@@ -17,7 +17,7 @@
             <mxGeometry x="354" y="320" width="120" height="60" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="&lt;b&gt;%navn%&lt;/b&gt;" placeholders="1" navn="Jan" wid="" maskintype="Person" spor="" x="" z="" rot="" bredde="" dybde="" hoejde="" producent="" model="" aar="" proces="Står i hjørnet" kapacitet="" dim="" ot="" noter="Jan er her for sjov. Han er ikke udstyr." id="an-jan">
+        <UserObject label="&lt;b&gt;%navn%&lt;/b&gt;" placeholders="1" navn="Jan" wid="" maskintype="Person" spor="" x="" z="" rot="" bredde="" dybde="" hoejde="" producent="" model="" aar="" proces="" kapacitet="" dim="" ot="" noter="Jan er Jan, lavet af Jan, han er ikke udstyr." id="an-jan">
           <mxCell style="whiteSpace=wrap;html=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontColor=#18201E;rounded=1;arcSize=40;fillColor=#F3DACF;strokeColor=#C26B4D;" vertex="1" parent="1">
             <mxGeometry x="339" y="394" width="60" height="40" as="geometry" />
           </mxCell>

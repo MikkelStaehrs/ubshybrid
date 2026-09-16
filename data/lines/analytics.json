@@ -4,7 +4,7 @@
     "name": "Analytics",
     "order": 0,
     "sourceFile": "analytics.drawio",
-    "parsedAt": "2026-09-16T13:03:06.446Z",
+    "parsedAt": "2026-09-16T13:06:38.025Z",
     "positionMode": "schematic"
   },
   "lanes": [],
@@ -82,8 +82,7 @@
       "upstream": [],
       "downstream": [],
       "details": {
-        "proces": "Står i hjørnet",
-        "noter": "Jan er her for sjov. Han er ikke udstyr."
+        "noter": "Jan er Jan, lavet af Jan, han er ikke udstyr."
       }
     }
   ],
