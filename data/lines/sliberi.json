@@ -4,7 +4,7 @@
     "name": "Sliberiet",
     "order": 2,
     "sourceFile": "flow-sliberi.drawio",
-    "parsedAt": "2026-09-16T10:50:41.806Z",
+    "parsedAt": "2026-09-16T11:10:43.383Z",
     "positionMode": "schematic"
   },
   "lanes": [
@@ -666,8 +666,7 @@
       "id": "QdWsfEp3SHmr1tPobRuz-4",
       "from": "W-793-794-795-796",
       "to": "W-611",
-      "inferred": true,
-      "note": "Pil ikke koblet til maskinen i tegningen"
+      "inferred": false
     },
     {
       "id": "QdWsfEp3SHmr1tPobRuz-6",
@@ -802,23 +801,17 @@
       "inferred": false
     },
     {
-      "id": "inferred-W-766-W-745",
+      "id": "QdWsfEp3SHmr1tPobRuz-59",
       "from": "W-766",
       "to": "W-745",
-      "inferred": true,
-      "note": "Mangler pil i tegningen"
+      "inferred": false
     },
     {
-      "id": "inferred-W-765-W-746",
+      "id": "QdWsfEp3SHmr1tPobRuz-60",
       "from": "W-765",
       "to": "W-746",
-      "inferred": true,
-      "note": "Mangler pil i tegningen"
+      "inferred": false
     }
   ],
-  "issues": [
-    "Pilen fra \"Vippestol\" rammer ikke \"Påslag anlæg\" – forbindelsen er antaget.",
-    "Ingen pil mellem \"Elevator\" (766) og \"KB-2SS\" (745) – forbindelsen er antaget.",
-    "Ingen pil mellem \"Elevator\" (765) og \"KB-3NN\" (746) – forbindelsen er antaget."
-  ]
+  "issues": []
 }
