@@ -1,7 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { DEFAULT_LINE, LINE_OPTIONS, LINES } from "../lib/lines";
+import { DEFAULT_LINE, LINE_OPTIONS, LINES, ROOM_OPTIONS } from "../lib/lines";
 
 // WebGL kører kun i browseren.
 const FactoryMap = dynamic(() => import("../components/FactoryMap").then((m) => m.FactoryMap), {
@@ -10,7 +10,7 @@ const FactoryMap = dynamic(() => import("../components/FactoryMap").then((m) => 
 });
 
 export default function FactoryMapClient() {
-  const [lineId, setLineId] = useState(DEFAULT_LINE);
-  const data = LINES[lineId] ?? LINES[DEFAULT_LINE];
-  return <FactoryMap data={data} lines={LINE_OPTIONS} onSelectLine={setLineId} />;
+  const [viewId, setViewId] = useState(DEFAULT_LINE);
+  const data = LINES[viewId] ?? LINES[DEFAULT_LINE];
+  return <FactoryMap data={data} lines={LINE_OPTIONS} rooms={ROOM_OPTIONS} onSelectLine={setViewId} />;
 }

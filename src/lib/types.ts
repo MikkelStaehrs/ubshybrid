@@ -2,7 +2,7 @@
 // Én LineData pr. produktionslinje. Genereres fra Draw.io via `npm run parse`
 // og kan senere læses fra MSSQL i stedet for JSON.
 
-export type MachineKind = "intake" | "elevator" | "distributor" | "process";
+export type MachineKind = "intake" | "elevator" | "distributor" | "process" | "analysis";
 
 /** Felter line managers kan udfylde via "Edit Data" (Ctrl+M) i Draw.io. */
 export interface MachineDetails {
@@ -32,8 +32,20 @@ export interface Placement {
   z: number;
   /** Rotation i grader med uret set oppefra. 0 = maskinens længdeakse peger mod øst. */
   rot: number;
-  /** Opmålt fodaftryk i meter, i maskinens egne akser. Mangler det, bruges standardmålene for maskintypen. */
-  size?: { x: number; z: number; h?: number };
+}
+
+/**
+ * Opmålt fodaftryk i meter, i maskinens egne akser.
+ * Uafhængigt af `placement`: man kan godt kende en maskines mål uden at vide,
+ * hvor i fabrikken den står. Mangler det, bruges standardmålene for maskintypen.
+ */
+export interface Footprint {
+  /** Bredde langs maskinens længdeakse. */
+  x: number;
+  /** Dybde på tværs. */
+  z: number;
+  /** Højde. Udelades den, bruges standardhøjden for maskintypen. */
+  h?: number;
 }
 
 /** Plantegningen lagt ind under maskinerne, så koordinaterne kan kontrolleres visuelt. */
@@ -69,6 +81,8 @@ export interface Machine {
   drawio: { x: number; y: number; w: number; h: number };
   /** Målfast placering fra plantegningen. Mangler den, tegnes maskinen skematisk. */
   placement?: Placement;
+  /** Opmålte mål. Bruges altid, også når placeringen er skematisk. */
+  footprint?: Footprint;
   upstream: string[];
   downstream: string[];
   details: MachineDetails;

@@ -11,12 +11,13 @@ const esc = (s: string) =>
 const FIELDS = ["navn", "wid", "maskintype", "spor", "x", "z", "rot", "producent", "model", "aar", "proces", "kapacitet", "dim", "ot", "noter"] as const;
 type Fields = Partial<Record<(typeof FIELDS)[number], string>>;
 
-type Kind = "Indtag" | "Elevator" | "Fordeler" | "Proces";
+type Kind = "Indtag" | "Elevator" | "Fordeler" | "Proces" | "Analyse";
 const KIND_STYLE: Record<Kind, { style: string; w: number; h: number; title: string }> = {
   Indtag: { title: "Indtag", w: 120, h: 60, style: "rounded=1;arcSize=10;fillColor=#E3E7EB;strokeColor=#8B98A3;" },
   Elevator: { title: "Elevator", w: 120, h: 60, style: "rounded=1;arcSize=10;fillColor=#F6E7C4;strokeColor=#D4A03C;" },
   Fordeler: { title: "Fordeler", w: 120, h: 60, style: "ellipse;fillColor=#D8E6EA;strokeColor=#4C7B88;" },
   Proces: { title: "Procesmaskine", w: 120, h: 60, style: "rounded=1;arcSize=10;fillColor=#D5E9E5;strokeColor=#2E6D64;" },
+  Analyse: { title: "Analyseudstyr", w: 120, h: 60, style: "rounded=1;arcSize=10;fillColor=#E6DDEF;strokeColor=#8A6BA3;" },
 };
 const BASE = "whiteSpace=wrap;html=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontColor=#18201E;";
 const LABEL = `<b>%navn%</b><br><font style="font-size: 10px;" color="#5B6763">W-ID: %wid%</font>`;
@@ -74,7 +75,7 @@ guide.push(text(
 const fieldRows: [string, string, string][] = [
   ["navn", "Ja", "Maskinens navn, fx Jetpealer S"],
   ["wid", "Ja", "W-ID. Flere: 793/794/795"],
-  ["maskintype", "Ja", "Indtag, Elevator, Fordeler eller Proces"],
+  ["maskintype", "Ja", "Indtag, Elevator, Fordeler, Proces eller Analyse"],
   ["spor", "Ved deling", "Sporets bogstav, fx S eller N"],
   ["x", "Ved opmåling", "Meter mod øst fra fabrikkens nulpunkt"],
   ["z", "Ved opmåling", "Meter mod syd fra fabrikkens nulpunkt"],
@@ -98,14 +99,15 @@ guide.push(text(
   40, 500, 520, 400));
 
 // Maskintyper
-guide.push(text(`<font style="font-size: 16px;"><b>Maskintyper</b></font>`, 620, 130, 300, 24));
+guide.push(text(`<font style="font-size: 16px;"><b>Maskintyper</b></font>`, 600, 130, 300, 24));
 const types: [Kind, Fields][] = [
   ["Indtag", { navn: "Påslag", wid: "100" }],
   ["Elevator", { navn: "Elevator", wid: "101" }],
   ["Fordeler", { navn: "Fordeler", wid: "102" }],
   ["Proces", { navn: "Triør", wid: "103" }],
+  ["Analyse", { navn: "Videometer", wid: "104" }],
 ];
-types.forEach(([k, f], i) => guide.push(machine(k, 620 + i * 130, 165, f).xml));
+types.forEach(([k, f], i) => guide.push(machine(k, 600 + i * 110, 165, f).xml));
 
 // Eksempel-flow
 guide.push(text(`<font style="font-size: 16px;"><b>Eksempel på en linje, der deler sig</b></font>`, 620, 260, 500, 24));

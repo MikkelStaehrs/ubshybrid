@@ -18,7 +18,7 @@ const OT_ROWS: { key: string; label: string }[] = [
   { key: "dimSkab", label: "DIM-skab" },
   { key: "otNet", label: "OT-netværk" },
 ];
-const KIND_ORDER: MachineKind[] = ["intake", "elevator", "distributor", "process"];
+const KIND_ORDER: MachineKind[] = ["intake", "elevator", "distributor", "process", "analysis"];
 
 /** Meter med dansk komma, uden overflødige decimaler. */
 const meters = (v: number) => `${v.toFixed(1).replace(/\.0$/, "").replace(".", ",")} m`;
@@ -46,12 +46,15 @@ export function FactoryMap({
   data,
   site = "UBS · Holeby",
   lines,
+  rooms,
   onSelectLine,
 }: {
   data: LineData;
   site?: string;
   /** Alle linjer i visningsrækkefølge. Er der under to, vises ingen linjevælger. */
   lines?: LineOption[];
+  /** Fælles rum, altid valgbare uanset hvilken linje man står på. */
+  rooms?: LineOption[];
   onSelectLine?: (id: string) => void;
 }) {
   const theme = useSceneTheme();
@@ -66,7 +69,8 @@ export function FactoryMap({
   const [showLabels, setShowLabels] = useState(true);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  const showPicker = !!lines && lines.length > 1 && !!onSelectLine;
+  const isRoom = !!rooms?.some((r) => r.id === data.line.id);
+  const showPicker = (lines?.length ?? 0) + (rooms?.length ?? 0) > 1 && !!onSelectLine;
 
   // Skift af linje: ryd valg og filtre, så intet peger på den forrige linje.
   const firstLine = useRef(true);
@@ -98,7 +102,8 @@ export function FactoryMap({
     return data.machines.filter((m) => m.name.toLowerCase().includes(q) || m.wIds.some((w) => w.includes(q))).slice(0, 7);
   }, [query, data.machines]);
   const inferredEdges = selected ? data.edges.filter((e) => e.inferred && (e.from === selected.id || e.to === selected.id)) : [];
-  const kindCounts = KIND_ORDER.map((k) => ({ k, n: data.machines.filter((m) => m.kind === k).length }));
+  const kindCounts = KIND_ORDER.map((k) => ({ k, n: data.machines.filter((m) => m.kind === k).length })).filter((c) => c.n > 0);
+  const hasFlow = data.edges.length > 0;
 
   const select = (id: string | null) => {
     setSelectedId(id);
@@ -145,14 +150,27 @@ export function FactoryMap({
             {showPicker ? (
               <select
                 className="fm-linepick"
-                aria-label="Vælg linje"
+                aria-label="Vælg linje eller rum"
                 value={data.line.id}
                 onChange={(e) => onSelectLine!(e.target.value)}
               >
-                {lines!.map((l) => (
-                  <option key={l.id} value={l.id}>Linje {l.order} – {l.name}</option>
-                ))}
+                {!!lines?.length && (
+                  <optgroup label="Linjer">
+                    {lines.map((l) => (
+                      <option key={l.id} value={l.id}>Linje {l.order} – {l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {!!rooms?.length && (
+                  <optgroup label="Rum">
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
+            ) : isRoom ? (
+              <>{data.line.name}</>
             ) : (
               <>Linje {data.line.order}</>
             )}
@@ -160,8 +178,8 @@ export function FactoryMap({
           <h1>{data.line.name}</h1>
           <div className="fm-meta">
             <span>{data.machines.length} maskiner</span>
-            <span>{data.lanes.length} spor</span>
-            <span>{maxStep + 1} trin</span>
+            {data.lanes.length > 0 && <span>{data.lanes.length} spor</span>}
+            {maxStep > 0 && <span>{maxStep + 1} trin</span>}
           </div>
         </div>
 
@@ -196,6 +214,7 @@ export function FactoryMap({
             )}
           </div>
 
+          {data.lanes.length > 0 && (
           <div className="fm-seg" role="group" aria-label="Spor">
             {[null, ...data.lanes.slice().sort().reverse()].map((l) => (
               <button key={l ?? "all"} type="button" aria-pressed={lane === l} onClick={() => setLane(l)}>
@@ -203,6 +222,7 @@ export function FactoryMap({
               </button>
             ))}
           </div>
+          )}
 
           <div className="fm-seg" role="group" aria-label="Kamera">
             <button type="button" aria-pressed={view === "perspective"} onClick={() => { setView("perspective"); setResetToken((t) => t + 1); }}>3D</button>
@@ -210,7 +230,9 @@ export function FactoryMap({
           </div>
 
           <div className="fm-seg" role="group" aria-label="Lag">
-            <button type="button" aria-pressed={animateFlow} onClick={() => setAnimateFlow((v) => !v)}>Flow</button>
+            {hasFlow && (
+              <button type="button" aria-pressed={animateFlow} onClick={() => setAnimateFlow((v) => !v)}>Flow</button>
+            )}
             <button type="button" aria-pressed={showLabels} onClick={() => setShowLabels((v) => !v)}>Navne</button>
           </div>
 
@@ -225,8 +247,10 @@ export function FactoryMap({
           {kindCounts.map(({ k, n }) => (
             <li key={k}><span className={`fm-dot k-${k}`} />{KIND_LABEL[k]}<span className="fm-mono">{n}</span></li>
           ))}
-          <li><span className="fm-flow" />Materialeflow</li>
-          <li><span className="fm-flow is-inferred" />Antaget forbindelse</li>
+          {hasFlow && <li><span className="fm-flow" />Materialeflow</li>}
+          {hasFlow && data.edges.some((e) => e.inferred) && (
+            <li><span className="fm-flow is-inferred" />Antaget forbindelse</li>
+          )}
         </ul>
         {data.line.positionMode === "schematic" ? (
           <p>Placering er skematisk (fra flowdiagram) — ikke målfast.</p>
@@ -261,12 +285,14 @@ export function FactoryMap({
               <span>W-ID</span>
               <strong>{selected.wIds.join(" / ") || "mangler"}</strong>
             </div>
-            <div className="fm-step">
-              Trin {selected.step + 1} af {maxStep + 1}
-              <span className="fm-steps" aria-hidden>
-                {Array.from({ length: maxStep + 1 }, (_, i) => <i key={i} className={i === selected.step ? "on" : i < selected.step ? "past" : ""} />)}
-              </span>
-            </div>
+            {maxStep > 0 && (
+              <div className="fm-step">
+                Trin {selected.step + 1} af {maxStep + 1}
+                <span className="fm-steps" aria-hidden>
+                  {Array.from({ length: maxStep + 1 }, (_, i) => <i key={i} className={i === selected.step ? "on" : i < selected.step ? "past" : ""} />)}
+                </span>
+              </div>
+            )}
           </div>
 
           <section>
@@ -279,6 +305,7 @@ export function FactoryMap({
             <dl>{OT_ROWS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
           </section>
 
+          {hasFlow && (
           <section>
             <h3>Flow</h3>
             <div className="fm-flowlist">
@@ -304,6 +331,7 @@ export function FactoryMap({
               </p>
             )}
           </section>
+          )}
 
           {selected.details.noter && (
             <section>

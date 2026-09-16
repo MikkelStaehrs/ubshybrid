@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net" compressed="false">
+  <diagram name="Analytics" id="analytics">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="an-note" value="&lt;b&gt;Analytics&lt;/b&gt;&lt;br&gt;Analyserum. Ingen pile: de to instrumenter har ikke materialeflow imellem sig.&lt;br&gt;&lt;br&gt;&lt;b&gt;Mangler:&lt;/b&gt; W-ID på begge, og x/z når rummet er målt ind på plantegningen.&lt;br&gt;Videometerets bordmål (1,6 × 0,8 m) er et gæt — ret det, hvis I har det rigtige." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontFamily=Helvetica;fontColor=#18201E;fillColor=#F6EFE3;strokeColor=#B7791F;rounded=1;arcSize=4;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="30" width="420" height="120" as="geometry" />
+        </mxCell>
+        <UserObject label="&lt;b&gt;%navn%&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#5B6763&quot;&gt;W-ID: %wid%&lt;/font&gt;" placeholders="1" navn="Videometer" wid="" maskintype="Analyse" spor="" x="" z="" rot="" bredde="1,6" dybde="0,8" hoejde="1,35" producent="" model="" aar="" proces="Billedanalyse af prøver" kapacitet="" dim="" ot="" noter="Transportbånd på 30 cm gennem en kuppel. Står på bord." id="an-videometer">
+          <mxCell style="whiteSpace=wrap;html=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontColor=#18201E;rounded=1;arcSize=10;fillColor=#E6DDEF;strokeColor=#8A6BA3;" vertex="1" parent="1">
+            <mxGeometry x="354" y="240" width="120" height="60" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="&lt;b&gt;%navn%&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#5B6763&quot;&gt;W-ID: %wid%&lt;/font&gt;" placeholders="1" navn="CT-scanner" wid="" maskintype="Analyse" spor="" x="" z="" rot="" bredde="0,9" dybde="1,8" hoejde="1,8" producent="" model="" aar="" proces="Gennemlysning af prøver" kapacitet="" dim="" ot="" noter="Firkantet kabinet, 180 cm højt, 90 cm bredt, 180 cm dybt." id="an-ct">
+          <mxCell style="whiteSpace=wrap;html=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontColor=#18201E;rounded=1;arcSize=10;fillColor=#E6DDEF;strokeColor=#8A6BA3;" vertex="1" parent="1">
+            <mxGeometry x="354" y="320" width="120" height="60" as="geometry" />
+          </mxCell>
+        </UserObject>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { FlowEdge, LineData, Machine, MachineDetails, MachineKind, Placement } from "./types";
+import type { FlowEdge, Footprint, LineData, Machine, MachineDetails, MachineKind, Placement } from "./types";
 
 // ---------------------------------------------------------------------------
 // Draw.io → LineData
@@ -57,14 +57,16 @@ function num(v: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+const pickField = (u: Attrs, ...keys: string[]) =>
+  keys.map((k) => u[k]).find((v) => v !== undefined && v.trim() !== "");
+
 /**
- * Læser de målfaste felter fra "Edit Data" (Ctrl+M): x, z, rot, bredde, dybde, hoejde.
- * Er x/z slet ikke udfyldt, returneres undefined uden brok — tegningen er bare ikke opmålt endnu.
+ * Læser placeringen fra "Edit Data" (Ctrl+M): x, z og rot.
+ * Er x/z slet ikke udfyldt, returneres undefined uden brok — maskinen er bare ikke opmålt endnu.
  */
 function readPlacement(u: Attrs, name: string, issues: string[]): Placement | undefined {
-  const pick = (...keys: string[]) => keys.map((k) => u[k]).find((v) => v !== undefined && v.trim() !== "");
-  const rawX = pick("x", "plan-x");
-  const rawZ = pick("z", "plan-z");
+  const rawX = pickField(u, "x", "plan-x");
+  const rawZ = pickField(u, "z", "plan-z");
   if (rawX === undefined && rawZ === undefined) return undefined;
 
   const x = num(rawX);
@@ -75,31 +77,40 @@ function readPlacement(u: Attrs, name: string, issues: string[]): Placement | un
   }
 
   let rot = 0;
-  const rawRot = pick("rot", "rotation");
+  const rawRot = pickField(u, "rot", "rotation");
   if (rawRot !== undefined) {
     const r = num(rawRot);
     if (r === undefined) issues.push(`"${name}": rot "${rawRot}" er ikke et tal – bruger 0°.`);
     else rot = ((r % 360) + 360) % 360;
   }
+  return { x, z, rot };
+}
 
-  let size: Placement["size"];
-  const rawW = pick("bredde", "width");
-  const rawD = pick("dybde", "depth");
-  const rawH = pick("hoejde", "højde", "height");
-  if (rawW !== undefined || rawD !== undefined) {
-    const w = num(rawW);
-    const d = num(rawD);
-    if (w === undefined || d === undefined || w <= 0 || d <= 0) {
-      issues.push(`"${name}": bredde og dybde skal begge være positive tal i meter – bruger standardmålene.`);
-    } else {
-      const h = num(rawH);
-      size = h !== undefined && h > 0 ? { x: w, z: d, h } : { x: w, z: d };
-      if (rawH !== undefined && (h === undefined || h <= 0)) {
-        issues.push(`"${name}": hoejde "${rawH}" er ikke et positivt tal – bruger standardhøjden.`);
-      }
-    }
+/**
+ * Læser de opmålte mål: bredde, dybde og hoejde.
+ * Uafhængigt af placeringen — en maskine kan være målt op uden at være sat på plantegningen.
+ */
+function readFootprint(u: Attrs, name: string, issues: string[]): Footprint | undefined {
+  const rawW = pickField(u, "bredde", "width");
+  const rawD = pickField(u, "dybde", "depth");
+  const rawH = pickField(u, "hoejde", "højde", "height");
+  if (rawW === undefined && rawD === undefined && rawH === undefined) return undefined;
+
+  const h = num(rawH);
+  const badH = rawH !== undefined && (h === undefined || h <= 0);
+  if (badH) issues.push(`"${name}": hoejde "${rawH}" er ikke et positivt tal – bruger standardhøjden.`);
+
+  if (rawW === undefined && rawD === undefined) {
+    if (!badH) issues.push(`"${name}": hoejde er udfyldt, men bredde og dybde mangler – målene bruges ikke.`);
+    return undefined;
   }
-  return { x, z, rot, size };
+  const w = num(rawW);
+  const d = num(rawD);
+  if (w === undefined || d === undefined || w <= 0 || d <= 0) {
+    issues.push(`"${name}": bredde og dybde skal begge være positive tal i meter – bruger standardmålene.`);
+    return undefined;
+  }
+  return h !== undefined && h > 0 ? { x: w, z: d, h } : { x: w, z: d };
 }
 
 /** Faner der starter med "Vejledning" eller "_" er ikke linjer. */
@@ -110,6 +121,7 @@ const KIND_FIELD: Record<string, MachineKind> = {
   elevator: "elevator",
   fordeler: "distributor", distributor: "distributor",
   proces: "process", procesmaskine: "process", process: "process", maskine: "process",
+  analyse: "analysis", analysis: "analysis", analyseudstyr: "analysis", maaleudstyr: "analysis",
 };
 
 /** Draw.io-placeholders: "%navn%" → værdien af feltet navn. */
@@ -138,6 +150,7 @@ function classify(name: string): MachineKind {
   if (/elevator/i.test(name)) return "elevator";
   if (/fordeler|splitter/i.test(name)) return "distributor";
   if (/påslag|vippestol|indtag|tipper/i.test(name)) return "intake";
+  if (/videometer|ct[-\s]?scanner|scanner|analyse/i.test(name)) return "analysis";
   return "process";
 }
 
@@ -284,12 +297,14 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
     }
 
     const placement = readPlacement(u, name, issues);
+    const footprint = readFootprint(u, name, issues);
 
     byDrawioId.set(c.id, {
       id, drawioId: c.id, name, label, wIds,
       kind, lane: u.spor?.trim() || null, step: 0,
       drawio: { ...absOrigin(c.id), w: c.geometry.w, h: c.geometry.h },
       ...(placement ? { placement } : {}),
+      ...(footprint ? { footprint } : {}),
       upstream: [], downstream: [], details,
     });
   }
@@ -339,7 +354,9 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
     .filter((d) => d > 0)
     .sort((a, b) => a - b);
   const typicalGap = gaps.length ? gaps[Math.floor(gaps.length / 2)] * 1.5 : 120;
-  for (const orphan of machines) {
+  // Er der ikke tegnet en eneste pil, beskriver tegningen et rum og ikke et flow.
+  // Så skal der heller ikke gættes forbindelser frem.
+  for (const orphan of edges.length ? machines : []) {
     if (hasIn.has(orphan.id)) continue;
     const above = machines
       .filter((m) => m !== orphan && !hasOut.has(m.id))
@@ -373,7 +390,8 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
     }
   }
   if ([...indeg.values()].some((v) => v > 0)) issues.push("Flowet indeholder en løkke – trin kan være upræcise.");
-  if (machines.length > 1) {
+  // En tegning helt uden pile er et rum, ikke et flow — så er løse maskiner normalt.
+  if (edges.length && machines.length > 1) {
     for (const m of machines) {
       if (!m.upstream.length && !m.downstream.length) {
         issues.push(`"${m.name}"${m.wIds.length ? ` (${m.wIds.join("/")})` : ""} er ikke forbundet med pile.`);

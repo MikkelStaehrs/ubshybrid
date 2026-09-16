@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 // og opdaterer når brugeren skifter lyst/mørkt tema.
 const TOKENS = [
   "scene-bg", "floor", "slab", "wall", "grid", "flow", "warn", "accent",
-  "m-intake", "m-elevator", "m-distributor", "m-process", "m-steel", "label-ink",
+  "m-intake", "m-elevator", "m-distributor", "m-process", "m-analysis", "m-steel", "label-ink",
 ] as const;
 export type SceneTheme = Record<(typeof TOKENS)[number], string> & { dark: boolean };
 

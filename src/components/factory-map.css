@@ -36,6 +36,7 @@
   --m-elevator: #d4a03c;
   --m-distributor: #4c7b88;
   --m-process: #2e6d64;
+  --m-analysis: #8a6ba3;
   --m-steel: #a9b1ad;
 }
 
@@ -99,6 +100,7 @@
   --m-elevator: #c8962f;
   --m-distributor: #4f8795;
   --m-process: #34806f;
+  --m-analysis: #9d80b8;
   --m-steel: #6c7773;
 }
 
@@ -133,6 +135,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .k-elevator { background: var(--m-elevator); }
 .k-distributor { background: var(--m-distributor); border-radius: 50%; }
 .k-process { background: var(--m-process); }
+.k-analysis { background: var(--m-analysis); border-radius: 50%; }
 
 /* --- Header -------------------------------------------------------------- */
 .fm-top {

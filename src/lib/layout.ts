@@ -11,6 +11,7 @@ export const KIND_SIZE: Record<MachineKind, { x: number; z: number; h: number }>
   elevator: { x: 1.1, z: 1.1, h: 5.2 },
   distributor: { x: 1.6, z: 1.6, h: 2.2 },
   process: { x: 3.2, z: 2.6, h: 2.4 },
+  analysis: { x: 1.6, z: 0.9, h: 1.3 },
 };
 
 export const KIND_LABEL: Record<MachineKind, string> = {
@@ -18,6 +19,7 @@ export const KIND_LABEL: Record<MachineKind, string> = {
   elevator: "Elevator",
   distributor: "Fordeler",
   process: "Procesmaskine",
+  analysis: "Analyseudstyr",
 };
 
 export interface PlacedMachine extends Machine {
@@ -60,10 +62,11 @@ export function layoutLine(data: LineData): Layout {
     // Faldes tilbage pr. maskine, så en halvt opmålt tegning stadig kan vises.
     const p = floorplan ? m.placement : undefined;
     const size = { ...KIND_SIZE[m.kind] };
-    if (p?.size) {
-      size.x = p.size.x;
-      size.z = p.size.z;
-      if (p.size.h) size.h = p.size.h;
+    if (m.footprint) {
+      // Opmålte mål slår altid standardmålene, også når placeringen er skematisk.
+      size.x = m.footprint.x;
+      size.z = m.footprint.z;
+      if (m.footprint.h) size.h = m.footprint.h;
     } else if (m.wIds.length > 1) {
       // Flere W-ID'er på én boks (fx 4 vippestole) → bredere station.
       size.z = Math.max(size.z, m.wIds.length * 1.6);

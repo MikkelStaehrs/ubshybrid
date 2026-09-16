@@ -104,6 +104,42 @@ export function MachineMesh({ m, theme, selected, hovered, related, dimmed, show
         </group>
       );
     });
+  } else if (m.kind === "analysis") {
+    // CT-scanner: massiv kasse med en åbning i enden. Videometer: bånd gennem
+    // en kuppel, på et bord — derfor tegnes bordet med.
+    const isScanner = /ct|scanner/i.test(m.name);
+    if (isScanner) {
+      const bore = Math.min(z, h) * 0.22;
+      parts = (
+        <>
+          <mesh castShadow receiveShadow position={[0, h / 2, 0]}><boxGeometry args={[x, h, z]} />{mat(body)}</mesh>
+          <mesh castShadow position={[x / 2 + 0.02, h * 0.55, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <torusGeometry args={[bore, 0.06, 12, 32]} />{mat(steel)}
+          </mesh>
+          <mesh position={[x / 2 + 0.02, h * 0.55, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <circleGeometry args={[bore, 32]} />{mat(steel)}
+          </mesh>
+        </>
+      );
+    } else {
+      const tableH = h * 0.66;
+      const domeR = Math.min(0.2, z * 0.28);
+      parts = (
+        <>
+          {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => (
+            <mesh key={`${sx}${sz}`} castShadow position={[sx * x * 0.42, tableH / 2, sz * z * 0.36]}>
+              <boxGeometry args={[0.06, tableH, 0.06]} />{mat(steel)}
+            </mesh>
+          )))}
+          <mesh castShadow receiveShadow position={[0, tableH, 0]}><boxGeometry args={[x, 0.05, z]} />{mat(steel)}</mesh>
+          {/* Transportbåndet er 30 cm bredt — et af de få rigtige mål vi har. */}
+          <mesh castShadow position={[0, tableH + 0.06, 0]}><boxGeometry args={[x * 0.95, 0.07, 0.3]} />{mat(body)}</mesh>
+          <mesh castShadow position={[0, tableH + 0.09, 0]}>
+            <sphereGeometry args={[domeR, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />{mat(body)}
+          </mesh>
+        </>
+      );
+    }
   } else {
     const shape = shapeFor(m.name);
     const bodyH = h * 0.62;

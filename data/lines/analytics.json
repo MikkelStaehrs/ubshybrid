@@ -1,0 +1,72 @@
+{
+  "line": {
+    "id": "analytics",
+    "name": "Analytics",
+    "order": 0,
+    "sourceFile": "analytics.drawio",
+    "parsedAt": "2026-09-16T12:42:17.355Z",
+    "positionMode": "schematic"
+  },
+  "lanes": [],
+  "machines": [
+    {
+      "id": "X-an-videometer",
+      "drawioId": "an-videometer",
+      "name": "Videometer",
+      "label": "Videometer\nW-ID:",
+      "wIds": [],
+      "kind": "analysis",
+      "lane": null,
+      "step": 0,
+      "drawio": {
+        "x": 354,
+        "y": 240,
+        "w": 120,
+        "h": 60
+      },
+      "footprint": {
+        "x": 1.6,
+        "z": 0.8,
+        "h": 1.35
+      },
+      "upstream": [],
+      "downstream": [],
+      "details": {
+        "proces": "Billedanalyse af prøver",
+        "noter": "Transportbånd på 30 cm gennem en kuppel. Står på bord."
+      }
+    },
+    {
+      "id": "X-an-ct",
+      "drawioId": "an-ct",
+      "name": "CT-scanner",
+      "label": "CT-scanner\nW-ID:",
+      "wIds": [],
+      "kind": "analysis",
+      "lane": null,
+      "step": 0,
+      "drawio": {
+        "x": 354,
+        "y": 320,
+        "w": 120,
+        "h": 60
+      },
+      "footprint": {
+        "x": 0.9,
+        "z": 1.8,
+        "h": 1.8
+      },
+      "upstream": [],
+      "downstream": [],
+      "details": {
+        "proces": "Gennemlysning af prøver",
+        "noter": "Firkantet kabinet, 180 cm højt, 90 cm bredt, 180 cm dybt."
+      }
+    }
+  ],
+  "edges": [],
+  "issues": [
+    "\"Videometer\" mangler W-ID.",
+    "\"CT-scanner\" mangler W-ID."
+  ]
+}

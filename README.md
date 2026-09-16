@@ -27,10 +27,26 @@ npm run dev          # http://localhost:3000
 Linjerne er selvstændige procesafsnit uden materialeflow imellem sig, så en
 maskines `upstream`/`downstream` peger altid på maskiner i samme linje.
 
+### Rum
+
+Ud over de nummererede linjer kan der være **rum**, der hører til hele fabrikken
+— fx `Analytics` med Videometer og CT-scanner. De registreres som en linje, men
+tilføjes `ROOM_IDS` i `src/lib/lines.ts`. Så ligger de i deres egen gruppe i
+vælgeren og kan nås uanset hvilken linje man står på.
+
+Et rum tegnes uden pile. Er der ikke en eneste pil i tegningen, forstår parseren
+den som et rum og gætter hverken forbindelser eller brokker sig over løse
+maskiner. Spor-, flow- og trin-visningen skjuler sig selv, når der ikke er noget
+at vise. Rummet parses med sit eget navn og nummer 0:
+
+```bash
+npm run parse -- data/drawio/analytics.drawio analytics "Analytics" 0
+```
+
 Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.
 - **Pile:** Materialeflowet. Løse pile og manglende pile mellem maskiner, der står lige under hinanden, bliver *antaget* og vist med orange stiplet linje.
-- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
+- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces eller Analyse) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
 - **Spor:** Feltet `spor`. Mangler det, gættes sporet ud fra navnets endelse (S/N) efter en fordeler.
 
 ## Målfast placering fra plantegningen
@@ -57,7 +73,10 @@ Tomme felter betyder bare "ikke målt op endnu" og giver ingen advarsler:
 | `bredde` / `dybde` | Opmålt fodaftryk i maskinens egne akser. Udelades de, bruges standardmålene for maskintypen |
 | `hoejde` | Opmålt højde |
 
-Kun `x` og `z` er nødvendige. Kør derefter:
+`bredde`, `dybde` og `hoejde` er **uafhængige af `x`/`z`**: man kan godt kende en
+maskines mål uden at vide, hvor i fabrikken den står. Målene bruges altid, også
+når placeringen er skematisk. `x` og `z` hører sammen — udfyld enten begge eller
+ingen. Kør derefter:
 
 ```bash
 npm run parse -- data/drawio/<fil>.drawio --floorplan
@@ -99,3 +118,7 @@ meter, og billedets top er nord. Ligger tegningen skævt, drejes den med `rot`
 
 - Linje 2 – Sliberiet er stadig **skematisk**: placeringerne kommer fra flowdiagrammet og er ikke målfaste. Datamodellen er klar til plantegningen (se *Målfast placering*), men koordinaterne er ikke målt op endnu.
 - Maskinformerne er illustrative og vælges ud fra maskinens navn i `MachineMesh.tsx`.
+- `Analytics` mangler W-ID på begge instrumenter, og rummet er ikke målt ind på
+  plantegningen. CT-scannerens mål (0,9 × 1,8 × 1,8 m) er rigtige; videometerets
+  bordmål (1,6 × 0,8 m) er et gæt — kun båndets bredde på 30 cm er oplyst.
+  Afstanden mellem de to instrumenter er skematisk, ikke målt.
