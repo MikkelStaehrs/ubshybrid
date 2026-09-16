@@ -122,6 +122,7 @@ const KIND_FIELD: Record<string, MachineKind> = {
   fordeler: "distributor", distributor: "distributor",
   proces: "process", procesmaskine: "process", process: "process", maskine: "process",
   analyse: "analysis", analysis: "analysis", analyseudstyr: "analysis", maaleudstyr: "analysis",
+  person: "person", medarbejder: "person",
 };
 
 /** Draw.io-placeholders: "%navn%" → værdien af feltet navn. */
@@ -273,7 +274,8 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
       u.navn?.trim() ||
       label.split("\n").filter((l) => !/W-?ID/i.test(l)).join(" ").trim() || label;
     if (!name) { issues.push(`En figur uden navn (celle ${c.id}) er sprunget over.`); continue; }
-    if (!wIds.length) issues.push(`"${name}" mangler W-ID.`);
+    const isPerson = (u.maskintype ?? "").trim().toLowerCase() === "person";
+    if (!wIds.length && !isPerson) issues.push(`"${name}" mangler W-ID.`);
     else if (wIds.some((w) => !/^\d+$/.test(w))) issues.push(`"${name}" har et W-ID der ikke er et tal: ${wIds.join("/")}.`);
 
     let kind = classify(name);

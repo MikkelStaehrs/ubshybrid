@@ -37,6 +37,7 @@
   --m-distributor: #4c7b88;
   --m-process: #2e6d64;
   --m-analysis: #8a6ba3;
+  --m-person: #c26b4d;
   --m-steel: #a9b1ad;
 }
 
@@ -101,6 +102,7 @@
   --m-distributor: #4f8795;
   --m-process: #34806f;
   --m-analysis: #9d80b8;
+  --m-person: #d4805f;
   --m-steel: #6c7773;
 }
 
@@ -136,6 +138,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .k-distributor { background: var(--m-distributor); border-radius: 50%; }
 .k-process { background: var(--m-process); }
 .k-analysis { background: var(--m-analysis); border-radius: 50%; }
+.k-person { background: var(--m-person); border-radius: 50%; }
 
 /* --- Header -------------------------------------------------------------- */
 .fm-top {

@@ -104,6 +104,31 @@ export function MachineMesh({ m, theme, selected, hovered, related, dimmed, show
         </group>
       );
     });
+  } else if (m.kind === "person") {
+    // Piktogram frem for forsøg på realisme — han er her for sjov.
+    const legH = h * 0.47;
+    const torsoH = h * 0.3;
+    const headR = h * 0.075;
+    parts = (
+      <>
+        {[-1, 1].map((sx) => (
+          <mesh key={`ben${sx}`} castShadow position={[0, legH / 2, sx * z * 0.22]}>
+            <boxGeometry args={[x * 0.34, legH, z * 0.3]} />{mat(body)}
+          </mesh>
+        ))}
+        <mesh castShadow position={[0, legH + torsoH / 2, 0]}>
+          <boxGeometry args={[x * 0.62, torsoH, z]} />{mat(body)}
+        </mesh>
+        {[-1, 1].map((sx) => (
+          <mesh key={`arm${sx}`} castShadow position={[0, legH + torsoH * 0.55, sx * (z / 2 + 0.06)]}>
+            <boxGeometry args={[x * 0.26, torsoH * 0.92, 0.1]} />{mat(body)}
+          </mesh>
+        ))}
+        <mesh castShadow position={[0, legH + torsoH + headR * 1.35, 0]}>
+          <sphereGeometry args={[headR, 20, 14]} />{mat(body)}
+        </mesh>
+      </>
+    );
   } else if (m.kind === "analysis") {
     // CT-scanner: massiv kasse med en åbning i enden. Videometer: bånd gennem
     // en kuppel, på et bord — derfor tegnes bordet med.
@@ -206,7 +231,7 @@ export function MachineMesh({ m, theme, selected, hovered, related, dimmed, show
             onPointerLeave={() => onHover(null)}
           >
             <span className="fm-tag-name">{m.name}</span>
-            <span className="fm-tag-id">{shortWIds(m.wIds)}</span>
+            {m.wIds.length > 0 && <span className="fm-tag-id">{shortWIds(m.wIds)}</span>}
           </button>
         </Html>
       )}

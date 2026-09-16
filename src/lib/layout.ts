@@ -12,6 +12,7 @@ export const KIND_SIZE: Record<MachineKind, { x: number; z: number; h: number }>
   distributor: { x: 1.6, z: 1.6, h: 2.2 },
   process: { x: 3.2, z: 2.6, h: 2.4 },
   analysis: { x: 1.6, z: 0.9, h: 1.3 },
+  person: { x: 0.5, z: 0.36, h: 1.8 },
 };
 
 export const KIND_LABEL: Record<MachineKind, string> = {
@@ -20,6 +21,7 @@ export const KIND_LABEL: Record<MachineKind, string> = {
   distributor: "Fordeler",
   process: "Procesmaskine",
   analysis: "Analyseudstyr",
+  person: "Person",
 };
 
 export interface PlacedMachine extends Machine {

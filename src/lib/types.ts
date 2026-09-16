@@ -2,7 +2,7 @@
 // Én LineData pr. produktionslinje. Genereres fra Draw.io via `npm run parse`
 // og kan senere læses fra MSSQL i stedet for JSON.
 
-export type MachineKind = "intake" | "elevator" | "distributor" | "process" | "analysis";
+export type MachineKind = "intake" | "elevator" | "distributor" | "process" | "analysis" | "person";
 
 /** Felter line managers kan udfylde via "Edit Data" (Ctrl+M) i Draw.io. */
 export interface MachineDetails {

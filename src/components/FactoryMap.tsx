@@ -212,6 +212,7 @@ export function FactoryMap({
   const lastService = lastOfType(history, "hovedeftersyn");
   const lastRetrofit = lastOfType(history, "retrofit");
   const inferredEdges = selected ? data.edges.filter((e) => e.inferred && (e.from === selected.id || e.to === selected.id)) : [];
+  const people = data.machines.filter((m) => m.kind === "person").length;
   const kindCounts = KIND_ORDER.map((k) => ({ k, n: data.machines.filter((m) => m.kind === k).length })).filter((c) => c.n > 0);
   const hasFlow = data.edges.length > 0;
 
@@ -288,7 +289,8 @@ export function FactoryMap({
           </div>
           <h1>{data.line.name}</h1>
           <div className="fm-meta">
-            <span>{data.machines.length} maskiner</span>
+            <span>{data.machines.length - people} maskiner</span>
+            {people > 0 && <span>{people === 1 ? "1 person" : `${people} personer`}</span>}
             {data.lanes.length > 0 && <span>{data.lanes.length} spor</span>}
             {maxStep > 0 && <span>{maxStep + 1} trin</span>}
           </div>
@@ -392,10 +394,12 @@ export function FactoryMap({
               <button type="button" className="fm-close" aria-label="Luk" onClick={() => select(null)}>×</button>
             </div>
             <h2>{selected.name}</h2>
-            <div className="fm-wid">
-              <span>W-ID</span>
-              <strong>{selected.wIds.join(" / ") || "mangler"}</strong>
-            </div>
+            {selected.kind !== "person" && (
+              <div className="fm-wid">
+                <span>W-ID</span>
+                <strong>{selected.wIds.join(" / ") || "mangler"}</strong>
+              </div>
+            )}
             {maxStep > 0 && (
               <div className="fm-step">
                 Trin {selected.step + 1} af {maxStep + 1}
@@ -406,6 +410,8 @@ export function FactoryMap({
             )}
           </div>
 
+          {selected.kind !== "person" && (
+          <>
           <section>
             <h3>Stamdata</h3>
             <dl>{DETAIL_ROWS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
@@ -437,8 +443,10 @@ export function FactoryMap({
               </span>
             </button>
           </section>
+          </>
+          )}
 
-          {hasFlow && (
+          {hasFlow && selected.kind !== "person" && (
           <section>
             <h3>Flow</h3>
             <div className="fm-flowlist">

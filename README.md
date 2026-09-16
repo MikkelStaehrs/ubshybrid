@@ -46,7 +46,7 @@ npm run parse -- data/drawio/analytics.drawio analytics "Analytics" 0
 Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.
 - **Pile:** Materialeflowet. Løse pile og manglende pile mellem maskiner, der står lige under hinanden, bliver *antaget* og vist med orange stiplet linje.
-- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces eller Analyse) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
+- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces, Analyse eller Person) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
 - **Spor:** Feltet `spor`. Mangler det, gættes sporet ud fra navnets endelse (S/N) efter en fordeler.
 
 ## Vedligehold og historik
@@ -162,6 +162,10 @@ meter, og billedets top er nord. Ligger tegningen skævt, drejes den med `rot`
 
 - Linje 2 – Sliberiet er stadig **skematisk**: placeringerne kommer fra flowdiagrammet og er ikke målfaste. Datamodellen er klar til plantegningen (se *Målfast placering*), men koordinaterne er ikke målt op endnu.
 - Maskinformerne er illustrative og vælges ud fra maskinens navn i `MachineMesh.tsx`.
+- **Jan** i Analytics er maskintypen `Person` og er sat ind for sjov. Personer
+  tælles for sig i headeren og har hverken W-ID, OT-felter eller
+  vedligeholdshistorik. Slet ham i `data/drawio/analytics.drawio`, hvis kortet
+  skal vises frem udadtil.
 - `Analytics` mangler W-ID på begge instrumenter, og rummet er ikke målt ind på
   plantegningen. CT-scannerens mål (0,9 × 1,8 × 1,8 m) er rigtige; videometerets
   bordmål (1,6 × 0,8 m) er et gæt — kun båndets bredde på 30 cm er oplyst.
