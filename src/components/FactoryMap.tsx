@@ -19,6 +19,9 @@ const OT_ROWS: { key: string; label: string }[] = [
 ];
 const KIND_ORDER: MachineKind[] = ["intake", "elevator", "distributor", "process"];
 
+/** Meter med dansk komma, uden overflødige decimaler. */
+const meters = (v: number) => `${v.toFixed(1).replace(/\.0$/, "").replace(".", ",")} m`;
+
 function Field({ label, value }: { label: string; value?: string }) {
   return (
     <div className="fm-field">
@@ -184,8 +187,12 @@ export function FactoryMap({ data, site = "UBS · Holeby" }: { data: LineData; s
           <li><span className="fm-flow" />Materialeflow</li>
           <li><span className="fm-flow is-inferred" />Antaget forbindelse</li>
         </ul>
-        {data.line.positionMode === "schematic" && (
+        {data.line.positionMode === "schematic" ? (
           <p>Placering er skematisk (fra flowdiagram) — ikke målfast.</p>
+        ) : layout.unplaced.length > 0 ? (
+          <p>Målfast fra plantegningen — {layout.unplaced.length} af {data.machines.length} maskiner mangler x/z og står skematisk.</p>
+        ) : (
+          <p>Målfast placering fra plantegningen.</p>
         )}
         {data.issues.length > 0 && (
           <button type="button" className="fm-issues-btn" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((v) => !v)}>
@@ -264,8 +271,18 @@ export function FactoryMap({ data, site = "UBS · Holeby" }: { data: LineData; s
             </section>
           )}
 
+          {data.line.positionMode === "floorplan" && selected.placedBy === "schematic" && (
+            <p className="fm-warn">
+              <span>Mangler x/z fra plantegningen — maskinen står skematisk og passer ikke med resten.</span>
+            </p>
+          )}
+
           <footer>
             Kilde: {data.line.sourceFile} · celle <span className="fm-mono">{selected.drawioId}</span>
+            {selected.placedBy === "floorplan" && selected.placement && (
+              <> · plan <span className="fm-mono">x {meters(selected.placement.x)} z {meters(selected.placement.z)}
+                {selected.placement.rot ? ` ${selected.placement.rot}°` : ""}</span></>
+            )}
           </footer>
         </aside>
       )}

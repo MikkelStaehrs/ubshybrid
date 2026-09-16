@@ -18,6 +18,40 @@ export interface MachineDetails {
   [key: string]: string | undefined;
 }
 
+/**
+ * Målfast placering fra plantegningen, i meter.
+ *
+ * Fabrikkens koordinatsystem: nulpunktet og akserne aftales én gang pr. fabrik
+ * og står i README. x vokser mod øst, z vokser mod syd — samme retninger som
+ * kortets x/z-akser, så tallene kan bruges direkte.
+ */
+export interface Placement {
+  /** Maskinens midte, meter øst for nulpunktet. */
+  x: number;
+  /** Maskinens midte, meter syd for nulpunktet. */
+  z: number;
+  /** Rotation i grader med uret set oppefra. 0 = maskinens længdeakse peger mod øst. */
+  rot: number;
+  /** Opmålt fodaftryk i meter, i maskinens egne akser. Mangler det, bruges standardmålene for maskintypen. */
+  size?: { x: number; z: number; h?: number };
+}
+
+/** Plantegningen lagt ind under maskinerne, så koordinaterne kan kontrolleres visuelt. */
+export interface FloorplanImage {
+  /** Sti under `public/`, fx "/plantegninger/holeby.png". */
+  src: string;
+  /** Billedets nordvestlige hjørne i fabrikkens koordinatsystem (meter). */
+  x: number;
+  z: number;
+  /** Billedets udstrækning i meter. */
+  width: number;
+  depth: number;
+  /** Drejning i grader med uret om billedets midte, hvis tegningen ikke ligger akseparallelt. */
+  rot?: number;
+  /** 0–1. Standard 0.55. */
+  opacity?: number;
+}
+
 export interface Machine {
   /** Stabilt id, afledt af W-ID (fx "W-611"). */
   id: string;
@@ -31,8 +65,10 @@ export interface Machine {
   lane: string | null;
   /** Trin i flowet (0 = første maskine). */
   step: number;
-  /** Placering i tegningen (Draw.io-pixels). */
+  /** Placering i tegningen (Draw.io-pixels). Bruges til at udlede flow og spor. */
   drawio: { x: number; y: number; w: number; h: number };
+  /** Målfast placering fra plantegningen. Mangler den, tegnes maskinen skematisk. */
+  placement?: Placement;
   upstream: string[];
   downstream: string[];
   details: MachineDetails;
@@ -56,6 +92,8 @@ export interface LineData {
     parsedAt: string;
     /** "schematic" = placering fra flowdiagram, ikke målfast. */
     positionMode: "schematic" | "floorplan";
+    /** Plantegning under kortet. Vises kun i floorplan-tilstand. */
+    floorplan?: FloorplanImage;
   };
   lanes: string[];
   machines: Machine[];

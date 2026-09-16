@@ -25,8 +25,59 @@ npm run dev          # http://localhost:3000
 Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.
 - **Pile:** Materialeflowet. Løse pile og manglende pile mellem maskiner, der står lige under hinanden, bliver *antaget* og vist med orange stiplet linje.
-- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. Andre felter bliver også gemt i data.
+- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
 - **Spor:** Feltet `spor`. Mangler det, gættes sporet ud fra navnets endelse (S/N) efter en fordeler.
+
+## Målfast placering fra plantegningen
+
+Som standard kommer placeringen fra flowdiagrammet og er ikke målfast. Når linjen
+er målt op på plantegningen, skrives koordinaterne ind i tegningen og linjen
+skifter til `positionMode: "floorplan"`.
+
+**Aftal først fabrikkens nulpunkt og nordretning** — ét fast punkt pr. fabrik, fx
+det nordvestlige hjørne af bygningens indervæg. Alle linjer skal bruge samme
+nulpunkt, ellers passer de ikke sammen indbyrdes. Skriv det aftalte punkt her:
+
+> Nulpunkt for UBS Holeby: _(ikke aftalt endnu)_
+
+Felterne sættes pr. maskine med Ctrl+M. Alle mål er i **meter**, og både `12,5`
+og `12.5` virker:
+
+| Felt | Betydning |
+| --- | --- |
+| `x` | Maskinens midte, meter mod **øst** fra nulpunktet |
+| `z` | Maskinens midte, meter mod **syd** fra nulpunktet |
+| `rot` | Grader med uret set oppefra. 0 = maskinens længdeakse peger mod øst |
+| `bredde` / `dybde` | Opmålt fodaftryk i maskinens egne akser. Udelades de, bruges standardmålene for maskintypen |
+| `hoejde` | Opmålt højde |
+
+Kun `x` og `z` er nødvendige. Kør derefter:
+
+```bash
+npm run parse -- data/drawio/<fil>.drawio --floorplan
+```
+
+Uden `--floorplan` bliver linjen ved med at være skematisk, men parseren læser og
+validerer koordinaterne alligevel og fortæller, hvor mange maskiner der mangler.
+Maskiner uden `x`/`z` falder tilbage til den skematiske placering og markeres
+både i signaturforklaringen og i maskinpanelet.
+
+### Plantegning som underlag
+
+For at kontrollere at koordinaterne rammer rigtigt, kan selve plantegningen
+lægges ind under maskinerne. Læg billedet i `public/` og tilføj `floorplan` til
+`line` i `data/lines/<id>.json` — feltet overlever en ny `npm run parse`:
+
+```json
+"floorplan": {
+  "src": "/plantegninger/holeby.png",
+  "x": 0, "z": 0, "width": 120, "depth": 60, "opacity": 0.55
+}
+```
+
+`x`/`z` er billedets **nordvestlige hjørne**, `width`/`depth` dets udstrækning i
+meter, og billedets top er nord. Ligger tegningen skævt, drejes den med `rot`
+(grader med uret om billedets midte).
 
 ## Struktur
 
@@ -40,5 +91,5 @@ Parseren læser:
 
 ## Kendte begrænsninger
 
-- Placeringerne kommer fra flowdiagrammet og er **ikke målfaste**. Når vi har plantegningen, sættes `positionMode: "floorplan"` med rigtige koordinater.
+- Linje 2 – Sliberiet er stadig **skematisk**: placeringerne kommer fra flowdiagrammet og er ikke målfaste. Datamodellen er klar til plantegningen (se *Målfast placering*), men koordinaterne er ikke målt op endnu.
 - Maskinformerne er illustrative og vælges ud fra maskinens navn i `MachineMesh.tsx`.

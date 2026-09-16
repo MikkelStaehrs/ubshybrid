@@ -145,7 +145,7 @@ export function MachineMesh({ m, theme, selected, hovered, related, dimmed, show
   const topY = m.kind === "elevator" ? h + 1 : m.kind === "process" ? h + 0.4 : h + 0.2;
 
   return (
-    <group ref={group} position={m.pos} {...handlers}>
+    <group ref={group} position={m.pos} rotation={[0, m.rotY, 0]} {...handlers}>
       {parts}
       {/* usynlig klikflade, så hele fodaftrykket kan rammes */}
       <mesh position={[0, topY / 2, 0]}>

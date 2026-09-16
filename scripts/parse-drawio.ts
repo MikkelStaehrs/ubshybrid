@@ -1,16 +1,33 @@
 // Brug:
 //   npm run parse -- <fil.drawio>                         → én JSON pr. linjefane
 //   npm run parse -- <fil.drawio> <id> "<Navn>" <nr>      → første linjefane med egne værdier
+//   npm run parse -- <fil.drawio> --floorplan             → brug de målfaste x/z fra tegningen
 // Faner navngives "Linje 2 – Sliberiet". Faner der starter med "Vejledning" eller "_" springes over.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { linePages, parseDrawio } from "../src/lib/drawio";
+import type { FloorplanImage, LineData } from "../src/lib/types";
 
-const args = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const floorplanMode = argv.includes("--floorplan");
+const args = argv.filter((a) => !a.startsWith("--"));
 const legacyDefault = args.length === 0; // `npm run parse` uden argumenter = den første Sliberi-tegning
 const [file = "data/drawio/flow-sliberi.drawio", argId, argName, argOrder] = args;
 const xml = readFileSync(file, "utf8");
+
+/**
+ * `line.floorplan` peger på en billedfil og hører ikke til tegningen, så den
+ * sættes i hånden i JSON'en. Her bæres den videre, så den ikke går tabt ved re-parse.
+ */
+function existingFloorplan(path: string): FloorplanImage | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    return (JSON.parse(readFileSync(path, "utf8")) as LineData).line.floorplan;
+  } catch {
+    return undefined;
+  }
+}
 
 const slug = (s: string) =>
   s.toLowerCase().replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa")
@@ -50,12 +67,24 @@ for (const page of targets) {
     lineId, lineName, order, page: page.index,
     sourceFile: basename(file),
     inflateRaw: (b) => inflateRawSync(b),
+    positionMode: floorplanMode ? "floorplan" : "schematic",
   });
   const out = join("data/lines", `${lineId}.json`);
+  const carried = existingFloorplan(out);
+  if (carried) data.line.floorplan = carried;
   writeFileSync(out, JSON.stringify(data, null, 2) + "\n");
   written++;
 
   console.log(`\n✔ Linje ${order} – ${lineName}: ${data.machines.length} maskiner, ${data.edges.length} forbindelser, spor: ${data.lanes.join(", ") || "–"} → ${out}`);
+
+  const placed = data.machines.filter((m) => m.placement).length;
+  if (floorplanMode) {
+    console.log(`  Målfast: ${placed} af ${data.machines.length} maskiner har x/z.${carried ? " Plantegning bevaret." : ""}`);
+  } else if (placed === data.machines.length && placed > 0) {
+    console.log(`  Alle ${placed} maskiner har x/z – kør med --floorplan for at bruge dem.`);
+  } else if (placed > 0) {
+    console.log(`  ${placed} af ${data.machines.length} maskiner har x/z (vises skematisk indtil alle har).`);
+  }
   if (data.issues.length) {
     problems += data.issues.length;
     console.log(`⚠ ${data.issues.length} ting at rette i tegningen:`);

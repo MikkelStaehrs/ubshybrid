@@ -2,10 +2,10 @@
 import { Grid, MapControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CanvasTexture, MathUtils, PerspectiveCamera, SRGBColorSpace, Vector3 } from "three";
+import { CanvasTexture, MathUtils, PerspectiveCamera, SRGBColorSpace, TextureLoader, Vector3, type Texture } from "three";
 import type { MapControls as MapControlsImpl } from "three-stdlib";
-import { flowPath, type Layout } from "../lib/layout";
-import type { LineData } from "../lib/types";
+import { flowPath, halfExtent, type Layout } from "../lib/layout";
+import type { FloorplanImage, LineData } from "../lib/types";
 import type { SceneTheme } from "../lib/useSceneTheme";
 import { FlowRibbon } from "./FlowRibbon";
 import { MachineMesh } from "./MachineMesh";
@@ -136,6 +136,37 @@ function FloorText({ text, color, position, size = 6 }: { text: string; color: s
   );
 }
 
+/**
+ * Plantegningen lagt fladt ind under maskinerne. Billedets top er nord.
+ * Indlæses uden Suspense, så resten af scenen tegnes med det samme.
+ */
+function FloorplanUnderlay({ plan }: { plan: FloorplanImage }) {
+  const [tex, setTex] = useState<Texture | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    new TextureLoader().load(plan.src, (t) => {
+      t.colorSpace = SRGBColorSpace;
+      if (alive) setTex(t);
+      else t.dispose();
+    });
+    return () => { alive = false; };
+  }, [plan.src]);
+  useEffect(() => () => tex?.dispose(), [tex]);
+
+  if (!tex) return null;
+  return (
+    <mesh
+      // Rotationen om z lægges i tegningens eget plan, før den vippes ned.
+      rotation={[-Math.PI / 2, 0, (-(plan.rot ?? 0) * Math.PI) / 180]}
+      position={[plan.x + plan.width / 2, 0.008, plan.z + plan.depth / 2]}
+    >
+      <planeGeometry args={[plan.width, plan.depth]} />
+      <meshBasicMaterial map={tex} transparent opacity={plan.opacity ?? 0.55} depthWrite={false} />
+    </mesh>
+  );
+}
+
 function Building({ layout, theme, data }: { layout: Layout; theme: SceneTheme; data: LineData }) {
   const { minX, maxX, minZ, maxZ } = layout.bounds;
   const w = maxX - minX, d = maxZ - minZ;
@@ -145,10 +176,10 @@ function Building({ layout, theme, data }: { layout: Layout; theme: SceneTheme; 
 
   const laneZones = data.lanes.map((lane) => {
     const ms = layout.machines.filter((m) => m.lane === lane);
-    const x0 = Math.min(...ms.map((m) => m.pos[0] - m.size.x / 2)) - 1.2;
-    const x1 = Math.max(...ms.map((m) => m.pos[0] + m.size.x / 2)) + 1.2;
-    const z0 = Math.min(...ms.map((m) => m.pos[2] - m.size.z / 2)) - 1.2;
-    const z1 = Math.max(...ms.map((m) => m.pos[2] + m.size.z / 2)) + 1.2;
+    const x0 = Math.min(...ms.map((m) => m.pos[0] - halfExtent(m).x)) - 1.2;
+    const x1 = Math.max(...ms.map((m) => m.pos[0] + halfExtent(m).x)) + 1.2;
+    const z0 = Math.min(...ms.map((m) => m.pos[2] - halfExtent(m).z)) - 1.2;
+    const z1 = Math.max(...ms.map((m) => m.pos[2] + halfExtent(m).z)) + 1.2;
     return { lane, x0, x1, z0, z1 };
   });
 
@@ -174,6 +205,9 @@ function Building({ layout, theme, data }: { layout: Layout; theme: SceneTheme; 
         fadeDistance={400}
         infiniteGrid={false}
       />
+      {data.line.positionMode === "floorplan" && data.line.floorplan && (
+        <FloorplanUnderlay plan={data.line.floorplan} />
+      )}
       {/* Afskårne vægge — taget er fjernet */}
       <mesh castShadow receiveShadow position={[cx, wallH / 2, minZ]}><boxGeometry args={[w, wallH, t]} /><meshStandardMaterial color={theme.wall} /></mesh>
       <mesh castShadow receiveShadow position={[cx, wallH / 2, maxZ]}><boxGeometry args={[w, wallH, t]} /><meshStandardMaterial color={theme.wall} /></mesh>

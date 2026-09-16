@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { FlowEdge, LineData, Machine, MachineDetails, MachineKind } from "./types";
+import type { FlowEdge, LineData, Machine, MachineDetails, MachineKind, Placement } from "./types";
 
 // ---------------------------------------------------------------------------
 // Draw.io → LineData
@@ -17,6 +17,11 @@ export interface ParseOptions {
   page?: string | number;
   /** Kræves kun for komprimerede diagrammer (Node: zlib.inflateRawSync). */
   inflateRaw?: (data: Uint8Array) => Uint8Array;
+  /**
+   * "floorplan" = brug de målfaste x/z fra tegningen. Standard er "schematic",
+   * så en linje først bliver målfast når nogen aktivt beder om det.
+   */
+  positionMode?: "schematic" | "floorplan";
 }
 
 type Attrs = Record<string, string>;
@@ -37,7 +42,65 @@ const DETAIL_ALIASES: Record<string, keyof MachineDetails> = {
   ot: "otNet", otnet: "otNet", "ot-net": "otNet", ip: "otNet",
   noter: "noter", note: "noter", notes: "noter",
 };
-const IGNORED_USER_KEYS = new Set(["label", "placeholders", "id", "tooltip", "link", "navn", "wid", "maskintype", "spor"]);
+const IGNORED_USER_KEYS = new Set([
+  "label", "placeholders", "id", "tooltip", "link", "navn", "wid", "maskintype", "spor",
+  // Målfast placering — havner i machine.placement, ikke i details.
+  "x", "plan-x", "z", "plan-z", "rot", "rotation",
+  "bredde", "width", "dybde", "depth", "hoejde", "højde", "height",
+]);
+
+/** "12,5" og "12.5" → 12.5. Tom eller ugyldig → undefined. */
+function num(v: string | undefined): number | undefined {
+  const s = v?.trim().replace(",", ".");
+  if (!s) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Læser de målfaste felter fra "Edit Data" (Ctrl+M): x, z, rot, bredde, dybde, hoejde.
+ * Er x/z slet ikke udfyldt, returneres undefined uden brok — tegningen er bare ikke opmålt endnu.
+ */
+function readPlacement(u: Attrs, name: string, issues: string[]): Placement | undefined {
+  const pick = (...keys: string[]) => keys.map((k) => u[k]).find((v) => v !== undefined && v.trim() !== "");
+  const rawX = pick("x", "plan-x");
+  const rawZ = pick("z", "plan-z");
+  if (rawX === undefined && rawZ === undefined) return undefined;
+
+  const x = num(rawX);
+  const z = num(rawZ);
+  if (x === undefined || z === undefined) {
+    issues.push(`"${name}": x og z skal begge være tal i meter (fik "${rawX ?? ""}" / "${rawZ ?? ""}") – placeringen bruges ikke.`);
+    return undefined;
+  }
+
+  let rot = 0;
+  const rawRot = pick("rot", "rotation");
+  if (rawRot !== undefined) {
+    const r = num(rawRot);
+    if (r === undefined) issues.push(`"${name}": rot "${rawRot}" er ikke et tal – bruger 0°.`);
+    else rot = ((r % 360) + 360) % 360;
+  }
+
+  let size: Placement["size"];
+  const rawW = pick("bredde", "width");
+  const rawD = pick("dybde", "depth");
+  const rawH = pick("hoejde", "højde", "height");
+  if (rawW !== undefined || rawD !== undefined) {
+    const w = num(rawW);
+    const d = num(rawD);
+    if (w === undefined || d === undefined || w <= 0 || d <= 0) {
+      issues.push(`"${name}": bredde og dybde skal begge være positive tal i meter – bruger standardmålene.`);
+    } else {
+      const h = num(rawH);
+      size = h !== undefined && h > 0 ? { x: w, z: d, h } : { x: w, z: d };
+      if (rawH !== undefined && (h === undefined || h <= 0)) {
+        issues.push(`"${name}": hoejde "${rawH}" er ikke et positivt tal – bruger standardhøjden.`);
+      }
+    }
+  }
+  return { x, z, rot, size };
+}
 
 /** Faner der starter med "Vejledning" eller "_" er ikke linjer. */
 export const isGuidePage = (name: string) => /^(vejledning|_)/i.test(name.trim());
@@ -216,14 +279,17 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
 
     const details: MachineDetails = {};
     for (const [k, v] of Object.entries(c.userData)) {
-      if (IGNORED_USER_KEYS.has(k) || v === "") continue;
+      if (IGNORED_USER_KEYS.has(k.toLowerCase()) || v === "") continue;
       details[DETAIL_ALIASES[k.toLowerCase()] ?? k] = String(v);
     }
+
+    const placement = readPlacement(u, name, issues);
 
     byDrawioId.set(c.id, {
       id, drawioId: c.id, name, label, wIds,
       kind, lane: u.spor?.trim() || null, step: 0,
       drawio: { ...absOrigin(c.id), w: c.geometry.w, h: c.geometry.h },
+      ...(placement ? { placement } : {}),
       upstream: [], downstream: [], details,
     });
   }
@@ -344,11 +410,30 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
 
   machines.sort((a, b) => a.step - b.step || (a.lane ?? "").localeCompare(b.lane ?? ""));
 
+  // --- Målfast placering ------------------------------------------------------
+  const positionMode = opts.positionMode ?? "schematic";
+  const missing = machines.filter((m) => !m.placement);
+  if (positionMode === "floorplan" && missing.length) {
+    const names = missing.slice(0, 5).map((m) => m.name).join(", ");
+    issues.push(
+      `${missing.length} af ${machines.length} maskiner mangler x/z fra plantegningen (${names}${missing.length > 5 ? " m.fl." : ""}) – de står skematisk og passer ikke med resten.`
+    );
+  }
+  // To maskiner på samme koordinat betyder som regel en glemt indtastning.
+  const atPoint = new Map<string, Machine>();
+  for (const m of machines) {
+    if (!m.placement) continue;
+    const key = `${m.placement.x.toFixed(2)}, ${m.placement.z.toFixed(2)}`;
+    const prev = atPoint.get(key);
+    if (prev) issues.push(`"${m.name}" og "${prev.name}" står på samme koordinat (${key}).`);
+    else atPoint.set(key, m);
+  }
+
   return {
     line: {
       id: opts.lineId, name: opts.lineName, order: opts.order,
       sourceFile: opts.sourceFile, parsedAt: new Date().toISOString(),
-      positionMode: "schematic",
+      positionMode,
     },
     lanes,
     machines,
