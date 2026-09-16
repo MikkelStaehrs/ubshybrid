@@ -165,6 +165,23 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   text-transform: uppercase;
   color: var(--muted);
 }
+.fm-linepick {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin-left: -2px;
+  cursor: pointer;
+}
+.fm-linepick:hover { background: var(--surface-2); }
+.fm-linepick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Selve listen tegnes af styresystemet — den arver ikke versalerne ovenfor. */
+.fm-linepick option { text-transform: none; letter-spacing: normal; color: var(--ink); background: var(--surface-solid); }
+
 .fm-title h1 {
   font-family: var(--font-display);
   font-weight: 600;

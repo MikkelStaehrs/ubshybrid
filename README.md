@@ -20,7 +20,12 @@ npm run dev          # http://localhost:3000
 1. Læg tegningen i `data/drawio/`.
 2. `npm run parse -- data/drawio/<fil>.drawio`
    – laver én `data/lines/<id>.json` pr. fane med navnet *Linje N – Navn* og lister de ting, der bør rettes i tegningen.
-3. Registrér linjen i `src/lib/lines.ts`.
+3. Registrér linjen i `src/lib/lines.ts` — importér JSON-filen og tilføj den til
+   `LINES`. Resten sker af sig selv: linjen kommer med i vælgeren i headeren,
+   sorteret efter sit nummer. Vælgeren vises først, når der er mere end én linje.
+
+Linjerne er selvstændige procesafsnit uden materialeflow imellem sig, så en
+maskines `upstream`/`downstream` peger altid på maskiner i samme linje.
 
 Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.

@@ -1,7 +1,8 @@
 "use client";
 import { Canvas } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
+import type { LineOption } from "../lib/lines";
 import type { LineData, Machine, MachineKind } from "../lib/types";
 import { useSceneTheme } from "../lib/useSceneTheme";
 import { Scene, type ViewMode } from "./Scene";
@@ -41,7 +42,18 @@ function MachineChip({ m, onSelect }: { m: Machine; onSelect: (id: string) => vo
   );
 }
 
-export function FactoryMap({ data, site = "UBS · Holeby" }: { data: LineData; site?: string }) {
+export function FactoryMap({
+  data,
+  site = "UBS · Holeby",
+  lines,
+  onSelectLine,
+}: {
+  data: LineData;
+  site?: string;
+  /** Alle linjer i visningsrækkefølge. Er der under to, vises ingen linjevælger. */
+  lines?: LineOption[];
+  onSelectLine?: (id: string) => void;
+}) {
   const theme = useSceneTheme();
   const layout = useMemo(() => layoutLine(data), [data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,6 +66,19 @@ export function FactoryMap({ data, site = "UBS · Holeby" }: { data: LineData; s
   const [showLabels, setShowLabels] = useState(true);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
+  const showPicker = !!lines && lines.length > 1 && !!onSelectLine;
+
+  // Skift af linje: ryd valg og filtre, så intet peger på den forrige linje.
+  const firstLine = useRef(true);
+  useEffect(() => {
+    if (firstLine.current) { firstLine.current = false; return; }
+    setSelectedId(null);
+    setHoveredId(null);
+    setLane(null);
+    setQuery("");
+    setIssuesOpen(false);
+    setResetToken((t) => t + 1);
+  }, [data.line.id]);
 
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) setAnimateFlow(false);
@@ -115,7 +140,23 @@ export function FactoryMap({ data, site = "UBS · Holeby" }: { data: LineData; s
 
       <header className="fm-top">
         <div className="fm-title">
-          <div className="fm-eyebrow">{site} · Linje {data.line.order}</div>
+          <div className="fm-eyebrow">
+            {site} ·{" "}
+            {showPicker ? (
+              <select
+                className="fm-linepick"
+                aria-label="Vælg linje"
+                value={data.line.id}
+                onChange={(e) => onSelectLine!(e.target.value)}
+              >
+                {lines!.map((l) => (
+                  <option key={l.id} value={l.id}>Linje {l.order} – {l.name}</option>
+                ))}
+              </select>
+            ) : (
+              <>Linje {data.line.order}</>
+            )}
+          </div>
           <h1>{data.line.name}</h1>
           <div className="fm-meta">
             <span>{data.machines.length} maskiner</span>
