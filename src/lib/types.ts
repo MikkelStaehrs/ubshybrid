@@ -13,10 +13,6 @@ export interface MachineDetails {
   kapacitet?: string;
   dimSkab?: string;
   otNet?: string;
-  /** Hvornår maskinen sidst er totalrenoveret. "2024", "2024-06" eller "2024-06-15". */
-  retrofit?: string;
-  /** Hvad renoveringen omfattede. */
-  retrofitNoter?: string;
   noter?: string;
   /** Alle øvrige felter fra Draw.io bevares her. */
   [key: string]: string | undefined;
@@ -117,4 +113,32 @@ export interface LineData {
   machines: Machine[];
   edges: FlowEdge[];
   issues: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Vedligehold
+//
+// Bevidst adskilt fra LineData: linjedata genereres fra Draw.io og kan når som
+// helst laves om af en ny `npm run parse`, mens historikken er driftsdata, der
+// skal overleve. Ligger i data/maintenance.json og flytter senere til MSSQL.
+// ---------------------------------------------------------------------------
+
+export type MaintenanceType = "hovedeftersyn" | "retrofit" | "reparation" | "udskiftning";
+
+export interface MaintenanceEvent {
+  /** Stabilt id for hændelsen. */
+  id: string;
+  /**
+   * W-ID på maskinen — nøglen der binder hændelsen til en maskine.
+   * Har en maskine flere W-ID'er, tæller en hændelse på et hvilket som helst af dem.
+   */
+  wid: string;
+  /** ISO-dato: "2024-06-15". */
+  dato: string;
+  type: MaintenanceType;
+  beskrivelse: string;
+  /** Hvem der udførte arbejdet — internt team eller ekstern leverandør. */
+  udfoertAf?: string;
+  /** Kroner. */
+  omkostning?: number;
 }

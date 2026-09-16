@@ -40,10 +40,6 @@ const DETAIL_ALIASES: Record<string, keyof MachineDetails> = {
   kapacitet: "kapacitet", capacity: "kapacitet",
   dim: "dimSkab", dimskab: "dimSkab", "dim-skab": "dimSkab",
   ot: "otNet", otnet: "otNet", "ot-net": "otNet", ip: "otNet",
-  retrofit: "retrofit", renovering: "retrofit", renoveret: "retrofit",
-  gennemrenoveret: "retrofit", totalrenoveret: "retrofit",
-  retrofitnoter: "retrofitNoter", "retrofit-noter": "retrofitNoter",
-  renoveringsnoter: "retrofitNoter",
   noter: "noter", note: "noter", notes: "noter",
 };
 const IGNORED_USER_KEYS = new Set([

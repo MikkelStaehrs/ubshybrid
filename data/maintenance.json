@@ -1,0 +1,46 @@
+[
+  {
+    "id": "ex-001",
+    "wid": "614",
+    "dato": "2022-09-05",
+    "type": "retrofit",
+    "beskrivelse": "EKSEMPELDATA – Totalrenovering: nyt sold, nye lejer og ny frekvensomformer.",
+    "udfoertAf": "Nordmark Service",
+    "omkostning": 285000
+  },
+  {
+    "id": "ex-002",
+    "wid": "614",
+    "dato": "2024-11-02",
+    "type": "reparation",
+    "beskrivelse": "EKSEMPELDATA – Utæt pakning ved indløbet skiftet efter driftsstop.",
+    "udfoertAf": "Eget vedligehold",
+    "omkostning": 8400
+  },
+  {
+    "id": "ex-003",
+    "wid": "614",
+    "dato": "2025-03-11",
+    "type": "hovedeftersyn",
+    "beskrivelse": "EKSEMPELDATA – Årligt hovedeftersyn. Slidmål på valser inden for tolerance.",
+    "udfoertAf": "Nordmark Service"
+  },
+  {
+    "id": "ex-004",
+    "wid": "789",
+    "dato": "2023-05-22",
+    "type": "udskiftning",
+    "beskrivelse": "EKSEMPELDATA – Skalleringe udskiftet i fuld sæt.",
+    "udfoertAf": "Eget vedligehold",
+    "omkostning": 46500
+  },
+  {
+    "id": "ex-005",
+    "wid": "795",
+    "dato": "2026-02-10",
+    "type": "reparation",
+    "beskrivelse": "EKSEMPELDATA – Hydraulikslange på vippestol 795 skiftet.",
+    "udfoertAf": "Eget vedligehold",
+    "omkostning": 3200
+  }
+]

@@ -1,17 +1,16 @@
-// Retrofit = hvornår en maskine sidst er totalrenoveret.
-// Feltet udfyldes i Draw.io og kan være upræcist, så teksten vises råt,
-// når den ikke kan læses som en dato.
+// Datoer vises på dansk. Kilderne kan være upræcise ("2024" uden måned), så
+// præcisionen bæres med, og tekst der ikke kan læses som en dato vises råt.
 
 const MONTHS = ["januar", "februar", "marts", "april", "maj", "juni",
   "juli", "august", "september", "oktober", "november", "december"];
 
-export interface RetrofitDate {
+export interface PartialDate {
   date: Date;
   precision: "day" | "month" | "year";
 }
 
 /** "2024", "2024-06" og "2024-06-15" → dato. Alt andet giver null. */
-export function parseRetrofit(v: string): RetrofitDate | null {
+export function parseDate(v: string): PartialDate | null {
   const m = v.trim().match(/^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/);
   if (!m) return null;
   const y = Number(m[1]);
@@ -24,14 +23,14 @@ export function parseRetrofit(v: string): RetrofitDate | null {
   return { date, precision: m[3] ? "day" : m[2] ? "month" : "year" };
 }
 
-export function formatRetrofit({ date, precision }: RetrofitDate): string {
+export function formatDate({ date, precision }: PartialDate): string {
   if (precision === "year") return String(date.getFullYear());
   const my = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
   return precision === "month" ? my : `${date.getDate()}. ${my}`;
 }
 
 /** "for 3 år siden". Tom streng når datoen ligger i fremtiden. */
-export function timeSince({ date }: RetrofitDate, now: Date = new Date()): string {
+export function timeSince({ date }: PartialDate, now: Date = new Date()): string {
   const months = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
   if (months < 0) return "";
   if (months < 1) return "inden for den seneste måned";

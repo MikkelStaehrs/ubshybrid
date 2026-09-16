@@ -3,8 +3,11 @@ import { Canvas } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
 import type { LineOption } from "../lib/lines";
-import { formatRetrofit, parseRetrofit, timeSince } from "../lib/retrofit";
-import type { LineData, Machine, MachineKind } from "../lib/types";
+import {
+  describeDate, formatCost, historyFor, lastOfType,
+  MAINTENANCE_LABEL, MAINTENANCE_ORDER,
+} from "../lib/maintenance";
+import type { LineData, Machine, MachineKind, MaintenanceEvent, MaintenanceType } from "../lib/types";
 import { useSceneTheme } from "../lib/useSceneTheme";
 import { Scene, type ViewMode } from "./Scene";
 
@@ -24,18 +27,23 @@ const KIND_ORDER: MachineKind[] = ["intake", "elevator", "distributor", "process
 /** Meter med dansk komma, uden overflødige decimaler. */
 const meters = (v: number) => `${v.toFixed(1).replace(/\.0$/, "").replace(".", ",")} m`;
 
-function RetrofitModal({ m, onClose }: { m: Machine; onClose: () => void }) {
+function HistoryModal({ m, onClose }: { m: Machine; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  const raw = m.details.retrofit?.trim();
-  const parsed = raw ? parseRetrofit(raw) : null;
-  const since = parsed ? timeSince(parsed) : "";
+  const [filter, setFilter] = useState<MaintenanceType | null>(null);
+  const history = useMemo(() => historyFor(m.wIds), [m.wIds]);
+  const shown = filter ? history.filter((e) => e.type === filter) : history;
+
+  // Vis kun filtre for de typer maskinen faktisk har hændelser af.
+  const present = MAINTENANCE_ORDER
+    .map((t) => ({ t, n: history.filter((e) => e.type === t).length }))
+    .filter((x) => x.n > 0);
 
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
+      // capture, så modalen lukkes før Escape rammer resten af kortet
       if (e.key === "Escape") { e.stopPropagation(); onClose(); }
     };
-    // capture, så modalen lukkes før Escape rammer resten af kortet
     addEventListener("keydown", onKey, true);
     return () => removeEventListener("keydown", onKey, true);
   }, [onClose]);
@@ -46,60 +54,85 @@ function RetrofitModal({ m, onClose }: { m: Machine; onClose: () => void }) {
         className="fm-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="fm-retro-title"
+        aria-labelledby="fm-history-title"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="fm-modal-head">
           <div>
-            <div className="fm-modal-eyebrow">Retrofit</div>
-            <h2 id="fm-retro-title">{m.name}</h2>
+            <div className="fm-modal-eyebrow">Historik</div>
+            <h2 id="fm-history-title">{m.name}</h2>
+            <div className="fm-modal-sub">
+              <span className="fm-mono">{shortWIds(m.wIds) || "uden W-ID"}</span>
+              <span>{history.length === 1 ? "1 hændelse" : `${history.length} hændelser`}</span>
+            </div>
           </div>
           <button ref={closeRef} type="button" className="fm-close" aria-label="Luk" onClick={onClose}>×</button>
         </div>
 
-        <div className={`fm-retro-state${raw ? " is-done" : ""}`}>
-          {raw ? (
-            <>
-              <strong>Totalrenoveret {parsed ? formatRetrofit(parsed) : raw}</strong>
-              {since && <span>{since}</span>}
-            </>
-          ) : (
-            <>
-              <strong>Ingen totalrenovering registreret</strong>
-              <span>Vi ved ikke, om maskinen har været gennemrenoveret.</span>
-            </>
-          )}
-        </div>
+        {history.length === 0 ? (
+          <p className="fm-empty">
+            Ingen registreringer.
+            {m.wIds.length
+              ? " Der er ikke registreret vedligehold på denne maskine endnu."
+              : " Maskinen mangler W-ID, og historikken slås op på W-ID."}
+          </p>
+        ) : (
+          <>
+            {present.length > 1 && (
+              <div className="fm-seg fm-history-filter" role="group" aria-label="Filtrér på type">
+                <button type="button" aria-pressed={filter === null} onClick={() => setFilter(null)}>
+                  Alle <span className="fm-count">{history.length}</span>
+                </button>
+                {present.map(({ t, n }) => (
+                  <button key={t} type="button" aria-pressed={filter === t} onClick={() => setFilter(t)}>
+                    {MAINTENANCE_LABEL[t]} <span className="fm-count">{n}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
-        <dl>
-          <Field label="W-ID" value={m.wIds.join(" / ") || undefined} />
-          <Field label="Producent" value={m.details.producent} />
-          <Field label="Model" value={m.details.model} />
-          <Field label="Oprindeligt år" value={m.details.aar} />
-          <Field label="Sidste totalrenovering" value={raw} />
-        </dl>
-
-        {m.details.retrofitNoter && (
-          <section>
-            <h3>Hvad blev der lavet</h3>
-            <p>{m.details.retrofitNoter}</p>
-          </section>
+            {shown.length === 0 ? (
+              <p className="fm-empty">Ingen registreringer af denne type.</p>
+            ) : (
+              <ol className="fm-timeline">
+                {shown.map((e) => <TimelineEvent key={e.id} e={e} />)}
+              </ol>
+            )}
+          </>
         )}
 
         <footer>
-          Udfyldes i Draw.io med Ctrl+M: <span className="fm-mono">retrofit</span> (fx
-          {" "}<span className="fm-mono">2024-06</span>) og <span className="fm-mono">retrofitnoter</span>.
+          Vedligehold ligger i <span className="fm-mono">data/maintenance.json</span>, adskilt fra
+          tegningsdata og nøglet på W-ID.
         </footer>
       </div>
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value?: string }) {
+function TimelineEvent({ e }: { e: MaintenanceEvent }) {
+  return (
+    <li className={`fm-event t-${e.type}`}>
+      <div className="fm-event-head">
+        <span className="fm-event-type">{MAINTENANCE_LABEL[e.type]}</span>
+        <span className="fm-event-date">{describeDate(e.dato)}</span>
+      </div>
+      <p>{e.beskrivelse}</p>
+      {(e.udfoertAf || e.omkostning !== undefined) && (
+        <div className="fm-event-meta">
+          {e.udfoertAf && <span>{e.udfoertAf}</span>}
+          {e.omkostning !== undefined && <span className="fm-mono">{formatCost(e.omkostning)}</span>}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function Field({ label, value, empty = "Ikke udfyldt" }: { label: string; value?: string; empty?: string }) {
   return (
     <div className="fm-field">
       <dt>{label}</dt>
-      <dd className={value ? "" : "is-empty"}>{value || "Ikke udfyldt"}</dd>
+      <dd className={value ? "" : "is-empty"}>{value || empty}</dd>
     </div>
   );
 }
@@ -141,7 +174,7 @@ export function FactoryMap({
   const [showLabels, setShowLabels] = useState(true);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  const [retrofitOpen, setRetrofitOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const isRoom = !!rooms?.some((r) => r.id === data.line.id);
   const showPicker = (lines?.length ?? 0) + (rooms?.length ?? 0) > 1 && !!onSelectLine;
 
@@ -152,7 +185,7 @@ export function FactoryMap({
     setSelectedId(null);
     setHoveredId(null);
     setLane(null);
-    setRetrofitOpen(false);
+    setHistoryOpen(false);
     setQuery("");
     setIssuesOpen(false);
     setResetToken((t) => t + 1);
@@ -175,6 +208,9 @@ export function FactoryMap({
     if (!q) return [];
     return data.machines.filter((m) => m.name.toLowerCase().includes(q) || m.wIds.some((w) => w.includes(q))).slice(0, 7);
   }, [query, data.machines]);
+  const history = useMemo(() => (selected ? historyFor(selected.wIds) : []), [selected]);
+  const lastService = lastOfType(history, "hovedeftersyn");
+  const lastRetrofit = lastOfType(history, "retrofit");
   const inferredEdges = selected ? data.edges.filter((e) => e.inferred && (e.from === selected.id || e.to === selected.id)) : [];
   const kindCounts = KIND_ORDER.map((k) => ({ k, n: data.machines.filter((m) => m.kind === k).length })).filter((c) => c.n > 0);
   const hasFlow = data.edges.length > 0;
@@ -182,7 +218,7 @@ export function FactoryMap({
   const select = (id: string | null) => {
     setSelectedId(id);
     setSearchOpen(false);
-    setRetrofitOpen(false);
+    setHistoryOpen(false);
     if (id) {
       const m = layout.byId.get(id);
       if (m && lane && m.lane && m.lane !== lane) setLane(null);
@@ -381,14 +417,24 @@ export function FactoryMap({
           </section>
 
           <section>
-            <h3>Retrofit</h3>
-            <button
-              type="button"
-              className={`fm-retro-btn${selected.details.retrofit ? " is-done" : ""}`}
-              onClick={() => setRetrofitOpen(true)}
-            >
-              <span>{selected.details.retrofit ? `Totalrenoveret ${selected.details.retrofit}` : "Ikke registreret"}</span>
-              <span className="fm-retro-more">Detaljer</span>
+            <h3>Vedligehold</h3>
+            <dl>
+              <Field
+                label="Sidste hovedeftersyn"
+                value={lastService && describeDate(lastService.dato)}
+                empty="Ingen registreringer"
+              />
+              <Field
+                label="Sidste retrofit"
+                value={lastRetrofit && describeDate(lastRetrofit.dato)}
+                empty="Ingen registreringer"
+              />
+            </dl>
+            <button type="button" className="fm-history-btn" onClick={() => setHistoryOpen(true)}>
+              <span>Se historik</span>
+              <span className="fm-history-count">
+                {history.length === 0 ? "Ingen registreringer" : history.length === 1 ? "1 hændelse" : `${history.length} hændelser`}
+              </span>
             </button>
           </section>
 
@@ -443,8 +489,8 @@ export function FactoryMap({
         </aside>
       )}
 
-      {retrofitOpen && selected && (
-        <RetrofitModal m={selected} onClose={() => setRetrofitOpen(false)} />
+      {historyOpen && selected && (
+        <HistoryModal m={selected} onClose={() => setHistoryOpen(false)} />
       )}
     </div>
   );

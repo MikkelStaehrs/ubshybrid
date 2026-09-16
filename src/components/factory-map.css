@@ -507,22 +507,22 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   .fm-panel, .fm-top, .fm-tag { animation: none; transition: none; }
 }
 
-/* --- Retrofit ------------------------------------------------------------- */
-.fm-retro-btn {
+/* --- Vedligehold & historik ---------------------------------------------- */
+.fm-history-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   width: 100%;
+  margin-top: 8px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-2);
   text-align: left;
 }
-.fm-retro-btn:hover { border-color: var(--ink); }
-.fm-retro-btn.is-done { border-left: 3px solid var(--m-process); }
-.fm-retro-more { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.fm-history-btn:hover { border-color: var(--ink); }
+.fm-history-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
 
 .fm-modal-back {
   position: absolute;
@@ -536,9 +536,10 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   backdrop-filter: blur(2px);
 }
 .fm-modal {
-  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
   max-height: 100%;
-  overflow: auto;
   background: var(--surface-solid);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -549,7 +550,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 12px;
+  padding: 16px 18px 14px;
   border-bottom: 1px solid var(--line);
 }
 .fm-modal-eyebrow {
@@ -566,16 +567,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   text-transform: uppercase;
   margin: 4px 0 0;
 }
-.fm-modal dl { margin: 0; padding: 4px 18px 12px; }
-.fm-modal section { padding: 4px 18px 12px; border-top: 1px solid var(--line); }
-.fm-modal section h3 {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 12px 0 6px;
-}
-.fm-modal section p { margin: 0; }
+.fm-modal-sub { display: flex; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.fm-modal-sub span + span::before { content: "·"; margin-right: 10px; }
 .fm-modal footer {
   padding: 12px 18px 16px;
   border-top: 1px solid var(--line);
@@ -583,15 +576,54 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+.fm-empty { margin: 0; padding: 20px 18px; color: var(--muted); }
 
-.fm-retro-state {
-  display: grid;
-  gap: 4px;
-  margin: 16px 18px 4px;
-  padding: 12px 14px;
-  border-radius: 6px;
-  background: var(--warn-soft);
-  border-left: 3px solid var(--warn);
+.fm-history-filter { margin: 14px 18px 0; flex-wrap: wrap; height: auto; align-self: flex-start; }
+.fm-history-filter button { padding: 5px 10px; }
+.fm-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.fm-seg button[aria-pressed="true"] .fm-count { color: inherit; opacity: 0.7; }
+
+.fm-timeline {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 14px 18px 18px 30px;
+  list-style: none;
 }
-.fm-retro-state.is-done { background: var(--accent-soft); border-left-color: var(--m-process); }
-.fm-retro-state span { font-size: 12px; color: var(--muted); }
+.fm-event {
+  position: relative;
+  padding: 0 0 18px 16px;
+  border-left: 1px solid var(--line);
+}
+.fm-event:last-child { padding-bottom: 0; border-left-color: transparent; }
+.fm-event::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  border: 2px solid var(--surface-solid);
+}
+.fm-event.t-hovedeftersyn::before { background: var(--m-process); }
+.fm-event.t-retrofit::before { background: var(--accent); }
+.fm-event.t-reparation::before { background: var(--warn); }
+.fm-event.t-udskiftning::before { background: var(--m-distributor); }
+
+.fm-event-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.fm-event-type {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.fm-event.t-hovedeftersyn .fm-event-type { color: var(--m-process); }
+.fm-event.t-retrofit .fm-event-type { color: var(--accent); }
+.fm-event.t-reparation .fm-event-type { color: var(--warn); }
+.fm-event.t-udskiftning .fm-event-type { color: var(--m-distributor); }
+.fm-event-date { font-size: 12px; color: var(--muted); }
+.fm-event p { margin: 4px 0 0; }
+.fm-event-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.fm-event-meta span + span::before { content: "·"; margin-right: 10px; }

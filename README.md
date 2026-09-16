@@ -46,28 +46,49 @@ npm run parse -- data/drawio/analytics.drawio analytics "Analytics" 0
 Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.
 - **Pile:** Materialeflowet. Løse pile og manglende pile mellem maskiner, der står lige under hinanden, bliver *antaget* og vist med orange stiplet linje.
-- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces eller Analyse) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `retrofit` og `retrofitnoter` vises i retrofit-modalen. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
+- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces eller Analyse) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
 - **Spor:** Feltet `spor`. Mangler det, gættes sporet ud fra navnets endelse (S/N) efter en fordeler.
 
-## Retrofit
+## Vedligehold og historik
 
-Alt hardware har et retrofit-afsnit i maskinpanelet, der åbner en modal med,
-hvornår maskinen sidst er **totalrenoveret**. Står der intet, siger modalen det
-tydeligt — "ikke registreret" er en anden oplysning end "aldrig renoveret".
+Hver maskine har et vedligeholdsafsnit i panelet med **sidste hovedeftersyn** og
+**sidste retrofit** (dato og hvor længe siden), og en knap der åbner en tidslinje
+over alle hændelser — nyeste først, med filter på type.
 
-To felter i Ctrl+M:
+Hændelserne ligger i `data/maintenance.json`, **adskilt fra linjedata**: filerne i
+`data/lines/` genereres fra Draw.io og bliver overskrevet ved hver `npm run parse`,
+mens vedligehold er driftsdata, der skal overleve. Det er også derfor, de er nøglet
+på W-ID og ikke på tegningens celle-id'er — en hændelse følger maskinen, selv om
+tegningen laves om. Filen svarer til én tabel og flytter senere til MSSQL.
 
-| Felt | Betydning |
-| --- | --- |
-| `retrofit` | Hvornår. `2024`, `2024-06` eller `2024-06-15` |
-| `retrofitnoter` | Hvad renoveringen omfattede |
+```json
+{
+  "id": "ex-001",
+  "wid": "614",
+  "dato": "2022-09-05",
+  "type": "retrofit",
+  "beskrivelse": "Nyt sold, nye lejer og ny frekvensomformer.",
+  "udfoertAf": "Nordmark Service",
+  "omkostning": 285000
+}
+```
 
-Datoen vises på dansk sammen med hvor længe siden det er ("juni 2024 · for 2 år
-siden"). Kan feltet ikke læses som en dato, vises teksten som den står, så fx
-"sidste sommer" ikke går tabt.
+| Felt | Krav | Betydning |
+| --- | --- | --- |
+| `id` | Ja | Entydigt id for hændelsen |
+| `wid` | Ja | W-ID på maskinen. Dækker en maskine flere W-ID'er, tæller hændelsen på dem alle |
+| `dato` | Ja | ISO: `2024-06-15` |
+| `type` | Ja | `hovedeftersyn`, `retrofit`, `reparation` eller `udskiftning` |
+| `beskrivelse` | Ja | Hvad der blev lavet |
+| `udfoertAf` | | Internt team eller leverandør |
+| `omkostning` | | Kroner, som tal |
 
-Der gemmes **én** renovering pr. maskine — den seneste. Skal I have historik med
-flere renoveringer, kræver det en liste i datamodellen.
+Findes der ingen hændelser, står der **"Ingen registreringer"** — både i panelet og
+i modalen. Det er en anden oplysning end "aldrig vedligeholdt".
+
+Filen indeholder pt. **fem eksempelhændelser** på Nordmark (614), Jetpealer S (789)
+og Vippestol (795). De er mærket `EKSEMPELDATA` i beskrivelsen og skal slettes,
+når rigtige data kommer ind.
 
 ## Målfast placering fra plantegningen
 
@@ -131,7 +152,9 @@ meter, og billedets top er nord. Ligger tegningen skævt, drejes den med `rot`
 | `src/lib/drawio.ts` | Draw.io → `LineData` (virker også i browseren) |
 | `src/lib/types.ts` | Datamodellen (klar til at flytte til MSSQL) |
 | `src/lib/layout.ts` | Tegning → meter, maskinstørrelser, flowruter |
-| `src/lib/retrofit.ts` | Datoer for totalrenovering |
+| `src/lib/dates.ts` | Danske datoer, også upræcise som `2024` |
+| `src/lib/maintenance.ts` | Opslag i vedligeholdshistorikken |
+| `data/maintenance.json` | Vedligeholdshændelser (senere MSSQL) |
 | `src/components/` | 3D-scene (React Three Fiber), maskinpanel, styles |
 | `scripts/build-preview.ts` | `npm run preview` → én selvstændig HTML-fil til deling |
 
