@@ -1,0 +1,9 @@
+main { margin: 0; }
+.fm-loading {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--scene-bg);
+  font-family: var(--font-ui);
+}

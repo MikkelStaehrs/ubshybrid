@@ -1,0 +1,824 @@
+{
+  "line": {
+    "id": "sliberi",
+    "name": "Sliberiet",
+    "order": 2,
+    "sourceFile": "flow-sliberi.drawio",
+    "parsedAt": "2026-09-16T09:41:05.503Z",
+    "positionMode": "schematic"
+  },
+  "lanes": [
+    "N",
+    "S"
+  ],
+  "machines": [
+    {
+      "id": "W-793-794-795-796",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-1",
+      "name": "Vippestol",
+      "label": "Vippestol\nW-ID:793/794/795/796",
+      "wIds": [
+        "793",
+        "794",
+        "795",
+        "796"
+      ],
+      "kind": "intake",
+      "lane": null,
+      "step": 0,
+      "drawio": {
+        "x": 354,
+        "y": -1160,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [],
+      "downstream": [
+        "W-611"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-611",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-5",
+      "name": "Påslag anlæg",
+      "label": "Påslag anlæg\nW-ID:611",
+      "wIds": [
+        "611"
+      ],
+      "kind": "intake",
+      "lane": null,
+      "step": 1,
+      "drawio": {
+        "x": 354,
+        "y": -1080,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-793-794-795-796"
+      ],
+      "downstream": [
+        "W-743"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-743",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-7",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:743",
+      "wIds": [
+        "743"
+      ],
+      "kind": "elevator",
+      "lane": null,
+      "step": 2,
+      "drawio": {
+        "x": 354,
+        "y": -1000,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-611"
+      ],
+      "downstream": [
+        "W-614"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-614",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-8",
+      "name": "Nordmark",
+      "label": "Nordmark\nW-ID:614",
+      "wIds": [
+        "614"
+      ],
+      "kind": "process",
+      "lane": null,
+      "step": 3,
+      "drawio": {
+        "x": 354,
+        "y": -920,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-743"
+      ],
+      "downstream": [
+        "W-756"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-756",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-10",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:756",
+      "wIds": [
+        "756"
+      ],
+      "kind": "elevator",
+      "lane": null,
+      "step": 4,
+      "drawio": {
+        "x": 354,
+        "y": -840,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-614"
+      ],
+      "downstream": [
+        "W-615"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-615",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-12",
+      "name": "Fordeler",
+      "label": "Fordeler\nW-ID:615",
+      "wIds": [
+        "615"
+      ],
+      "kind": "distributor",
+      "lane": null,
+      "step": 5,
+      "drawio": {
+        "x": 354,
+        "y": -760,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-756"
+      ],
+      "downstream": [
+        "W-758",
+        "W-759"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-758",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-20",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:758",
+      "wIds": [
+        "758"
+      ],
+      "kind": "elevator",
+      "lane": "N",
+      "step": 6,
+      "drawio": {
+        "x": 474,
+        "y": -670,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-615"
+      ],
+      "downstream": [
+        "W-790"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-759",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-22",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:759",
+      "wIds": [
+        "759"
+      ],
+      "kind": "elevator",
+      "lane": "S",
+      "step": 6,
+      "drawio": {
+        "x": 234,
+        "y": -670,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-615"
+      ],
+      "downstream": [
+        "W-789"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-790",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-25",
+      "name": "Jetpealer N",
+      "label": "Jetpealer N\nW-ID:790",
+      "wIds": [
+        "790"
+      ],
+      "kind": "process",
+      "lane": "N",
+      "step": 7,
+      "drawio": {
+        "x": 474,
+        "y": -580,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-758"
+      ],
+      "downstream": [
+        "W-762"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-789",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-24",
+      "name": "Jetpealer S",
+      "label": "Jetpealer S\nW-ID:789",
+      "wIds": [
+        "789"
+      ],
+      "kind": "process",
+      "lane": "S",
+      "step": 7,
+      "drawio": {
+        "x": 234,
+        "y": -580,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-759"
+      ],
+      "downstream": [
+        "W-763"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-762",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-29",
+      "name": "Triøre N",
+      "label": "Triøre N\nW-ID:762",
+      "wIds": [
+        "762"
+      ],
+      "kind": "process",
+      "lane": "N",
+      "step": 8,
+      "drawio": {
+        "x": 474,
+        "y": -490,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-790"
+      ],
+      "downstream": [
+        "W-772"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-763",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-28",
+      "name": "Triøre S",
+      "label": "Triøre S\nW-ID:763",
+      "wIds": [
+        "763"
+      ],
+      "kind": "process",
+      "lane": "S",
+      "step": 8,
+      "drawio": {
+        "x": 234,
+        "y": -490,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-789"
+      ],
+      "downstream": [
+        "W-773"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-772",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-32",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:772",
+      "wIds": [
+        "772"
+      ],
+      "kind": "elevator",
+      "lane": "N",
+      "step": 9,
+      "drawio": {
+        "x": 474,
+        "y": -400,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-762"
+      ],
+      "downstream": [
+        "W-738"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-773",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-31",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:773",
+      "wIds": [
+        "773"
+      ],
+      "kind": "elevator",
+      "lane": "S",
+      "step": 9,
+      "drawio": {
+        "x": 234,
+        "y": -400,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-763"
+      ],
+      "downstream": [
+        "W-625"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-738",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-38",
+      "name": "Alfa N",
+      "label": "Alfa N\nW-ID:738",
+      "wIds": [
+        "738"
+      ],
+      "kind": "process",
+      "lane": "N",
+      "step": 10,
+      "drawio": {
+        "x": 474,
+        "y": -310,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-772"
+      ],
+      "downstream": [
+        "W-761"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-625",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-37",
+      "name": "Alfa S",
+      "label": "Alfa S\nW-ID:625",
+      "wIds": [
+        "625"
+      ],
+      "kind": "process",
+      "lane": "S",
+      "step": 10,
+      "drawio": {
+        "x": 234,
+        "y": -310,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-773"
+      ],
+      "downstream": [
+        "W-760"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-761",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-42",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:761",
+      "wIds": [
+        "761"
+      ],
+      "kind": "elevator",
+      "lane": "N",
+      "step": 11,
+      "drawio": {
+        "x": 474,
+        "y": -220,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-738"
+      ],
+      "downstream": [
+        "W-634"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-760",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-41",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:760",
+      "wIds": [
+        "760"
+      ],
+      "kind": "elevator",
+      "lane": "S",
+      "step": 11,
+      "drawio": {
+        "x": 234,
+        "y": -220,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-625"
+      ],
+      "downstream": [
+        "W-633"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-634",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-46",
+      "name": "Carter N",
+      "label": "Carter N\nW-ID:634",
+      "wIds": [
+        "634"
+      ],
+      "kind": "process",
+      "lane": "N",
+      "step": 12,
+      "drawio": {
+        "x": 474,
+        "y": -130,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-761"
+      ],
+      "downstream": [
+        "W-636"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-633",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-45",
+      "name": "Carter S",
+      "label": "Carter S\nW-ID:633",
+      "wIds": [
+        "633"
+      ],
+      "kind": "process",
+      "lane": "S",
+      "step": 12,
+      "drawio": {
+        "x": 234,
+        "y": -130,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-760"
+      ],
+      "downstream": [
+        "W-635"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-636",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-50",
+      "name": "KB-3N",
+      "label": "KB-3N\nW-ID:636",
+      "wIds": [
+        "636"
+      ],
+      "kind": "process",
+      "lane": "N",
+      "step": 13,
+      "drawio": {
+        "x": 474,
+        "y": -40,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-634"
+      ],
+      "downstream": [
+        "W-765"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-635",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-49",
+      "name": "KB-2S",
+      "label": "KB-2S\nW-ID:635",
+      "wIds": [
+        "635"
+      ],
+      "kind": "process",
+      "lane": "S",
+      "step": 13,
+      "drawio": {
+        "x": 234,
+        "y": -40,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-633"
+      ],
+      "downstream": [
+        "W-766"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-765",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-51",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:765",
+      "wIds": [
+        "765"
+      ],
+      "kind": "elevator",
+      "lane": "N",
+      "step": 14,
+      "drawio": {
+        "x": 474,
+        "y": 50,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-636"
+      ],
+      "downstream": [
+        "W-746"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-766",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-52",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:766",
+      "wIds": [
+        "766"
+      ],
+      "kind": "elevator",
+      "lane": "S",
+      "step": 14,
+      "drawio": {
+        "x": 234,
+        "y": 50,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-635"
+      ],
+      "downstream": [
+        "W-745"
+      ],
+      "details": {}
+    },
+    {
+      "id": "W-746",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-58",
+      "name": "KB-3NN",
+      "label": "KB-3NN\nW-ID:746",
+      "wIds": [
+        "746"
+      ],
+      "kind": "process",
+      "lane": "N",
+      "step": 15,
+      "drawio": {
+        "x": 474,
+        "y": 140,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-765"
+      ],
+      "downstream": [],
+      "details": {}
+    },
+    {
+      "id": "W-745",
+      "drawioId": "QdWsfEp3SHmr1tPobRuz-57",
+      "name": "KB-2SS",
+      "label": "KB-2SS\nW-ID:745",
+      "wIds": [
+        "745"
+      ],
+      "kind": "process",
+      "lane": "S",
+      "step": 15,
+      "drawio": {
+        "x": 234,
+        "y": 140,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "W-766"
+      ],
+      "downstream": [],
+      "details": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-4",
+      "from": "W-793-794-795-796",
+      "to": "W-611",
+      "inferred": true,
+      "note": "Pil ikke koblet til maskinen i tegningen"
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-6",
+      "from": "W-611",
+      "to": "W-743",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-9",
+      "from": "W-743",
+      "to": "W-614",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-11",
+      "from": "W-614",
+      "to": "W-756",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-13",
+      "from": "W-756",
+      "to": "W-615",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-21",
+      "from": "W-615",
+      "to": "W-758",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-23",
+      "from": "W-615",
+      "to": "W-759",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-27",
+      "from": "W-758",
+      "to": "W-790",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-26",
+      "from": "W-759",
+      "to": "W-789",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-34",
+      "from": "W-789",
+      "to": "W-763",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-33",
+      "from": "W-790",
+      "to": "W-762",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-35",
+      "from": "W-763",
+      "to": "W-773",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-36",
+      "from": "W-762",
+      "to": "W-772",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-39",
+      "from": "W-773",
+      "to": "W-625",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-40",
+      "from": "W-772",
+      "to": "W-738",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-43",
+      "from": "W-625",
+      "to": "W-760",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-44",
+      "from": "W-738",
+      "to": "W-761",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-47",
+      "from": "W-760",
+      "to": "W-633",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-48",
+      "from": "W-761",
+      "to": "W-634",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-53",
+      "from": "W-633",
+      "to": "W-635",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-54",
+      "from": "W-634",
+      "to": "W-636",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-56",
+      "from": "W-635",
+      "to": "W-766",
+      "inferred": false
+    },
+    {
+      "id": "QdWsfEp3SHmr1tPobRuz-55",
+      "from": "W-636",
+      "to": "W-765",
+      "inferred": false
+    },
+    {
+      "id": "inferred-W-766-W-745",
+      "from": "W-766",
+      "to": "W-745",
+      "inferred": true,
+      "note": "Mangler pil i tegningen"
+    },
+    {
+      "id": "inferred-W-765-W-746",
+      "from": "W-765",
+      "to": "W-746",
+      "inferred": true,
+      "note": "Mangler pil i tegningen"
+    }
+  ],
+  "issues": [
+    "Pilen fra \"Vippestol\" rammer ikke \"Påslag anlæg\" – forbindelsen er antaget.",
+    "Ingen pil mellem \"Elevator\" (766) og \"KB-2SS\" (745) – forbindelsen er antaget.",
+    "Ingen pil mellem \"Elevator\" (765) og \"KB-3NN\" (746) – forbindelsen er antaget."
+  ]
+}

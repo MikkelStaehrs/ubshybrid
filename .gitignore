@@ -1,0 +1,5 @@
+node_modules
+.next
+preview/dist
+next-env.d.ts
+*.tsbuildinfo
