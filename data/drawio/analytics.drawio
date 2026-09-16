@@ -12,7 +12,7 @@
             <mxGeometry x="354" y="240" width="120" height="60" as="geometry" />
           </mxCell>
         </UserObject>
-        <UserObject label="&lt;b&gt;%navn%&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#5B6763&quot;&gt;W-ID: %wid%&lt;/font&gt;" placeholders="1" navn="CT-scanner" wid="" maskintype="Analyse" spor="" x="" z="" rot="" bredde="0,9" dybde="1,8" hoejde="1,8" producent="" model="" aar="" proces="Gennemlysning af prøver" kapacitet="" dim="" ot="" noter="Firkantet kabinet, 180 cm højt, 90 cm bredt, 180 cm dybt." id="an-ct">
+        <UserObject label="&lt;b&gt;%navn%&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#5B6763&quot;&gt;W-ID: %wid%&lt;/font&gt;" placeholders="1" navn="CT-scanner" wid="" maskintype="Analyse" spor="" x="" z="" rot="" bredde="0,9" dybde="1,8" hoejde="1,8" producent="Fraunhofer-Gesellschaft" model="" aar="" proces="Gennemlysning af prøver" kapacitet="" dim="" ot="" noter="Firkantet kabinet, 180 cm højt, 90 cm bredt, 180 cm dybt." id="an-ct">
           <mxCell style="whiteSpace=wrap;html=1;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontColor=#18201E;rounded=1;arcSize=10;fillColor=#E6DDEF;strokeColor=#8A6BA3;" vertex="1" parent="1">
             <mxGeometry x="354" y="320" width="120" height="60" as="geometry" />
           </mxCell>

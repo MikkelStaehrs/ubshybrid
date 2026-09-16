@@ -4,7 +4,7 @@
     "name": "Analytics",
     "order": 0,
     "sourceFile": "analytics.drawio",
-    "parsedAt": "2026-09-16T12:42:17.355Z",
+    "parsedAt": "2026-09-16T12:48:28.991Z",
     "positionMode": "schematic"
   },
   "lanes": [],
@@ -59,6 +59,7 @@
       "upstream": [],
       "downstream": [],
       "details": {
+        "producent": "Fraunhofer-Gesellschaft",
         "proces": "Gennemlysning af prøver",
         "noter": "Firkantet kabinet, 180 cm højt, 90 cm bredt, 180 cm dybt."
       }

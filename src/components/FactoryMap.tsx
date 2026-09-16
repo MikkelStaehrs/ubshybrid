@@ -3,6 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
 import type { LineOption } from "../lib/lines";
+import { formatRetrofit, parseRetrofit, timeSince } from "../lib/retrofit";
 import type { LineData, Machine, MachineKind } from "../lib/types";
 import { useSceneTheme } from "../lib/useSceneTheme";
 import { Scene, type ViewMode } from "./Scene";
@@ -22,6 +23,77 @@ const KIND_ORDER: MachineKind[] = ["intake", "elevator", "distributor", "process
 
 /** Meter med dansk komma, uden overflødige decimaler. */
 const meters = (v: number) => `${v.toFixed(1).replace(/\.0$/, "").replace(".", ",")} m`;
+
+function RetrofitModal({ m, onClose }: { m: Machine; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const raw = m.details.retrofit?.trim();
+  const parsed = raw ? parseRetrofit(raw) : null;
+  const since = parsed ? timeSince(parsed) : "";
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+    };
+    // capture, så modalen lukkes før Escape rammer resten af kortet
+    addEventListener("keydown", onKey, true);
+    return () => removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  return (
+    <div className="fm-modal-back" onClick={onClose}>
+      <div
+        className="fm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fm-retro-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="fm-modal-head">
+          <div>
+            <div className="fm-modal-eyebrow">Retrofit</div>
+            <h2 id="fm-retro-title">{m.name}</h2>
+          </div>
+          <button ref={closeRef} type="button" className="fm-close" aria-label="Luk" onClick={onClose}>×</button>
+        </div>
+
+        <div className={`fm-retro-state${raw ? " is-done" : ""}`}>
+          {raw ? (
+            <>
+              <strong>Totalrenoveret {parsed ? formatRetrofit(parsed) : raw}</strong>
+              {since && <span>{since}</span>}
+            </>
+          ) : (
+            <>
+              <strong>Ingen totalrenovering registreret</strong>
+              <span>Vi ved ikke, om maskinen har været gennemrenoveret.</span>
+            </>
+          )}
+        </div>
+
+        <dl>
+          <Field label="W-ID" value={m.wIds.join(" / ") || undefined} />
+          <Field label="Producent" value={m.details.producent} />
+          <Field label="Model" value={m.details.model} />
+          <Field label="Oprindeligt år" value={m.details.aar} />
+          <Field label="Sidste totalrenovering" value={raw} />
+        </dl>
+
+        {m.details.retrofitNoter && (
+          <section>
+            <h3>Hvad blev der lavet</h3>
+            <p>{m.details.retrofitNoter}</p>
+          </section>
+        )}
+
+        <footer>
+          Udfyldes i Draw.io med Ctrl+M: <span className="fm-mono">retrofit</span> (fx
+          {" "}<span className="fm-mono">2024-06</span>) og <span className="fm-mono">retrofitnoter</span>.
+        </footer>
+      </div>
+    </div>
+  );
+}
 
 function Field({ label, value }: { label: string; value?: string }) {
   return (
@@ -69,6 +141,7 @@ export function FactoryMap({
   const [showLabels, setShowLabels] = useState(true);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
+  const [retrofitOpen, setRetrofitOpen] = useState(false);
   const isRoom = !!rooms?.some((r) => r.id === data.line.id);
   const showPicker = (lines?.length ?? 0) + (rooms?.length ?? 0) > 1 && !!onSelectLine;
 
@@ -79,6 +152,7 @@ export function FactoryMap({
     setSelectedId(null);
     setHoveredId(null);
     setLane(null);
+    setRetrofitOpen(false);
     setQuery("");
     setIssuesOpen(false);
     setResetToken((t) => t + 1);
@@ -108,6 +182,7 @@ export function FactoryMap({
   const select = (id: string | null) => {
     setSelectedId(id);
     setSearchOpen(false);
+    setRetrofitOpen(false);
     if (id) {
       const m = layout.byId.get(id);
       if (m && lane && m.lane && m.lane !== lane) setLane(null);
@@ -305,6 +380,18 @@ export function FactoryMap({
             <dl>{OT_ROWS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
           </section>
 
+          <section>
+            <h3>Retrofit</h3>
+            <button
+              type="button"
+              className={`fm-retro-btn${selected.details.retrofit ? " is-done" : ""}`}
+              onClick={() => setRetrofitOpen(true)}
+            >
+              <span>{selected.details.retrofit ? `Totalrenoveret ${selected.details.retrofit}` : "Ikke registreret"}</span>
+              <span className="fm-retro-more">Detaljer</span>
+            </button>
+          </section>
+
           {hasFlow && (
           <section>
             <h3>Flow</h3>
@@ -354,6 +441,10 @@ export function FactoryMap({
             )}
           </footer>
         </aside>
+      )}
+
+      {retrofitOpen && selected && (
+        <RetrofitModal m={selected} onClose={() => setRetrofitOpen(false)} />
       )}
     </div>
   );

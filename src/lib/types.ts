@@ -13,6 +13,10 @@ export interface MachineDetails {
   kapacitet?: string;
   dimSkab?: string;
   otNet?: string;
+  /** Hvornår maskinen sidst er totalrenoveret. "2024", "2024-06" eller "2024-06-15". */
+  retrofit?: string;
+  /** Hvad renoveringen omfattede. */
+  retrofitNoter?: string;
   noter?: string;
   /** Alle øvrige felter fra Draw.io bevares her. */
   [key: string]: string | undefined;

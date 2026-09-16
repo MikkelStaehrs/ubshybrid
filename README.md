@@ -46,8 +46,28 @@ npm run parse -- data/drawio/analytics.drawio analytics "Analytics" 0
 Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.
 - **Pile:** Materialeflowet. Løse pile og manglende pile mellem maskiner, der står lige under hinanden, bliver *antaget* og vist med orange stiplet linje.
-- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces eller Analyse) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
+- **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces eller Analyse) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `retrofit` og `retrofitnoter` vises i retrofit-modalen. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
 - **Spor:** Feltet `spor`. Mangler det, gættes sporet ud fra navnets endelse (S/N) efter en fordeler.
+
+## Retrofit
+
+Alt hardware har et retrofit-afsnit i maskinpanelet, der åbner en modal med,
+hvornår maskinen sidst er **totalrenoveret**. Står der intet, siger modalen det
+tydeligt — "ikke registreret" er en anden oplysning end "aldrig renoveret".
+
+To felter i Ctrl+M:
+
+| Felt | Betydning |
+| --- | --- |
+| `retrofit` | Hvornår. `2024`, `2024-06` eller `2024-06-15` |
+| `retrofitnoter` | Hvad renoveringen omfattede |
+
+Datoen vises på dansk sammen med hvor længe siden det er ("juni 2024 · for 2 år
+siden"). Kan feltet ikke læses som en dato, vises teksten som den står, så fx
+"sidste sommer" ikke går tabt.
+
+Der gemmes **én** renovering pr. maskine — den seneste. Skal I have historik med
+flere renoveringer, kræver det en liste i datamodellen.
 
 ## Målfast placering fra plantegningen
 
@@ -111,6 +131,7 @@ meter, og billedets top er nord. Ligger tegningen skævt, drejes den med `rot`
 | `src/lib/drawio.ts` | Draw.io → `LineData` (virker også i browseren) |
 | `src/lib/types.ts` | Datamodellen (klar til at flytte til MSSQL) |
 | `src/lib/layout.ts` | Tegning → meter, maskinstørrelser, flowruter |
+| `src/lib/retrofit.ts` | Datoer for totalrenovering |
 | `src/components/` | 3D-scene (React Three Fiber), maskinpanel, styles |
 | `scripts/build-preview.ts` | `npm run preview` → én selvstændig HTML-fil til deling |
 

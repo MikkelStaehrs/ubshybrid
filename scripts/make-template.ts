@@ -8,7 +8,7 @@ const esc = (s: string) =>
 
 // Feltrækkefølge = rækkefølgen i "Rediger data" (Ctrl+M).
 // navn…rot styrer selve kortet; resten er stamdata til maskinpanelet.
-const FIELDS = ["navn", "wid", "maskintype", "spor", "x", "z", "rot", "producent", "model", "aar", "proces", "kapacitet", "dim", "ot", "noter"] as const;
+const FIELDS = ["navn", "wid", "maskintype", "spor", "x", "z", "rot", "producent", "model", "aar", "retrofit", "retrofitnoter", "proces", "kapacitet", "dim", "ot", "noter"] as const;
 type Fields = Partial<Record<(typeof FIELDS)[number], string>>;
 
 type Kind = "Indtag" | "Elevator" | "Fordeler" | "Proces" | "Analyse";
@@ -82,7 +82,9 @@ const fieldRows: [string, string, string][] = [
   ["rot", "", "Grader med uret. 0 = maskinen vender mod øst"],
   ["producent", "", "Fabrikat, fx Cimbria"],
   ["model", "", "Modelbetegnelse"],
-  ["aar", "", "Årgang"],
+  ["aar", "", "Årgang da maskinen blev sat op"],
+  ["retrofit", "", "Sidste totalrenovering: 2024, 2024-06 eller 2024-06-15"],
+  ["retrofitnoter", "", "Hvad renoveringen omfattede"],
   ["proces", "", "Hvad maskinen gør, fx rensning, sortering"],
   ["kapacitet", "", "Fx 2 t/h"],
   ["dim", "", "DIM-skab maskinen hænger på"],
@@ -96,7 +98,7 @@ guide.push(text(
   `<tr><td style="${td}"><b>Felt</b></td><td style="${td}"><b>Skal udfyldes</b></td><td style="${td}"><b>Eksempel / betydning</b></td></tr>` +
   fieldRows.map(([f, req, d]) => `<tr><td style="${td}font-family:Courier New;">${f}</td><td style="${td}">${req}</td><td style="${td}">${d}</td></tr>`).join("") +
   `</table>`,
-  40, 500, 520, 400));
+  40, 500, 520, 450));
 
 // Maskintyper
 guide.push(text(`<font style="font-size: 16px;"><b>Maskintyper</b></font>`, 600, 130, 300, 24));
