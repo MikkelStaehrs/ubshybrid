@@ -40,8 +40,9 @@ nulpunkt, ellers passer de ikke sammen indbyrdes. Skriv det aftalte punkt her:
 
 > Nulpunkt for UBS Holeby: _(ikke aftalt endnu)_
 
-Felterne sættes pr. maskine med Ctrl+M. Alle mål er i **meter**, og både `12,5`
-og `12.5` virker:
+Felterne sættes pr. maskine med Ctrl+M og står klar på alle bokse fra skabelonen
+og maskinbiblioteket. Alle mål er i **meter**, og både `12,5` og `12.5` virker.
+Tomme felter betyder bare "ikke målt op endnu" og giver ingen advarsler:
 
 | Felt | Betydning |
 | --- | --- |

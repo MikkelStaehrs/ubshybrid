@@ -7,7 +7,8 @@ const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\n/g, "&#10;");
 
 // Feltrækkefølge = rækkefølgen i "Rediger data" (Ctrl+M).
-const FIELDS = ["navn", "wid", "maskintype", "spor", "producent", "model", "aar", "proces", "kapacitet", "dim", "ot", "noter"] as const;
+// navn…rot styrer selve kortet; resten er stamdata til maskinpanelet.
+const FIELDS = ["navn", "wid", "maskintype", "spor", "x", "z", "rot", "producent", "model", "aar", "proces", "kapacitet", "dim", "ot", "noter"] as const;
 type Fields = Partial<Record<(typeof FIELDS)[number], string>>;
 
 type Kind = "Indtag" | "Elevator" | "Fordeler" | "Proces";
@@ -75,6 +76,9 @@ const fieldRows: [string, string, string][] = [
   ["wid", "Ja", "W-ID. Flere: 793/794/795"],
   ["maskintype", "Ja", "Indtag, Elevator, Fordeler eller Proces"],
   ["spor", "Ved deling", "Sporets bogstav, fx S eller N"],
+  ["x", "Ved opmåling", "Meter mod øst fra fabrikkens nulpunkt"],
+  ["z", "Ved opmåling", "Meter mod syd fra fabrikkens nulpunkt"],
+  ["rot", "", "Grader med uret. 0 = maskinen vender mod øst"],
   ["producent", "", "Fabrikat, fx Cimbria"],
   ["model", "", "Modelbetegnelse"],
   ["aar", "", "Årgang"],
@@ -91,7 +95,7 @@ guide.push(text(
   `<tr><td style="${td}"><b>Felt</b></td><td style="${td}"><b>Skal udfyldes</b></td><td style="${td}"><b>Eksempel / betydning</b></td></tr>` +
   fieldRows.map(([f, req, d]) => `<tr><td style="${td}font-family:Courier New;">${f}</td><td style="${td}">${req}</td><td style="${td}">${d}</td></tr>`).join("") +
   `</table>`,
-  40, 500, 520, 330));
+  40, 500, 520, 400));
 
 // Maskintyper
 guide.push(text(`<font style="font-size: 16px;"><b>Maskintyper</b></font>`, 620, 130, 300, 24));
@@ -123,6 +127,14 @@ guide.push(note(
   `☐ Fanen hedder <i>Linje N – Navn</i>`,
   620, 720, 420, 110, "#F6EFE3", "#B7791F"));
 
+guide.push(note(
+  `<b>Målfast placering – kun hvis linjen er målt op</b><br><br>` +
+  `Felterne <i>x</i>, <i>z</i> og <i>rot</i> flytter maskinerne hen, hvor de står i virkeligheden. ` +
+  `<b>Lad dem stå tomme</b>, hvis linjen ikke er målt op – så placeres maskinerne efter tegningen som hidtil.<br><br>` +
+  `Alle mål er i meter fra fabrikkens aftalte nulpunkt. Både 12,5 og 12.5 virker. ` +
+  `Har du målt maskinen op, kan du selv tilføje felterne <i>bredde</i>, <i>dybde</i> og <i>hoejde</i>.`,
+  620, 860, 420, 150, "#EEF3F1", "#2E6D64"));
+
 // ---------------------------------------------------------------------------
 // Fane 2: tom linje
 // ---------------------------------------------------------------------------
@@ -137,7 +149,7 @@ line.push(start.xml);
 
 const drawio =
   `<mxfile host="app.diagrams.net" compressed="false">` +
-  page("Vejledning", "vejledning", guide, 1169, 900) +
+  page("Vejledning", "vejledning", guide, 1169, 1040) +
   page("Linje N – Navn", "linje", line) +
   `</mxfile>\n`;
 
