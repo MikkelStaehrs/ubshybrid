@@ -142,3 +142,201 @@ export interface MaintenanceEvent {
   /** Kroner. */
   omkostning?: number;
 }
+
+// ---------------------------------------------------------------------------
+// OT-lag
+//
+// Sensorer, skabe og kabelbakker ligger som vedligehold uden for LineData:
+// linjedata genereres fra Draw.io, mens OT-installationen er projektdata, der
+// planlægges og rulles ud i faser. Ligger i data/ot-layer.ts og bindes til
+// maskinerne på W-ID.
+//
+// Geometri står bevidst ikke i dataene. Bakker og skabe beskrives ved den
+// maskine eller det spor, de følger, og koordinaterne udledes af layoutet — så
+// overlever OT-laget en ny `npm run parse`, der flytter rundt på maskinerne.
+// ---------------------------------------------------------------------------
+
+/**
+ * Hvor langt en OT-komponent er — fra noget der kører, til noget ingen har
+ * taget stilling til. Rækkefølgen i OT_STATUS_ORDER følger den skala.
+ *
+ * To skel er vigtige, og kortet må ikke udviske dem:
+ *  - "planned" er besluttet og skal købes; "idea" er en mulighed, ingen har
+ *    sagt ja til.
+ *  - "missing" er hverken af delene: det findes ikke i dag, men er en
+ *    forudsætning for at resten virker. En manglende ting er ikke valgfri.
+ */
+export type OtStatus = "active" | "test" | "ordered" | "planned" | "missing" | "idea";
+
+/** Udrulningen sker i faser. Filteret i kortet er kumulativt. */
+export type OtPhase = 1 | 2 | 3;
+
+/** Signaltype afgør hvilken slags kanal i skabet komponenten optager. */
+export type OtSignal = "4-20 mA" | "0-10 V" | "digital";
+
+export interface OtNetwork {
+  /** Switch sensorskabet hænger på. */
+  switch?: string;
+  /** VLAN eller subnet for OT-segmentet. */
+  vlan?: string;
+  /** Hvor skabet er koblet op — fx fiber til krydsfelt. */
+  uplink?: string;
+}
+
+/** Afsnit i skabets stykliste, i den rækkefølge de vises. */
+export type OtHardwareCategory = "forsyning" | "io" | "netvaerk" | "klemmer" | "skab";
+
+/**
+ * Én komponent i skabet. Listen er både stykliste og kilden til kanaltallene:
+ * hvor mange AI- og DI-kanaler skabet har, udledes af IO-kortene her, så tallene
+ * ikke kan komme til at sige noget andet end styklisten.
+ */
+export interface OtHardware {
+  id: string;
+  category: OtHardwareCategory;
+  name: string;
+  /** Tavlebyggeren vælger det endelige fabrikat. Tom = ikke afklaret endnu. */
+  model?: string;
+  qty: number;
+  status: OtStatus;
+  note?: string;
+  /**
+   * Fasen komponenten kommer med i. Udeladt = med fra starten.
+   * Det er sådan kortet ved, hvornår AI-kort nr. 2 kommer på.
+   */
+  phase?: OtPhase;
+  /** Kanaler komponenten giver pr. stk. Kun IO-kort har det. */
+  provides?: { ai?: number; di?: number };
+  /**
+   * Blokken på DIN-skinne-tegningen: `width` er bredden i forhold til de andre
+   * blokke, `label` den korte tekst der kan stå i den. Komponenter uden `rail`
+   * (skabet selv, uplinket) sidder ikke på skinnen og tegnes ikke.
+   */
+  rail?: { width: number; label: string };
+}
+
+export interface OtCabinet {
+  /** Skabets mærkning, fx "RIO-SLIB-01". */
+  id: string;
+  name: string;
+  /** W-ID på maskinen skabet står ved. Bestemmer placeringen på kortet. */
+  nearMachine: string;
+  /** Meter fra maskinens midte. Skabet skal stå ved siden af, ikke oveni. */
+  offset: { x: number; z: number };
+  /** Styklisten. Kanalkapaciteten regnes ud fra IO-kortene i den. */
+  hardware: OtHardware[];
+  status: OtStatus;
+  /**
+   * Netværksdelen er kun datamodel indtil videre — OT-nettet tegnes ovenpå
+   * senere, og feltet er her for at holde oplysningen ét sted fra start.
+   */
+  network?: OtNetwork;
+}
+
+export interface OtSensor {
+  /** Tag efter ISA-skik, fx "FT-756" — flowtransmitter på elevator 756. */
+  id: string;
+  /** Hvad den måler. */
+  type: string;
+  model: string;
+  signal: OtSignal;
+  /** W-ID på maskinen. Sensoren sidder ved elevatorens afkast. */
+  machineId: string;
+  cabinetId: string;
+  phase: OtPhase;
+  status: OtStatus;
+}
+
+export interface OtCableTray {
+  id: string;
+  name: string;
+  cabinetId: string;
+  /** Sporet bakken følger. null = det fælles stræk før fordeleren. */
+  lane: string | null;
+  /**
+   * Meter fra sporets midterlinje, med fortegn så siden vælges bevidst:
+   * negativ = mod nord, positiv = mod syd.
+   */
+  offset: number;
+  /** Højde over gulv i meter. */
+  height: number;
+  /**
+   * W-ID på en maskine bakken skal nå ud over de maskiner, den betjener.
+   * Bruges til stikket fra skabet frem til indtaget.
+   */
+  extendTo?: string;
+}
+
+export interface OtLayer {
+  cabinets: OtCabinet[];
+  sensors: OtSensor[];
+  cableTrays: OtCableTray[];
+}
+
+// ---------------------------------------------------------------------------
+// Sensorkatalog og idéer
+//
+// Kataloget er de sensortyper, der giver mening på et sliberi — uafhængigt af
+// hvilke maskiner der findes. Det er hverken projektdata eller anlægsdata, men
+// en liste over hvad man kan sætte på. Idéerne er det, brugeren selv stikker
+// ind på kortet for at se, hvad en udvidelse ville koste i kanaler.
+// ---------------------------------------------------------------------------
+
+/**
+ * Hvordan signalet når frem til skabet. AI og DI optager hver sin slags kanal;
+ * IO-Link og Modbus går på feltbussen og bruger ingen.
+ */
+export type OtSignalKind = "AI" | "DI" | "IO-Link" | "Modbus";
+
+export interface OtSensorType {
+  /** Stabil nøgle, fx "flow". */
+  type: string;
+  label: string;
+  signal: OtSignalKind;
+  /**
+   * Nogle typer fås i to udgaver — en vibrationssensor kan være analog eller
+   * sidde på IO-Link. `signal` er den, kanalregnskabet regner med.
+   */
+  altSignal?: OtSignalKind;
+  /** Hvor den typisk sidder. Fri tekst — kortet gætter ikke på maskiner. */
+  typicalPlacement: string;
+  /** Hvad man får ud af den. */
+  purpose: string;
+}
+
+/**
+ * En sensoridé sat på en maskine i kortet. Lever kun i browseren — det er en
+ * skitse, ikke et projekt, og den skal ikke kunne forveksles med data/.
+ */
+export interface SensorIdea {
+  id: string;
+  /** W-ID på maskinen idéen er sat på. */
+  machineId: string;
+  /** Nøgle ind i sensorkataloget. */
+  type: string;
+}
+
+// ---------------------------------------------------------------------------
+// OT-infrastruktur
+//
+// Alt det mellem IO-skabet og en database, der ikke står i hallen: uplink,
+// rack, VLAN, edge-collector og vejen til skyen. Det meste findes ikke endnu,
+// og det er hele pointen — uden det leverer piloten ingen data nogen steder.
+// ---------------------------------------------------------------------------
+
+/** Leddene i datavejen, fra måling til skærm. */
+export type OtPathStep = "sensor" | "io" | "kobler" | "edge" | "mssql" | "dashboard";
+
+export type OtInfraType = "uplink" | "rack" | "vlan" | "edge" | "link" | "cloud";
+
+export interface OtInfraNode {
+  id: string;
+  type: OtInfraType;
+  name: string;
+  /** Hvor den er — eller skal være. Fri tekst. */
+  location: string;
+  status: OtStatus;
+  /** De led i datavejen, der ikke virker uden den. */
+  requiredFor: OtPathStep[];
+  note?: string;
+}

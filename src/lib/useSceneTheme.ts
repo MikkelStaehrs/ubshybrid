@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 const TOKENS = [
   "scene-bg", "floor", "slab", "wall", "grid", "flow", "warn", "accent",
   "m-intake", "m-elevator", "m-distributor", "m-process", "m-analysis", "m-person", "m-steel", "label-ink",
+  "ot-cabinet", "ot-tray", "ot-active", "ot-test", "ot-planned", "ot-idea", "ot-ordered", "ot-missing",
+  "live-good", "live-stale", "live-fault", "live-none",
 ] as const;
 export type SceneTheme = Record<(typeof TOKENS)[number], string> & { dark: boolean };
 

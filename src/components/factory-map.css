@@ -39,6 +39,20 @@
   --m-analysis: #8a6ba3;
   --m-person: #c26b4d;
   --m-steel: #a9b1ad;
+
+  /* OT-lag */
+  --ot-cabinet: #4a5fb5;
+  --ot-tray: #8a9a94;
+  --ot-active: #3f8f4f;
+  --ot-test: #c9821f;
+  --ot-planned: #7f8d95;
+  --ot-idea: #9aa6ad;
+  --ot-ordered: #3d7ea6;
+  --ot-missing: #c0392b;
+  --live-good: #2f8f4e;
+  --live-stale: #c9821f;
+  --live-fault: #c0392b;
+  --live-none: #8a959b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,6 +85,18 @@
     --m-distributor: #4f8795;
     --m-process: #34806f;
     --m-steel: #6c7773;
+    --ot-cabinet: #8390e2;
+    --ot-tray: #6f7f79;
+    --ot-active: #5bb06d;
+    --ot-test: #e0a341;
+    --ot-planned: #7b8a92;
+    --ot-idea: #6a777e;
+    --ot-ordered: #63a8cc;
+    --ot-missing: #e0705f;
+    --live-good: #56b877;
+    --live-stale: #e0a341;
+    --live-fault: #e0705f;
+    --live-none: #76838a;
   }
 }
 :root[data-theme="dark"] {
@@ -104,6 +130,18 @@
   --m-analysis: #9d80b8;
   --m-person: #d4805f;
   --m-steel: #6c7773;
+  --ot-cabinet: #8390e2;
+  --ot-tray: #6f7f79;
+  --ot-active: #5bb06d;
+  --ot-test: #e0a341;
+  --ot-planned: #7b8a92;
+  --ot-idea: #6a777e;
+  --ot-ordered: #63a8cc;
+  --ot-missing: #e0705f;
+  --live-good: #56b877;
+  --live-stale: #e0a341;
+  --live-fault: #e0705f;
+  --live-none: #76838a;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -542,6 +580,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   display: flex;
   flex-direction: column;
   width: min(520px, 100%);
+  max-width: 100%;
   max-height: 100%;
   background: var(--surface-solid);
   border: 1px solid var(--line);
@@ -587,8 +626,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fm-seg button[aria-pressed="true"] .fm-count { color: inherit; opacity: 0.7; }
 
 .fm-timeline {
-  flex: 1;
-  overflow-y: auto;
   margin: 0;
   padding: 14px 18px 18px 30px;
   list-style: none;
@@ -630,3 +667,608 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fm-event p { margin: 4px 0 0; }
 .fm-event-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .fm-event-meta span + span::before { content: "·"; margin-right: 10px; }
+
+/* --- OT-lag --------------------------------------------------------------- */
+.ot-active { background: var(--ot-active); border-radius: 50%; }
+.ot-test { background: var(--ot-test); border-radius: 50%; }
+.ot-planned { background: var(--ot-planned); border-radius: 50%; opacity: 0.8; }
+.ot-cab { background: var(--ot-cabinet); }
+.ot-ordered { background: var(--ot-ordered); border-radius: 50%; }
+/* Mangler er ikke en tone af planlagt — den skal stikke ud. */
+.ot-missing {
+  background: none;
+  border: 1.5px dashed var(--ot-missing);
+  border-radius: 50%;
+}
+/* En idé er ikke besluttet — den tegnes som et omrids, ikke som en klat. */
+.ot-idea {
+  background: none;
+  border: 1px dashed var(--ot-idea);
+  border-radius: 50%;
+  opacity: 0.85;
+}
+.fm-tray {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  flex: none;
+  border-radius: 1px;
+  background: var(--ot-tray);
+}
+.fm-tag-ot { border-color: var(--ot-tray); }
+.fm-tag-ot .fm-tag-name { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; }
+
+.fm-modal-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.fm-modal-body { padding: 14px 18px; }
+.fm-modal-body + .fm-modal-body { border-top: 1px solid var(--line); }
+.fm-modal-body h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fm-modal-body dl { margin: 0; display: grid; }
+.fm-modal-body p { margin: 0; line-height: 1.5; }
+
+/* Kanalregnskab i skabet */
+.fm-chan + .fm-chan { margin-top: 12px; }
+.fm-chan-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.fm-chan-head .fm-mono { color: var(--muted); }
+.fm-chan-bar { display: flex; gap: 2px; margin: 6px 0 4px; }
+.fm-chan-bar i { flex: 1; height: 6px; border-radius: 1px; background: var(--line); }
+.fm-chan-bar i.on { background: var(--ot-cabinet); }
+.fm-chan-note { font-size: 12px; color: var(--muted); }
+.fm-chan.is-over .fm-chan-note { color: var(--warn); }
+.fm-chan.is-over .fm-chan-head .fm-mono { color: var(--warn); }
+
+/* Sensorliste */
+.fm-otlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.fm-otrow {
+  display: grid;
+  grid-template-columns: 10px 62px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  text-align: left;
+  font-size: 13px;
+}
+.fm-otrow:hover { border-color: var(--accent); background: var(--accent-soft); }
+.fm-otrow-where { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-otrow-phase { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fm-otrow-ch { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fm-otrow-ch.is-missing { color: var(--warn); }
+
+@media (max-width: 860px) {
+  .fm-otrow { grid-template-columns: 10px 62px 1fr auto; }
+  .fm-otrow-phase { display: none; }
+}
+
+/* --- Stykliste og DIN-skinne --------------------------------------------- */
+.fm-rail { margin: 0 0 14px; }
+.fm-rail-row {
+  display: flex;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 4px;
+  /* Skinnen selv: to riller i metal. */
+  background:
+    linear-gradient(var(--line), var(--line)) 0 6px / 100% 2px no-repeat,
+    linear-gradient(var(--line), var(--line)) 0 calc(100% - 6px) / 100% 2px no-repeat,
+    var(--surface-2);
+  border: 1px solid var(--line);
+}
+.fm-rail-block {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 4px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  font-size: 10px;
+  text-align: center;
+  overflow: hidden;
+}
+.fm-rail-block span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fm-rail-block.is-io { border-color: var(--ot-cabinet); color: var(--ot-cabinet); }
+/* Kort fra en senere fase: pladsen er der, komponenten er ikke. */
+.fm-rail-block.is-later {
+  border-style: dashed;
+  background: none;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.fm-hwgroup + .fm-hwgroup { margin-top: 14px; }
+.fm-hwgroup h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.fm-hwlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fm-hwrow {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto auto;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 13px;
+}
+.fm-hwrow.is-later { opacity: 0.6; }
+.fm-hwrow-name { overflow-wrap: anywhere; }
+.fm-hwrow-later { color: var(--muted); font-size: 11px; }
+.fm-hwrow-model { color: var(--muted); font-size: 12px; }
+.fm-hwrow-model.is-empty { font-style: italic; opacity: 0.8; }
+.fm-hwrow-qty { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fm-hwrow-buy { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fm-hwrow-buy.is-later { color: var(--ot-idea); font-style: italic; }
+/* En idé tones ned, men skal stadig kunne læses. */
+.fm-hwrow.is-idea { opacity: 0.72; }
+.fm-hwsum { margin: 0 0 12px !important; font-size: 12px; color: var(--muted); }
+/* Noten løber under de fire kolonner, forbi prikken. */
+.fm-hwrow-note { grid-column: 2 / -1; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+.fm-chan-soon { color: var(--ot-cabinet); }
+.fm-otrow.is-later { opacity: 0.6; }
+
+@media (max-width: 860px) {
+  .fm-hwrow { grid-template-columns: 10px 1fr auto; }
+  .fm-hwrow-model, .fm-hwrow-buy { display: none; }
+}
+
+/* --- Mulig udvidelse ------------------------------------------------------ */
+.fm-otmore { margin-top: 12px; }
+.fm-otmore > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fm-otmore > summary:hover { border-color: var(--ot-idea); color: var(--ink); }
+.fm-otmore > summary .fm-count { margin-left: auto; letter-spacing: normal; }
+.fm-otmore[open] > summary { margin-bottom: 8px; }
+/* Rækker under udvidelsen er ikke besluttede — stiplet frem for fuld ramme. */
+.fm-otmore .fm-otrow { border-style: dashed; background: none; }
+
+/* Styklisten er tabelagtig og har brug for mere bredde end en tidslinje.
+   Højden er fast, ikke indholdsstyret: en modal med faner må ikke hoppe i
+   størrelse, hver gang man skifter fane. Korte faner får tom plads i bunden. */
+.fm-modal.is-wide {
+  width: min(820px, 100%);
+  height: min(720px, 100%);
+}
+
+/* Etiketterne på skinnen skal kunne stå i de smalle blokke. */
+.fm-rail-block { padding: 10px 3px; font-size: 9.5px; letter-spacing: -0.01em; }
+
+@media (max-width: 860px) {
+  .fm-modal.is-wide { width: 100%; }
+}
+
+/* --- Faner i skabsmodalen ------------------------------------------------- */
+.fm-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.fm-tabs button {
+  flex: none;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.fm-tabs button:hover { color: var(--ink); }
+.fm-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.fm-tabs .fm-count { margin-left: 6px; }
+
+/* --- Nøgletal ------------------------------------------------------------- */
+.fm-stats { display: flex; flex-wrap: wrap; gap: 10px; }
+.fm-stat {
+  flex: 1 1 110px;
+  display: grid;
+  gap: 1px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.fm-stat-value { font-size: 22px; line-height: 1.1; }
+.fm-stat-label { font-size: 11px; color: var(--muted); }
+.fm-stat-hint { font-size: 11px; color: var(--muted); opacity: 0.8; }
+
+/* --- Registeroversigt ----------------------------------------------------- */
+.fm-reglist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.fm-reghead, .fm-regrow {
+  display: grid;
+  grid-template-columns: 76px 52px 108px 1fr;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.fm-reghead {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.fm-regnote { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.fm-regfoot { margin-top: 10px !important; font-size: 12px; line-height: 1.5; }
+
+/* --- Datavejen ------------------------------------------------------------ */
+.fm-path { list-style: none; margin: 0; padding: 0 0 0 18px; display: grid; gap: 0; }
+.fm-path li {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  padding: 0 0 16px 14px;
+  border-left: 1px solid var(--line);
+}
+.fm-path li:last-child { padding-bottom: 0; border-left-color: transparent; }
+.fm-path li::before {
+  content: "";
+  position: absolute;
+  left: -4.5px;
+  top: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ot-cabinet);
+}
+.fm-path-title { font-weight: 500; }
+.fm-path-detail { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* --- Kodeeksempel --------------------------------------------------------- */
+.fm-code {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+/* --- Sensoridéer ---------------------------------------------------------- */
+.fm-idearow {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.fm-idearow.is-real { border-style: solid; background: var(--surface-2); }
+.fm-idearow-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-idearow-sig { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fm-idearow-ch { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fm-idearow-del {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.fm-idearow-del:hover { color: var(--accent); }
+
+/* --- Sensorkatalog -------------------------------------------------------- */
+.fm-catalog { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.fm-catalog button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  text-align: left;
+}
+.fm-catalog button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.fm-catalog-head { display: flex; align-items: baseline; gap: 8px; }
+.fm-catalog-name { flex: 1; font-size: 13px; }
+.fm-catalog-sig { font-size: 11px; color: var(--muted); }
+.fm-catalog-where { font-size: 11px; color: var(--muted); }
+.fm-catalog-why { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.fm-catalog-foot { margin-top: 10px !important; font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 860px) {
+  .fm-reghead, .fm-regrow { grid-template-columns: 70px 46px 1fr; }
+  .fm-reghead span:nth-child(4), .fm-regrow span:nth-child(4) { display: none; }
+}
+
+/* --- Status som farve ----------------------------------------------------- */
+.st-active { --st: var(--ot-active); }
+.st-test { --st: var(--ot-test); }
+.st-ordered { --st: var(--ot-ordered); }
+.st-planned { --st: var(--ot-planned); }
+.st-missing { --st: var(--ot-missing); }
+.st-idea { --st: var(--ot-idea); }
+
+/* --- Datavejen farvet efter status ---------------------------------------- */
+.fm-path li::before { background: var(--st, var(--ot-cabinet)); }
+/* Et led der ikke findes, tegnes som en ring frem for en fyldt prik. */
+.fm-path li.st-missing::before,
+.fm-path li.st-planned::before,
+.fm-path li.st-idea::before {
+  background: var(--bg);
+  border: 1.5px solid var(--st);
+}
+.fm-path li.st-missing { border-left-color: var(--ot-missing); }
+.fm-path-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-weight: 500; }
+.fm-path-status {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--st, var(--muted));
+}
+.fm-path-block { font-size: 12px; color: var(--ot-missing); line-height: 1.45; }
+
+/* --- Forudsætninger ------------------------------------------------------- */
+.fm-prereq-count { margin: 0 0 8px !important; font-size: 14px; }
+.fm-prereq-count strong { font-family: var(--font-mono); font-size: 18px; font-weight: 500; }
+.fm-prereq-bar { display: flex; gap: 3px; }
+.fm-prereq-bar i {
+  flex: 1;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--st, var(--line));
+}
+.fm-prereq-bar i.st-missing, .fm-prereq-bar i.st-planned, .fm-prereq-bar i.st-idea {
+  background: none;
+  border: 1px dashed var(--st);
+}
+
+.fm-prereqlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.fm-prereq {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 3px 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--st, var(--line));
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+.fm-prereq.is-done { opacity: 0.72; }
+.fm-prereq-name { overflow-wrap: anywhere; }
+.fm-prereq-status {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--st, var(--muted));
+  white-space: nowrap;
+}
+.fm-prereq-where { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
+.fm-prereq-blocks { grid-column: 2 / -1; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.fm-prereq.st-missing .fm-prereq-blocks { color: var(--ot-missing); }
+.fm-prereq-note { grid-column: 2 / -1; font-size: 12px; color: var(--muted); opacity: 0.85; line-height: 1.4; }
+
+/* --- Live: kvalitet som farve --------------------------------------------- */
+.q-good { --q: var(--live-good); }
+.q-stale { --q: var(--live-stale); }
+.q-fault { --q: var(--live-fault); }
+.q-no-source { --q: var(--live-none); }
+.fm-q { color: var(--q, var(--muted)); }
+.fm-q::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--q, var(--muted));
+}
+
+/* --- Badge over målepunktet ----------------------------------------------- */
+.fm-live-badge {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 8px;
+  border: 1px solid var(--q, var(--line));
+  border-radius: 5px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+.fm-live-value { font-family: var(--font-mono); font-size: 13px; color: var(--q, var(--ink)); }
+.fm-live-tag { font-family: var(--font-mono); font-size: 9px; color: var(--muted); }
+.fm-live-badge.is-selected { border-width: 2px; }
+.fm-live-badge.q-no-source { opacity: 0.7; }
+
+/* --- Banner --------------------------------------------------------------- */
+.fm-mock-banner {
+  position: absolute;
+  left: 50%;
+  bottom: var(--gutter);
+  z-index: 40;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  max-width: calc(100% - var(--gutter) * 2);
+  padding: 8px 14px;
+  border: 1px dashed var(--warn);
+  border-radius: 6px;
+  background: var(--warn-soft);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+}
+.fm-mock-banner strong { font-size: 13px; }
+.fm-mock-banner span { color: var(--muted); }
+
+/* --- Sidepanel ------------------------------------------------------------ */
+.fm-live-panel {
+  position: absolute;
+  top: 96px;
+  right: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 30;
+  width: min(420px, calc(100% - var(--gutter) * 2));
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+.fm-live-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.fm-live-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.fm-live-sub { font-size: 12px; color: var(--muted); }
+.fm-live-panel section { padding: 12px 16px; border-top: 1px solid var(--line); }
+.fm-live-panel section:first-of-type { border-top: 0; }
+.fm-live-panel h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fm-live-panel p { margin: 0 0 6px; font-size: 12px; line-height: 1.5; }
+
+/* --- Kæden ---------------------------------------------------------------- */
+.fm-chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fm-chain li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.fm-chain-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--st, var(--line));
+}
+.fm-chain li.st-missing .fm-chain-dot,
+.fm-chain li.st-planned .fm-chain-dot,
+.fm-chain li.st-idea .fm-chain-dot {
+  background: none;
+  border: 1.5px dashed var(--st);
+}
+.fm-chain-status { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--st, var(--muted)); }
+.fm-chain-seen { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
+.fm-chain-note { grid-column: 2 / -1; font-size: 11px; color: var(--muted); opacity: 0.85; line-height: 1.4; }
+
+/* --- Signaltabel ---------------------------------------------------------- */
+.fm-siglist { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.fm-sighead {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  padding: 0 9px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fm-sigrow button {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-left: 3px solid var(--q, var(--line));
+  border-radius: 4px;
+  background: var(--surface-2);
+  text-align: left;
+  font-size: 12px;
+}
+.fm-sigrow button:hover { border-color: var(--line); border-left-color: var(--q, var(--line)); }
+.fm-sigrow.is-selected button { border-color: var(--accent); border-left-color: var(--q, var(--accent)); }
+.fm-sig-val { color: var(--q, var(--ink)); }
+.fm-sig-src { grid-column: 1 / 4; font-size: 11px; color: var(--muted); }
+.fm-sig-q { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--q, var(--muted)); }
+
+.fm-oee { opacity: 0.85; }
+
+/* --- Sparkline ------------------------------------------------------------ */
+.fm-live-now { display: flex; align-items: baseline; gap: 8px; }
+.fm-live-now-value { font-size: 40px; line-height: 1; }
+.fm-live-now-unit { font-size: 16px; color: var(--muted); }
+.fm-live-now-raw { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+.fm-spark { position: relative; margin-bottom: 12px; }
+.fm-spark svg {
+  display: block;
+  width: 100%;
+  height: 96px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.fm-spark path {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.fm-spark-scale {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  .fm-live-panel { top: auto; left: var(--gutter); width: auto; max-height: 52%; }
+  .fm-mock-banner { display: none; }
+}

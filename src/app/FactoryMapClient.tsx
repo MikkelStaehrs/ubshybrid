@@ -1,6 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import type { LiveSourceKind } from "../lib/live-source";
 import { DEFAULT_LINE, LINE_OPTIONS, LINES, ROOM_OPTIONS } from "../lib/lines";
 
 // WebGL kører kun i browseren.
@@ -9,8 +10,16 @@ const FactoryMap = dynamic(() => import("../components/FactoryMap").then((m) => 
   loading: () => <div className="fm-loading">Indlæser fabrikskort…</div>,
 });
 
-export default function FactoryMapClient() {
+export default function FactoryMapClient({ liveSource }: { liveSource: LiveSourceKind }) {
   const [viewId, setViewId] = useState(DEFAULT_LINE);
   const data = LINES[viewId] ?? LINES[DEFAULT_LINE];
-  return <FactoryMap data={data} lines={LINE_OPTIONS} rooms={ROOM_OPTIONS} onSelectLine={setViewId} />;
+  return (
+    <FactoryMap
+      data={data}
+      lines={LINE_OPTIONS}
+      rooms={ROOM_OPTIONS}
+      onSelectLine={setViewId}
+      liveSource={liveSource}
+    />
+  );
 }

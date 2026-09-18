@@ -5,12 +5,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CanvasTexture, MathUtils, PerspectiveCamera, SRGBColorSpace, TextureLoader, Vector3, type Texture } from "three";
 import type { MapControls as MapControlsImpl } from "three-stdlib";
 import { flowPath, halfExtent, type Layout } from "../lib/layout";
-import type { FloorplanImage, LineData } from "../lib/types";
+import type { OtLayout, OtSelection, PlacedIdea } from "../lib/ot";
+import type { FloorplanImage, LineData, OtPhase } from "../lib/types";
 import type { SceneTheme } from "../lib/useSceneTheme";
 import { FlowRibbon } from "./FlowRibbon";
 import { MachineMesh } from "./MachineMesh";
+import type { SignalValue } from "../lib/live-source";
+import { LiveLayer } from "./LiveLayer";
+import { OtLayer } from "./OtLayer";
 
 export type ViewMode = "perspective" | "top";
+
+/** Hvilket lag kortet viser. Kameraet er det samme i begge. */
+export type MapLayer = "maintenance" | "ot" | "live";
 
 interface SceneProps {
   data: LineData;
@@ -27,6 +34,20 @@ interface SceneProps {
   resetToken: number;
   onSelect: (id: string | null) => void;
   onHover: (id: string | null) => void;
+  layer: MapLayer;
+  /** OT-installationen, når linjen har en. */
+  ot: OtLayout | null;
+  otPhase: OtPhase;
+  otSelected: OtSelection | null;
+  otHovered: OtSelection | null;
+  /** Sensoridéer brugeren har skitseret på maskinerne. */
+  otIdeas: PlacedIdea[];
+  /** Seneste måleværdier. Tom uden for Live-visningen. */
+  liveValues: Map<string, SignalValue>;
+  liveSelected: string | null;
+  onLiveSelect: (signalId: string) => void;
+  onOtSelect: (sel: OtSelection | null) => void;
+  onOtHover: (sel: OtSelection | null) => void;
 }
 
 function matchesQuery(m: { name: string; wIds: string[] }, q: string) {
@@ -239,6 +260,26 @@ export function Scene(p: SceneProps) {
   const { layout, theme, data } = p;
   const selected = p.selectedId ? layout.byId.get(p.selectedId) : undefined;
   const related = new Set(selected ? [...selected.upstream, ...selected.downstream] : []);
+  // I OT-visningen træder maskiner og materialeflow tilbage, så sensorer,
+  // skab og kabler er det man ser. I Live står anlægget i normale farver —
+  // det er tallene ovenpå, der er nye.
+  const ot = p.layer === "ot";
+  const live = p.layer === "live";
+
+  // Pilene bevæger sig kun, hvor et flowsignal siger, at der løber noget.
+  // Et signal i fejl eller uden kilde ved ingenting og får intet til at rulle.
+  const flowing = new Set<string>();
+  if (live && p.ot) {
+    for (const sensor of p.ot.sensors) {
+      if (sensor.type !== "Materialestrøm" || !sensor.machine) continue;
+      const v = p.liveValues.get(sensor.id);
+      // Over nulpunktet på sløjfen = der er materiale i maskinen.
+      if (!v || v.quality === "no-source" || v.quality === "fault" || !(v.raw > 4.5)) continue;
+      for (const e of data.edges) {
+        if (e.from === sensor.machine.id || e.to === sensor.machine.id) flowing.add(e.id);
+      }
+    }
+  }
   const visible = (m: { lane: string | null; name: string; wIds: string[] }) =>
     (!p.lane || m.lane === p.lane || m.lane === null) && matchesQuery(m, p.query);
 
@@ -282,8 +323,8 @@ export function Scene(p: SceneProps) {
             dashed={e.inferred}
             width={hot ? 1.0 : 0.85}
             y={hot ? 0.06 : 0.04}
-            animate={p.animateFlow}
-            opacity={shown ? 1 : 0.15}
+            animate={live ? flowing.has(e.id) : p.animateFlow}
+            opacity={ot ? 0.12 : shown ? 1 : 0.15}
           />
         );
       })}
@@ -296,12 +337,36 @@ export function Scene(p: SceneProps) {
           selected={m.id === p.selectedId}
           hovered={m.id === p.hoveredId}
           related={related.has(m.id)}
-          dimmed={!visible(m)}
+          dimmed={ot || !visible(m)}
           showLabel={p.showLabels}
           onSelect={p.onSelect}
           onHover={p.onHover}
         />
       ))}
+
+      {live && p.ot && (
+        <LiveLayer
+          sensors={p.ot.sensors}
+          values={p.liveValues}
+          theme={theme}
+          selectedId={p.liveSelected}
+          onSelect={p.onLiveSelect}
+        />
+      )}
+
+      {ot && p.ot && (
+        <OtLayer
+          ot={p.ot}
+          theme={theme}
+          phase={p.otPhase}
+          showLabels={p.showLabels}
+          selected={p.otSelected}
+          hovered={p.otHovered}
+          ideas={p.otIdeas}
+          onSelect={p.onOtSelect}
+          onHover={p.onOtHover}
+        />
+      )}
 
       <CameraRig layout={layout} selectedId={p.selectedId} view={p.view} resetToken={p.resetToken} />
     </>
