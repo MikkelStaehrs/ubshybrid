@@ -34,6 +34,8 @@ const sliberi: Agent[] = [
         need: "Materialestrøm ind i sporene, målt før fordeleren",
       },
     ],
+    // Skriver prosa ud fra tal, der skal vejes mod hinanden.
+    engine: "claude",
     cadence: "Dagligt 06:00",
     enabled: false,
   },
@@ -55,6 +57,7 @@ const sliberi: Agent[] = [
         need: "Materialestrøm ind i sporene, målt før fordeleren",
       },
     ],
+    engine: "claude",
     cadence: "Dagligt 06:00",
     enabled: false,
   },
@@ -71,6 +74,9 @@ const sliberi: Agent[] = [
       { chainStep: "edge", required: true, need: "Edge-collectoren skal køre og poll'e" },
       { chainStep: "mssql", required: true, need: "Databasen skal tage imod rækker" },
     ],
+    // Rent regel-tjek: svarede leddet, eller gjorde det ikke. Ingen API-kald —
+    // og slet ikke fire gange i timen.
+    engine: "kode",
     cadence: "Hver 15. minut",
     enabled: false,
   },

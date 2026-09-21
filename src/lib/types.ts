@@ -400,6 +400,16 @@ export interface LineOps {
 export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt";
 
 /**
+ * Hvad der driver agenten.
+ *
+ * "kode" er ren regel-logik og koster ingenting at køre — et kædetjek er
+ * en sammenligning, ikke en vurdering. "claude" kalder API'et og koster
+ * penge pr. kørsel. Forskellen skal kunne ses i fladen, før nogen sætter
+ * noget i gang hver 15. minut.
+ */
+export type AgentEngine = "kode" | "claude";
+
+/**
  * Hvad agenten kigger på. Vagtagenten ser på signalkæden frem for maskiner —
  * dens arbejde er at opdage, at data holder op med at komme.
  */
@@ -445,6 +455,7 @@ export interface Agent {
   job: string;
   scope: AgentScope;
   inputs: AgentInput[];
+  engine: AgentEngine;
   /** Fx "Dagligt 06:00". */
   cadence: string;
   /** Slået til på serveren. Falsk på alle, indtil noget faktisk kører. */

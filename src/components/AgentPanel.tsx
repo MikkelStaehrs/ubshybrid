@@ -1,5 +1,8 @@
 "use client";
-import { describeScope, AGENT_ROLE_LABEL, AGENT_STATUS_LABEL, type AgentState } from "../lib/agents";
+import {
+  describeScope, AGENT_ENGINE_LABEL, AGENT_ENGINE_NOTE, AGENT_ROLE_LABEL, AGENT_STATUS_LABEL,
+  type AgentState,
+} from "../lib/agents";
 import type { OtLayout } from "../lib/ot";
 import { Field } from "./Modal";
 
@@ -57,6 +60,7 @@ export function AgentPanel({ st, colorIndex, ot, onClose }: {
           <div>
             <div className="fm-modal-eyebrow">
               <span className={`fm-dot ${dot}`} /> Agent · {AGENT_ROLE_LABEL[a.role]}
+              <span className={`fm-engine eng-${a.engine}`}>{AGENT_ENGINE_LABEL[a.engine]}</span>
             </div>
             <h2>{a.name}</h2>
             <div className="fm-modal-sub">
@@ -96,6 +100,7 @@ export function AgentPanel({ st, colorIndex, ot, onClose }: {
             />
           )}
           <Field label="Kadence" value={a.cadence} />
+          <Field label="Motor" value={`${AGENT_ENGINE_LABEL[a.engine]} — ${AGENT_ENGINE_NOTE[a.engine]}`} />
           <Field label="Aktiveret" value={a.enabled ? "Ja" : "Nej — ingen agent kører endnu"} />
         </dl>
         {st.upstream.length > 0 && (

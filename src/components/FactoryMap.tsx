@@ -1,7 +1,9 @@
 "use client";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { agentStates, lineOpsFor, opsForMachine, AGENT_STATUS_LABEL } from "../lib/agents";
+import {
+  agentStates, lineOpsFor, opsForMachine, AGENT_ENGINE_LABEL, AGENT_STATUS_LABEL,
+} from "../lib/agents";
 import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
 import type { LineOption } from "../lib/lines";
@@ -554,6 +556,9 @@ export function FactoryMap({
                   >
                     <span className={`fm-dot ag-${(i % 3) + 1}`} />
                     {st.agent.name}
+                    <span className={`fm-engine eng-${st.agent.engine}`}>
+                      {AGENT_ENGINE_LABEL[st.agent.engine]}
+                    </span>
                     <span className={`fm-legend-status ags-${st.status}`}>{AGENT_STATUS_LABEL[st.status]}</span>
                   </button>
                 </li>
@@ -564,7 +569,8 @@ export function FactoryMap({
             </ul>
             <p>
               Zonerne er agenternes ansvarsområder. Stiplet kant betyder, at agenten mangler sine
-              inputs — samme sprog som OT Layer.
+              inputs — samme sprog som OT Layer. Mærket <span className="fm-engine eng-claude">Claude</span>{" "}
+              koster API-kald pr. kørsel; <span className="fm-engine eng-kode">Kode</span> gør ikke.
             </p>
           </>
         ) : isOt && ot ? (

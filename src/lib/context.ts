@@ -123,6 +123,7 @@ export interface AgentCtx {
   id: string;
   name: string;
   role: Agent["role"];
+  engine: Agent["engine"];
   job: string;
   scope: Agent["scope"];
   scopeLabel: string;
@@ -215,6 +216,7 @@ function agentCtx(st: AgentState): AgentCtx {
     id: a.id,
     name: a.name,
     role: a.role,
+    engine: a.engine,
     job: a.job,
     scope: a.scope,
     scopeLabel: describeScope(a),

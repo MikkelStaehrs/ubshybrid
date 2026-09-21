@@ -3,7 +3,7 @@ import { LINE_OPS } from "../../data/line-config";
 import type { Layout, PlacedMachine } from "./layout";
 import { isDone, pathState, sensorType, signalDelivery, OT_PATH_STEPS, type OtLayout } from "./ot";
 import type {
-  Agent, AgentInput, AgentRole, LineOps, MachineOps, OtSensor, StopReason,
+  Agent, AgentEngine, AgentInput, AgentRole, LineOps, MachineOps, OtSensor, StopReason,
 } from "./types";
 
 export function agentsFor(lineId: string): Agent[] {
@@ -44,6 +44,17 @@ export function opsForMachine(ops: LineOps | undefined, wIds: string[]) {
 }
 
 // ---------------------------------------------------------------------------
+
+export const AGENT_ENGINE_LABEL: Record<AgentEngine, string> = {
+  kode: "Kode",
+  claude: "Claude",
+};
+
+/** Kun claude-agenter koster noget at køre. Det skal fladen sige. */
+export const AGENT_ENGINE_NOTE: Record<AgentEngine, string> = {
+  kode: "Ren regel-logik. Ingen API-kald.",
+  claude: "Kalder Claude API. Koster pr. kørsel.",
+};
 
 export const AGENT_ROLE_LABEL: Record<AgentRole, string> = {
   linjeagent: "Linjeagent",
