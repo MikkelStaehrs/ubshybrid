@@ -84,8 +84,10 @@ export interface AgentState {
   agent: Agent;
   status: AgentStatus;
   inputs: AgentInputState[];
-  /** Maskinerne i scope. Tom for vagtagenten, der ser på kæden. */
+  /** Maskinerne agenten ejer. Tom for vagtagenten, der ser på kæden. */
   machines: PlacedMachine[];
+  /** Maskiner opstrøms — må ses, ejes ikke, tæller ikke i status. */
+  upstream: PlacedMachine[];
   /** Én sætning om hvad der står i vejen. */
   summary: string;
 }
@@ -108,6 +110,14 @@ export function machinesInScope(agent: Agent, layout: Layout): PlacedMachine[] {
     case "chain":
       return [];
   }
+}
+
+/** Opstrøms maskiner, fratrukket dem agenten ejer i forvejen. */
+export function upstreamMachines(agent: Agent, layout: Layout): PlacedMachine[] {
+  const want = new Set(agent.scope.upstream ?? []);
+  if (want.size === 0) return [];
+  const own = new Set(machinesInScope(agent, layout).map((m) => m.id));
+  return realMachines(layout.machines.filter((m) => !own.has(m.id) && m.wIds.some((w) => want.has(w))));
 }
 
 export function describeScope(agent: Agent): string {
@@ -197,6 +207,8 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
 
 export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): AgentState {
   const machines = machinesInScope(agent, layout);
+  const upstream = upstreamMachines(agent, layout);
+  // Kun de ejede maskiner tæller — indløbet er kontekst, ikke ansvar.
   const inputs = agent.inputs.map((i) => resolveInput(i, machines, ot));
 
   // Status regnes kun på de påkrævede inputs. De støttende vises, men afgør
@@ -222,7 +234,7 @@ export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): A
           ? "Alle påkrævede inputs leverer. Agenten er ikke slået til endnu."
           : "Kører.";
 
-  return { agent, status, inputs, machines, summary };
+  return { agent, status, inputs, machines, upstream, summary };
 }
 
 export function agentStates(lineId: string, layout: Layout, ot: OtLayout | null): AgentState[] {

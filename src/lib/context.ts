@@ -8,6 +8,7 @@
 // Med et agent-id skæres objektet ned til den gren, agenten har i scope. Det
 // er præcis den JSON, agenten senere får i hånden — ikke mere.
 import { lineOpsFor, opsForMachine, agentStates, describeScope, AGENT_STATUS_LABEL, type AgentState } from "./agents";
+import { NOTE_FIELD, OPS_FIELDS, OT_FIELDS, STAMDATA_FIELDS } from "./fields";
 import { layoutLine, type PlacedMachine } from "./layout";
 import { LINES } from "./lines";
 import {
@@ -59,8 +60,15 @@ export interface MachineCtx {
   step: number;
   upstream: string[];
   downstream: string[];
+  /**
+   * Kun sat, når objektet er skåret til én agent: "own" er dem agenten
+   * ejer og regner status på, "upstream" er indløbet den må se.
+   */
+  role?: "own" | "upstream";
   /** Fra tegningen. Tomme felter er udeladt, ikke gættet. */
   stamdata: Record<string, string>;
+  /** Navne på stamdata- og driftsfelter, der ikke er udfyldt. */
+  missing: string[];
   ops: {
     normtakt: number | null;
     rateUnit: string;
@@ -116,16 +124,28 @@ export interface AgentCtx {
   statusLabel: string;
   summary: string;
   inputs: { label: string; required: boolean; need: string; have: number; total: number; detail: string }[];
-  /** Maskin-id'er i scope. Tom for vagtagenten. */
+  /** Maskin-id'er agenten ejer. Tom for vagtagenten. */
   machines: string[];
+  /** Maskin-id'er opstrøms — må ses, tæller ikke i status. */
+  upstream: string[];
 }
 
 // ---------------------------------------------------------------------------
 
-function machineCtx(m: PlacedMachine, lineId: string, signals: PlacedSensor[]): MachineCtx {
+function machineCtx(
+  m: PlacedMachine,
+  lineId: string,
+  signals: PlacedSensor[],
+  role?: "own" | "upstream",
+): MachineCtx {
   const ops = opsForMachine(lineOpsFor(lineId), m.wIds);
   const stamdata: Record<string, string> = {};
   for (const [k, v] of Object.entries(m.details)) if (v) stamdata[k] = v;
+  // Samme feltliste som panelet — "ikke udfyldt" betyder det samme begge steder.
+  const missing = [
+    ...[...STAMDATA_FIELDS, ...OT_FIELDS, NOTE_FIELD].filter((f) => !stamdata[f.key]).map((f) => f.key),
+    ...(ops ? OPS_FIELDS.filter((f) => ops[f.key as "normtakt" | "note"] === undefined).map((f) => f.key) : []),
+  ];
   return {
     id: m.id,
     wIds: m.wIds,
@@ -135,7 +155,9 @@ function machineCtx(m: PlacedMachine, lineId: string, signals: PlacedSensor[]): 
     step: m.step,
     upstream: m.upstream,
     downstream: m.downstream,
+    role,
     stamdata,
+    missing,
     ops: ops && {
       normtakt: ops.normtakt ?? null,
       rateUnit: ops.rateUnit,
@@ -198,6 +220,7 @@ function agentCtx(st: AgentState): AgentCtx {
       detail: i.detail,
     })),
     machines: st.machines.map((m) => m.id),
+    upstream: st.upstream.map((m) => m.id),
   };
 }
 
@@ -224,6 +247,8 @@ export function buildContext(lineId: string | null, agentId: string | null): Con
   let sensors = ot?.sensors ?? [];
   let agents = states;
   let scope: ContextDoc["scope"];
+  // Sat pr. maskine, når der er én agent at være "egen" eller "upstream" for.
+  const roleOf = new Map<string, "own" | "upstream">();
 
   if (agentId) {
     const st = states.find((s) => s.agent.id === agentId);
@@ -231,7 +256,9 @@ export function buildContext(lineId: string | null, agentId: string | null): Con
       return { status: 404, error: `Agenten "${agentId}" findes ikke på ${lineId}. Agenter: ${states.map((s) => s.agent.id).join(", ")}.` };
     }
     const wanted = new Set(st.agent.inputs.map((i) => i.signalId).filter((x): x is string => !!x));
-    machines = st.machines;
+    for (const m of st.machines) roleOf.set(m.id, "own");
+    for (const m of st.upstream) roleOf.set(m.id, "upstream");
+    machines = [...st.machines, ...st.upstream];
     // Vagtagenten har hele kæden i scope, og kæden bærer alle signaler.
     sensors = st.agent.scope.kind === "chain"
       ? sensors
@@ -264,7 +291,7 @@ export function buildContext(lineId: string | null, agentId: string | null): Con
     ops: lineOps
       ? { rateUnit: lineOps.rateUnit, stopAfterSeconds: lineOps.stopAfterSeconds, stopReasons: lineOps.stopReasons }
       : null,
-    machines: machines.map((m) => machineCtx(m, lineId, sensors)),
+    machines: machines.map((m) => machineCtx(m, lineId, sensors, roleOf.get(m.id))),
     // Kanter der rører scope — indløb og afløb hører med til en stoprapport.
     flow: data.edges.filter((e) => ids.has(e.from) || ids.has(e.to)),
     cabinets: (ot?.cabinets ?? []).map((c) => {

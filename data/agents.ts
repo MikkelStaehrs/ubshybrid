@@ -12,13 +12,16 @@
 // tværs af. Lige nu ville den kun have linje 2 at se på.
 import type { Agent } from "../src/lib/types";
 
+/** Fællesstrækket fra vippestolene til fordeleren. Begge spor får det som upstream. */
+const INLET = ["793", "794", "795", "796", "611", "743", "614", "756", "615"];
+
 const sliberi: Agent[] = [
   {
     id: "AG-SLIB-N",
     name: "Linjeagent Spor N",
     role: "linjeagent",
     job: "Daglig stoprapport for spor N: hvornår stod maskinerne stille, hvor længe, og hvad der gik forud.",
-    scope: { kind: "lane", lane: "N" },
+    scope: { kind: "lane", lane: "N", upstream: INLET },
     inputs: [
       {
         type: "motor-run",
@@ -39,7 +42,7 @@ const sliberi: Agent[] = [
     name: "Linjeagent Spor S",
     role: "linjeagent",
     job: "Daglig stoprapport for spor S: hvornår stod maskinerne stille, hvor længe, og hvad der gik forud.",
-    scope: { kind: "lane", lane: "S" },
+    scope: { kind: "lane", lane: "S", upstream: INLET },
     inputs: [
       {
         type: "motor-run",

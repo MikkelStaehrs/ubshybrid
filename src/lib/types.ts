@@ -403,11 +403,19 @@ export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt";
  * Hvad agenten kigger på. Vagtagenten ser på signalkæden frem for maskiner —
  * dens arbejde er at opdage, at data holder op med at komme.
  */
-export type AgentScope =
+export type AgentScope = (
   | { kind: "line" }
   | { kind: "lane"; lane: string }
   | { kind: "machines"; wIds: string[] }
-  | { kind: "chain" };
+  | { kind: "chain" }
+) & {
+  /**
+   * W-ID'er opstrøms, som agenten må se men ikke ejer. Et stop i indløbet
+   * forklarer et stop i sporet — men indløbet tæller ikke med, når der
+   * regnes "X af 10 maskiner har driftssignal".
+   */
+  upstream?: string[];
+};
 
 /**
  * Ét input agenten har brug for. Enten et konkret signal, der findes i dag,

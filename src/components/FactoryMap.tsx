@@ -2,6 +2,7 @@
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { lineOpsFor, opsForMachine } from "../lib/agents";
+import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
 import type { LineOption } from "../lib/lines";
 import {
@@ -25,17 +26,6 @@ import { Field, Modal } from "./Modal";
 import { CabinetModal, OtDot, SensorModal } from "./OtModals";
 import { Scene, type MapLayer, type ViewMode } from "./Scene";
 
-const DETAIL_ROWS: { key: string; label: string }[] = [
-  { key: "producent", label: "Producent" },
-  { key: "model", label: "Model" },
-  { key: "aar", label: "År" },
-  { key: "proces", label: "Proces" },
-  { key: "kapacitet", label: "Kapacitet" },
-];
-const OT_ROWS: { key: string; label: string }[] = [
-  { key: "dimSkab", label: "DIM-skab" },
-  { key: "otNet", label: "OT-netværk" },
-];
 const KIND_ORDER: MachineKind[] = ["intake", "elevator", "distributor", "process", "analysis"];
 
 /** Meter med dansk komma, uden overflødige decimaler. */
@@ -629,7 +619,7 @@ export function FactoryMap({
           <>
           <section>
             <h3>Stamdata</h3>
-            <dl>{DETAIL_ROWS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
+            <dl>{STAMDATA_FIELDS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
           </section>
 
           {ops && (
@@ -659,7 +649,7 @@ export function FactoryMap({
 
           <section>
             <h3>OT & el</h3>
-            <dl>{OT_ROWS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
+            <dl>{OT_FIELDS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
           </section>
 
           <section>
