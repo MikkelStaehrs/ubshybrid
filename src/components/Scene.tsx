@@ -2,7 +2,7 @@
 import { Grid, MapControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CanvasTexture, MathUtils, PerspectiveCamera, SRGBColorSpace, TextureLoader, Vector3, type Texture } from "three";
+import { CanvasTexture, MathUtils, PerspectiveCamera, Spherical, SRGBColorSpace, TextureLoader, Vector3, type Texture } from "three";
 import type { MapControls as MapControlsImpl } from "three-stdlib";
 import { flowPath, halfExtent, type Layout } from "../lib/layout";
 import type { AgentState } from "../lib/agents";
@@ -63,13 +63,49 @@ function matchesQuery(m: { name: string; wIds: string[] }, q: string) {
 }
 
 // ---------------------------------------------------------------------------
+/** Det, MapControls tillader. Et mål uden for det kan aldrig nås. */
+const CAM = { minDistance: 6, maxDistance: 260, maxPolar: Math.PI / 2.25 };
+
+/** Længst et kameramål får lov at leve. Efter det slipper vi — uanset hvad. */
+const GOAL_MS = 2500;
+
+interface CameraGoal {
+  pos: Vector3;
+  target: Vector3;
+  until: number;
+}
+
 function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "layout" | "selectedId" | "view" | "resetToken">) {
   const controls = useRef<MapControlsImpl>(null);
-  const { camera, size } = useThree();
-  const goal = useRef<{ pos: Vector3; target: Vector3 } | null>(null);
+  const { camera, size, gl } = useThree();
+  const goal = useRef<CameraGoal | null>(null);
   const booted = useRef(false);
 
+  const finite = (v: Vector3) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+
+  /**
+   * Sæt et mål — men kun ét, kontrollerne kan nå. Afstand og hældning klemmes
+   * til MapControls' grænser først. Ellers klemmer update() kameraet tilbage
+   * hver frame, målet nås aldrig, og lerp'en overskriver brugerens zoom og pan
+   * for evigt. Det var den lås, man ramte efter at have været inde på en maskine.
+   */
+  const aim = (g: { pos: Vector3; target: Vector3 } | null) => {
+    if (!g || !finite(g.pos) || !finite(g.target)) { goal.current = null; return; }
+    const offset = g.pos.clone().sub(g.target);
+    const sph = new Spherical().setFromVector3(offset);
+    sph.radius = MathUtils.clamp(sph.radius, CAM.minDistance, CAM.maxDistance);
+    sph.phi = MathUtils.clamp(sph.phi, 0.0001, CAM.maxPolar);
+    sph.makeSafe();
+    goal.current = {
+      pos: g.target.clone().add(offset.setFromSpherical(sph)),
+      target: g.target.clone(),
+      until: performance.now() + GOAL_MS,
+    };
+  };
+
   const overview = (mode: ViewMode) => {
+    // Uden et lærred med mål bliver alt herunder NaN.
+    if (size.width === 0 || size.height === 0) return null;
     const cam = camera as PerspectiveCamera;
     const { minX, maxX, minZ, maxZ } = layout.bounds;
     const vfov = MathUtils.degToRad(cam.fov);
@@ -85,6 +121,7 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
   useEffect(() => {
     if (booted.current || !controls.current) return;
     const o = overview(view);
+    if (!o) return;
     camera.position.copy(o.pos);
     controls.current.target.copy(o.target);
     controls.current.update();
@@ -94,7 +131,7 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
 
   useEffect(() => {
     if (!booted.current) return;
-    goal.current = overview(view);
+    aim(overview(view));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resetToken]);
 
@@ -103,16 +140,38 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
     const m = layout.byId.get(selectedId);
     if (!m) return;
     const target = new Vector3(m.pos[0], 1.2, m.pos[2]);
-    const offset = camera.position.clone().sub(controls.current.target).normalize().multiplyScalar(38);
-    goal.current = { pos: target.clone().add(offset), target };
+    const dir = camera.position.clone().sub(controls.current.target);
+    // Står kameraet oven i målet, er der ingen retning at bevare — tag standardvinklen.
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0.78, 0.62);
+    aim({ pos: target.clone().add(dir.normalize().multiplyScalar(38)), target });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // Brugeren tager over: enhver berøring af lærredet dropper målet. Lyttes
+  // direkte på DOM'en, så det ikke afhænger af, at kontrollernes start-event
+  // når frem.
+  useEffect(() => {
+    const el = gl.domElement;
+    const drop = () => { goal.current = null; };
+    const opts = { passive: true } as const;
+    el.addEventListener("pointerdown", drop, opts);
+    el.addEventListener("wheel", drop, opts);
+    el.addEventListener("pointercancel", drop, opts);
+    return () => {
+      el.removeEventListener("pointerdown", drop);
+      el.removeEventListener("wheel", drop);
+      el.removeEventListener("pointercancel", drop);
+    };
+  }, [gl]);
 
   useFrame((_, dt) => {
     const g = goal.current;
     const c = controls.current;
     if (!g || !c) return;
-    const k = 1 - Math.exp(-dt * 4.5);
+    // Aldrig et mål, der får lov at låse kortet.
+    if (performance.now() > g.until) { goal.current = null; return; }
+    // Efter et faneskift kan dt være sekunder — så snapper vi frem for at springe.
+    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 4.5);
     camera.position.lerp(g.pos, k);
     c.target.lerp(g.target, k);
     c.update();
@@ -125,9 +184,9 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
       makeDefault
       enableDamping
       dampingFactor={0.12}
-      minDistance={6}
-      maxDistance={260}
-      maxPolarAngle={Math.PI / 2.25}
+      minDistance={CAM.minDistance}
+      maxDistance={CAM.maxDistance}
+      maxPolarAngle={CAM.maxPolar}
       screenSpacePanning={false}
       onStart={() => (goal.current = null)}
     />
