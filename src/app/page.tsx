@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import FactoryMapClient from "./FactoryMapClient";
 
 // LIVE_SOURCE læses på serveren, så navnet kan stå uden NEXT_PUBLIC-præfiks.
@@ -6,7 +7,10 @@ export default function Page() {
   const liveSource = process.env.LIVE_SOURCE === "api" ? "api" : "mock";
   return (
     <main style={{ height: "100dvh" }}>
-      <FactoryMapClient liveSource={liveSource} />
+      {/* useSearchParams kræver en grænse, når siden præ-renderes. */}
+      <Suspense fallback={<div className="fm-loading">Indlæser fabrikskort…</div>}>
+        <FactoryMapClient liveSource={liveSource} />
+      </Suspense>
     </main>
   );
 }

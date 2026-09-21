@@ -1,0 +1,251 @@
+/* ------------------------------------------------------------------------
+   AI-overblik — en læseside, ikke et lærred.
+   Farver og fonte kommer fra tokens i factory-map.css, som layout.tsx
+   indlæser globalt. Her står kun det, siden selv har brug for.
+------------------------------------------------------------------------- */
+.ai-root {
+  min-height: 100dvh;
+  padding: 28px var(--gutter) 64px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+.ai-root * { box-sizing: border-box; }
+
+.ai-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto 28px;
+}
+.ai-top h1 {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 40px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.ai-sub { max-width: 62ch; margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.ai-top .fm-btn { flex: none; text-decoration: none; display: inline-flex; align-items: center; }
+
+.ai-section { max-width: 1100px; margin: 0 auto 36px; }
+.ai-section > h2 {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- Overblik ------------------------------------------------------------ */
+.ai-stats { display: flex; flex-wrap: wrap; gap: 10px; }
+.ai-stat {
+  flex: 1 1 150px;
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--st, var(--line));
+  border-radius: 6px;
+  background: var(--surface-solid);
+}
+.ai-stat-value { font-size: 30px; line-height: 1; }
+.ai-stat-label { font-size: 12px; color: var(--muted); }
+.ai-stat-hint { font-size: 11px; color: var(--muted); opacity: 0.8; }
+
+/* --- Agentkort ----------------------------------------------------------- */
+.ai-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+}
+.ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--st, var(--line));
+  border-radius: 6px;
+  background: var(--surface-solid);
+}
+/* En idé er ikke besluttet — den skal ikke fylde lige så meget. */
+.ai-card.ags-idea { opacity: 0.78; border-style: dashed; }
+.ai-card-top { display: flex; align-items: center; gap: 8px; }
+.ai-card h3 {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.ai-card-q { margin: 4px 0 0; font-size: 14px; line-height: 1.4; }
+.ai-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.ai-link { color: var(--accent); font-size: 13px; text-decoration: none; }
+.ai-link:hover { text-decoration: underline; }
+.ai-id { font-size: 11px; color: var(--muted); }
+
+.ai-facts { margin: 0; display: grid; gap: 4px; }
+.ai-facts > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; font-size: 13px; }
+.ai-facts dt { color: var(--muted); }
+.ai-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+/* --- Vejen til drift ----------------------------------------------------- */
+.ai-ready {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.ai-ready-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ai-ready-head h4 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ai-ready-head .fm-mono { font-size: 12px; color: var(--muted); }
+.ai-ready-bar { display: flex; gap: 3px; margin: 8px 0 10px; }
+.ai-ready-bar i { flex: 1; height: 5px; border-radius: 1px; background: var(--line); }
+.ai-ready-bar i.on { background: var(--live-good); }
+
+.ai-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.ai-steps li { display: grid; grid-template-columns: 14px 1fr; gap: 2px 8px; font-size: 13px; }
+.ai-step-mark { color: var(--ot-missing); }
+.ai-steps li.is-done .ai-step-mark { color: var(--live-good); }
+.ai-steps li.is-done .ai-step-label { color: var(--muted); }
+.ai-step-detail { grid-column: 2; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.ai-steps li:not(.is-done) .ai-step-detail { color: var(--ot-missing); }
+
+/* --- Kørselslog ---------------------------------------------------------- */
+.ai-empty {
+  padding: 16px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--surface-solid);
+}
+.ai-empty p { margin: 0; font-size: 13px; line-height: 1.55; }
+.ai-blockers { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.ai-blockers li {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 4px 12px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+.ai-blocker-name { font-weight: 500; }
+.ai-blocker-need { color: var(--muted); }
+.ai-note { margin-top: 12px !important; font-size: 12px; color: var(--muted); line-height: 1.55; }
+
+/* --- Omkostning ---------------------------------------------------------- */
+.ai-estimate-mark {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 2px 8px;
+  border: 1px dashed var(--warn);
+  border-radius: 3px;
+  background: var(--warn-soft);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ai-table th, .ai-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: baseline;
+}
+.ai-table thead th {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ai-table .num { text-align: right; }
+.ai-table tbody tr.is-idea { color: var(--muted); }
+.ai-tag-idea {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ot-idea);
+}
+.ai-free { color: var(--muted); font-size: 12px; }
+.ai-table tfoot th, .ai-table tfoot td {
+  border-bottom: 0;
+  border-top: 2px solid var(--line);
+  font-weight: 600;
+}
+
+.ai-point {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  background: var(--accent-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.ai-assump-head {
+  margin: 22px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ai-assumptions { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.ai-assumptions li {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.ai-assump-label { color: var(--muted); }
+.ai-unconfirmed {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px dashed var(--warn);
+  border-radius: 3px;
+  color: var(--warn);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .ai-top h1 { font-size: 30px; }
+  .ai-cards { grid-template-columns: 1fr; }
+  .ai-blockers li, .ai-assumptions li { grid-template-columns: 1fr; }
+  .ai-table thead { display: none; }
+  .ai-table tr { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .ai-table td, .ai-table th { border: 0; padding: 1px 0; }
+  .ai-table .num { text-align: left; }
+}

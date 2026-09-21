@@ -218,6 +218,8 @@ export function FactoryMap({
   rooms,
   onSelectLine,
   liveSource = "mock",
+  initialLayer,
+  initialAgent,
 }: {
   data: LineData;
   site?: string;
@@ -228,6 +230,10 @@ export function FactoryMap({
   onSelectLine?: (id: string) => void;
   /** Hvor Live-visningen henter tal fra. Sættes af serveren ud fra LIVE_SOURCE. */
   liveSource?: LiveSourceKind;
+  /** Startvisning fra et dybt link. Uden den åbner kortet på Maintenance. */
+  initialLayer?: MapLayer;
+  /** Agent, der skal være valgt fra start. Kræver initialLayer "agents". */
+  initialAgent?: string;
 }) {
   const theme = useSceneTheme();
   const layout = useMemo(() => layoutLine(data), [data]);
@@ -242,7 +248,7 @@ export function FactoryMap({
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [layer, setLayer] = useState<MapLayer>("maintenance");
+  const [layer, setLayer] = useState<MapLayer>(initialLayer ?? "maintenance");
   // Kun fase 1 er besluttet, så kortet åbner der. Fase 2 og 3 ses kun, når
   // man selv vælger dem.
   const [otPhase, setOtPhase] = useState<OtPhase>(1);
@@ -251,7 +257,7 @@ export function FactoryMap({
   // Sensoridéer er en skitse i browseren — de rører ikke data/.
   const [ideas, setIdeas] = useState<SensorIdea[]>([]);
   const [liveSel, setLiveSel] = useState<string | null>(null);
-  const [agentSel, setAgentSel] = useState<string | null>(null);
+  const [agentSel, setAgentSel] = useState<string | null>(initialAgent ?? null);
   // Fælleszonen vælges for sig — den ejes ikke af nogen agent.
   const [inletSel, setInletSel] = useState(false);
   const isRoom = !!rooms?.some((r) => r.id === data.line.id);
