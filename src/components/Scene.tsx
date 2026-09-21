@@ -52,6 +52,9 @@ interface SceneProps {
   agents: AgentState[];
   agentSelected: string | null;
   onAgentSelect: (agentId: string | null) => void;
+  /** Fælleszonen er valgt. Den hører ikke til nogen agent. */
+  inletSelected: boolean;
+  onInletSelect: () => void;
   onOtSelect: (sel: OtSelection | null) => void;
   onOtHover: (sel: OtSelection | null) => void;
 }
@@ -418,8 +421,10 @@ export function Scene(p: SceneProps) {
           ot={p.ot}
           theme={theme}
           selectedId={p.agentSelected}
+          inletSelected={p.inletSelected}
           showLabels={p.showLabels}
           onSelect={p.onAgentSelect}
+          onSelectInlet={p.onInletSelect}
         />
       )}
 

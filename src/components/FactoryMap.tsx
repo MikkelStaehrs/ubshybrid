@@ -2,7 +2,8 @@
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  agentStates, lineOpsFor, opsForMachine, AGENT_ENGINE_LABEL, AGENT_STATUS_LABEL,
+  agentStates, lineOpsFor, opsForMachine, sharedInlet,
+  AGENT_ENGINE_LABEL, AGENT_STATUS_LABEL,
 } from "../lib/agents";
 import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
@@ -23,6 +24,7 @@ import { useLiveSignals } from "../lib/useLiveSignals";
 import type { LiveSourceKind } from "../lib/live-source";
 import { useSceneTheme } from "../lib/useSceneTheme";
 import { AgentPanel } from "./AgentPanel";
+import { InletPanel } from "./InletPanel";
 import { LivePanel } from "./LivePanel";
 import { SignalModal } from "./SignalModal";
 import { Field, Modal } from "./Modal";
@@ -250,6 +252,8 @@ export function FactoryMap({
   const [ideas, setIdeas] = useState<SensorIdea[]>([]);
   const [liveSel, setLiveSel] = useState<string | null>(null);
   const [agentSel, setAgentSel] = useState<string | null>(null);
+  // Fælleszonen vælges for sig — den ejes ikke af nogen agent.
+  const [inletSel, setInletSel] = useState(false);
   const isRoom = !!rooms?.some((r) => r.id === data.line.id);
   const showPicker = (lines?.length ?? 0) + (rooms?.length ?? 0) > 1 && !!onSelectLine;
 
@@ -280,6 +284,7 @@ export function FactoryMap({
     setIdeas([]);
     setLiveSel(null);
     setAgentSel(null);
+    setInletSel(false);
     setResetToken((t) => t + 1);
   }, [data.line.id]);
 
@@ -314,6 +319,10 @@ export function FactoryMap({
   // Status udledes hver gang — den står ingen steder i dataene.
   const agents = useMemo(() => agentStates(data.line.id, layout, ot), [data.line.id, layout, ot]);
   const agentSelected = agentSel ? agents.find((a) => a.agent.id === agentSel) : undefined;
+  const inlet = useMemo(() => sharedInlet(agents), [agents]);
+
+  const selectAgent = (id: string | null) => { setAgentSel(id); setInletSel(false); };
+  const selectInlet = () => { setInletSel(true); setAgentSel(null); };
   const signalIds = useMemo(() => ot?.sensors.map((s) => s.id) ?? [], [ot]);
   const live = useLiveSignals(liveSource, signalIds, isLive);
   /** Tallet på hver faseknap er kumulativt, ligesom filteret selv. */
@@ -357,9 +366,13 @@ export function FactoryMap({
 
   const select = (id: string | null) => {
     if (isAgents) {
-      // En maskine hører til en agent — det er agenten, man vil se.
+      // En maskine hører til en agent — det er agenten, man vil se. Maskinerne
+      // i indløbet ejes af ingen, så de åbner fælleszonen i stedet.
       const owner = id ? agents.find((a) => a.machines.some((m) => m.id === id)) : undefined;
-      setAgentSel(owner?.agent.id ?? null);
+      if (owner) { selectAgent(owner.agent.id); return; }
+      if (id && inlet?.machines.some((m) => m.id === id)) { selectInlet(); return; }
+      setAgentSel(null);
+      setInletSel(false);
       return;
     }
     setSelectedId(id);
@@ -372,7 +385,7 @@ export function FactoryMap({
   };
 
   return (
-    <div className={`fm-root${(isAgents ? !!agentSelected : !!selected && !isLive) ? " has-panel" : ""}${isLive ? " is-live" : ""}`}>
+    <div className={`fm-root${(isAgents ? !!agentSelected || inletSel : !!selected && !isLive) ? " has-panel" : ""}${isLive ? " is-live" : ""}`}>
       <div className="fm-canvas" data-hovering={hoveredId ? "" : undefined}>
         {theme && (
           <Canvas
@@ -406,7 +419,9 @@ export function FactoryMap({
               onLiveSelect={setLiveSel}
               agents={isAgents ? agents : []}
               agentSelected={agentSel}
-              onAgentSelect={setAgentSel}
+              onAgentSelect={selectAgent}
+              inletSelected={inletSel}
+              onInletSelect={selectInlet}
               onOtSelect={setOtSel}
               onOtHover={setOtHover}
             />
@@ -552,7 +567,7 @@ export function FactoryMap({
                   <button
                     type="button"
                     className={`fm-legend-agent${agentSel === st.agent.id ? " is-selected" : ""}`}
-                    onClick={() => setAgentSel(st.agent.id)}
+                    onClick={() => selectAgent(st.agent.id)}
                   >
                     <span className={`fm-dot ag-${(i % 3) + 1}`} />
                     {st.agent.name}
@@ -563,8 +578,18 @@ export function FactoryMap({
                   </button>
                 </li>
               ))}
-              {agents.some((a) => a.upstream.length > 0) && (
-                <li><span className="fm-dot ag-shared" />Fælles indløb<span className="fm-mono">upstream</span></li>
+              {inlet && (
+                <li>
+                  <button
+                    type="button"
+                    className={`fm-legend-agent${inletSel ? " is-selected" : ""}`}
+                    onClick={selectInlet}
+                  >
+                    <span className="fm-dot ag-shared" />
+                    Fælles indløb
+                    <span className="fm-legend-status">upstream</span>
+                  </button>
+                </li>
               )}
             </ul>
             <p>
@@ -804,6 +829,14 @@ export function FactoryMap({
           colorIndex={agents.indexOf(agentSelected)}
           ot={ot}
           onClose={() => setAgentSel(null)}
+        />
+      )}
+
+      {isAgents && inletSel && inlet && (
+        <InletPanel
+          inlet={inlet}
+          onSelectAgent={selectAgent}
+          onClose={() => setInletSel(false)}
         />
       )}
 

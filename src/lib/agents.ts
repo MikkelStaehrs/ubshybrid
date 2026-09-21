@@ -249,3 +249,38 @@ export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): A
 export function agentStates(lineId: string, layout: Layout, ot: OtLayout | null): AgentState[] {
   return agentsFor(lineId).map((a) => agentState(a, layout, ot));
 }
+
+/**
+ * Det fælles indløb: de maskiner, mindst én agent har som upstream, og hvem
+ * der deler dem. Zonen på kortet og panelet bag den spørger begge her, så
+ * teksten ikke kan komme til at sige noget andet end panelet.
+ *
+ * Zonen ejes ikke af nogen agent og har derfor ingen status.
+ */
+export interface SharedInlet {
+  machines: PlacedMachine[];
+  /** Agenterne der har indløbet som upstream, i den rækkefølge de står. */
+  agents: AgentState[];
+  /** "Spor N og Spor S" — scope-navnene, som de vises. */
+  sharedBy: string;
+}
+
+export function sharedInlet(states: AgentState[]): SharedInlet | null {
+  const byId = new Map<string, PlacedMachine>();
+  const agents: AgentState[] = [];
+  for (const st of states) {
+    if (st.upstream.length === 0) continue;
+    agents.push(st);
+    for (const m of st.upstream) byId.set(m.id, m);
+  }
+  if (byId.size === 0) return null;
+  const names = agents.map((st) => describeScope(st.agent));
+  return {
+    // Samme rækkefølge som på linjen, så listen læses som flowet.
+    machines: [...byId.values()].sort((a, b) => a.step - b.step),
+    agents,
+    sharedBy: names.length > 1
+      ? `${names.slice(0, -1).join(", ")} og ${names[names.length - 1]}`
+      : names[0] ?? "",
+  };
+}

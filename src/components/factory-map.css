@@ -1392,3 +1392,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fm-engine.eng-kode { color: var(--muted); }
 .fm-legend-agent .fm-engine { margin-left: 4px; }
 .fm-legend-agent .fm-legend-status { margin-left: auto; }
+
+/* Statusprik i indløbspanelets agentliste. */
+.fm-dot.ags-dot { background: var(--st, var(--line)); border-radius: 50%; }
+.fm-dot.ags-dot.ags-missing { background: none; border: 1.5px dashed var(--st); }

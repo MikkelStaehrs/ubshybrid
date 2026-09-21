@@ -1,7 +1,7 @@
 "use client";
 import { Html, Line } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
-import { describeScope, AGENT_STATUS_LABEL, type AgentState } from "../lib/agents";
+import { describeScope, sharedInlet, AGENT_STATUS_LABEL, type AgentState } from "../lib/agents";
 import { halfExtent, type PlacedMachine } from "../lib/layout";
 import { isDone, type OtLayout, type Point3 } from "../lib/ot";
 import type { SceneTheme } from "../lib/useSceneTheme";
@@ -11,8 +11,11 @@ interface Props {
   ot: OtLayout | null;
   theme: SceneTheme;
   selectedId: string | null;
+  /** true når fælleszonen er valgt. Den ejes ikke af nogen agent. */
+  inletSelected: boolean;
   showLabels: boolean;
   onSelect: (agentId: string | null) => void;
+  onSelectInlet: () => void;
 }
 
 type ColorToken = Exclude<keyof SceneTheme, "dark">;
@@ -179,33 +182,41 @@ function ChainMarks({ st, ot, color, on, showLabel, onSelect }: {
   );
 }
 
-export function AgentLayer({ states, ot, theme, selectedId, showLabels, onSelect }: Props) {
-  // Indløbet er fælles for de agenter, der har det som upstream. Tegnes én gang.
-  const upstream = new Map<string, PlacedMachine>();
-  const sharedBy: string[] = [];
-  for (const st of states) {
-    if (st.upstream.length === 0) continue;
-    sharedBy.push(describeScope(st.agent));
-    for (const m of st.upstream) upstream.set(m.id, m);
-  }
-  const inlet = zoneOf([...upstream.values()], 1.4);
-  const shared = theme["agent-shared"];
+export function AgentLayer({
+  states, ot, theme, selectedId, inletSelected, showLabels, onSelect, onSelectInlet,
+}: Props) {
+  // Indløbet er fælles for de agenter, der har det som upstream. Tegnes én
+  // gang, og teksten kommer fra samme kilde som panelet bag den.
+  const shared = sharedInlet(states);
+  const inlet = shared ? zoneOf(shared.machines, 1.4) : null;
+  const sharedColor = theme["agent-shared"];
 
   return (
     <group>
-      {inlet && (
+      {inlet && shared && (
         <group>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(inlet.x0 + inlet.x1) / 2, 0.014, (inlet.z0 + inlet.z1) / 2]}>
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[(inlet.x0 + inlet.x1) / 2, 0.014, (inlet.z0 + inlet.z1) / 2]}
+            onClick={(e) => { e.stopPropagation(); onSelectInlet(); }}
+          >
             <planeGeometry args={[inlet.x1 - inlet.x0, inlet.z1 - inlet.z0]} />
-            <meshBasicMaterial color={shared} transparent opacity={0.1} depthWrite={false} />
+            <meshBasicMaterial color={sharedColor} transparent opacity={inletSelected ? 0.22 : 0.1} depthWrite={false} />
           </mesh>
-          <Line points={rect(inlet, 0.028)} color={shared} lineWidth={1.2} transparent opacity={0.7} />
+          <Line
+            points={rect(inlet, 0.028)}
+            color={sharedColor}
+            lineWidth={inletSelected ? 2.4 : 1.2}
+            transparent
+            opacity={inletSelected ? 1 : 0.7}
+          />
           {showLabels && (
             <ZoneTag
               position={[(inlet.x0 + inlet.x1) / 2, 0.5, inlet.z0 + 1.1]}
               name="Fælles indløb"
-              sub={`upstream for ${sharedBy.join(" og ")}`}
-              className="ags-shared"
+              sub={`upstream for ${shared.sharedBy}`}
+              className={`ags-shared${inletSelected ? " is-selected" : ""}`}
+              onSelect={onSelectInlet}
             />
           )}
         </group>
