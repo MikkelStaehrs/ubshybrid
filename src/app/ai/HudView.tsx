@@ -7,10 +7,16 @@ import type { OtLayout } from "../../lib/ot";
 import type { LineData } from "../../lib/types";
 import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
+import { AgentCores, BreakStage, CostPanel, Readout, RunLog } from "./HudPanels";
 import "./hud.css";
 
 /**
  * Kontrolrummet.
+ *
+ * Faste zoner på én skærm: hologrammet er scenen, bruddet står midt i den,
+ * kæden ligger som et bånd i bunden, agenterne i højre søjle, omkostning og
+ * log i venstre. Der er ingen scroll og ingen kolonne med maksimumsbredde —
+ * det her skal kunne stå på en skærm i et mødelokale og læses på afstand.
  *
  * Alt på skærmen kommer fra `model`, som er bygget på serveren af
  * pathState(), signalDelivery() og agentstatus. Der er ingen tilstand her
@@ -27,39 +33,42 @@ export function HudView({ model, line, ot, measure }: {
 
   return (
     <main className="ai-hud">
+      {/* Scenen. Ligger bag alt andet og fylder hele skærmen. */}
       <Hologram data={line} ot={ot} still={still} />
 
-      <div className="holo-readout">
-        <span className="ro-group">
-          <span className="ro-label">I drift</span>
-          <span className="ro-value">{model.tally.drift}</span>
-          <span className="ro-of">/ {model.tally.total}</span>
-        </span>
-        <span className="ro-group is-test">
-          <span className="ro-label">Test</span>
-          <span className="ro-value">{model.tally.test}</span>
-        </span>
-        <span className="ro-group">
-          <span className="ro-label">Afventer</span>
-          <span className="ro-value">{model.tally.afventer}</span>
-        </span>
-      </div>
-
       <header className="hud-top">
-        <div>
-          <div className="hud-eyebrow">{SITE} · {model.lineName}</div>
-          <h1>AI-overblik</h1>
-        </div>
+        <span className="hud-eyebrow">{SITE}</span>
+        <span className="hud-sep" aria-hidden />
+        <span className="hud-line-name">{model.lineName}</span>
+        <h1>AI-overblik</h1>
         <Link href="/ai?visning=dokument" className="hud-switch">Dokumentvisning</Link>
       </header>
 
-      <section className="hud-section">
-        <h2>Signalkæden</h2>
-        <p className="hud-reach">
-          <strong>{model.reach.delivers} af {model.reach.total}</strong> led på plads
-        </p>
+      <div className="hud-left">
+        <CostPanel model={model} />
+        <RunLog model={model} />
+      </div>
+
+      {/* Scenens midte holdes fri: hologrammet skal kunne ses. Kun det
+          udlæste tal og bruddet står her, og bruddet er blikfanget. */}
+      <div className="hud-stage">
+        <BreakStage link={model.broken} />
+        <Readout tally={model.tally} />
+      </div>
+
+      <div className="hud-right">
+        <AgentCores model={model} />
+      </div>
+
+      <footer className="hud-chain">
+        <div className="hc-head">
+          <span className="hp-label">Signalkæden</span>
+          <span className="hc-reach fm-num">
+            {model.reach.delivers} / {model.reach.total}
+          </span>
+        </div>
         <ChainCircuit model={model} />
-      </section>
+      </footer>
     </main>
   );
 }
@@ -104,7 +113,7 @@ function useFrameProbe(on?: boolean) {
         console.log(
           `[maal] ${(frames / secs).toFixed(1)} fps over ${secs.toFixed(1)} s, ` +
           `værste frame ${worst.toFixed(1)} ms, ` +
-          `animerede noder ${document.querySelectorAll(".ai-hud .cc-pulse, .ai-hud .cc-glow.is-pulse, .ai-hud .cc-break-dot").length}`,
+          `animerede noder ${document.querySelectorAll(".ai-hud .cc-pulse, .ai-hud .cc-glow.is-pulse, .ai-hud .hb-dot").length}`,
         );
       }
     };

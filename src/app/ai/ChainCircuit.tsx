@@ -8,14 +8,20 @@ import type { HudLink, HudModel } from "../../lib/ai-hud";
  * bruddet. Står kæden stille i virkeligheden, står den stille her — der er
  * ingen animation, som ikke svarer til en tilstand i modellen.
  *
+ * Kæden viser *hvor* bruddet er. Hvad der skal ske ved det, står i
+ * BreakStage midt i scenen — det er sidens vigtigste sætning og hører
+ * ikke nede i båndet.
+ *
  * SVG frem for WebGL: et diagram med seks knuder skal være skarpt, ikke
  * tredimensionelt, og det koster ingenting at tegne.
  */
 
-const W = 1000;
-const H = 200;
+// Båndet er bredt og lavt: det ligger på tværs i bunden af skærmen. Formatet
+// er valgt, så svg'en kan skalere med fuld bredde uden at blive brevkasset.
+const W = 1600;
+const H = 130;
 /** Knudens halve bredde. Segmenterne går fra kant til kant. */
-const NODE = 52;
+const NODE = 64;
 
 interface Node {
   x: number;
@@ -30,8 +36,8 @@ function layoutNodes(links: HudLink[]): Node[] {
     ...links.map((link) => ({ x: 0, label: link.label, link })),
     { x: 0, label: "Agenter", terminal: true },
   ];
-  const step = (W - 120) / Math.max(1, all.length - 1);
-  return all.map((n, i) => ({ ...n, x: 60 + i * step }));
+  const step = (W - NODE * 2 - 24) / Math.max(1, all.length - 1);
+  return all.map((n, i) => ({ ...n, x: NODE + 12 + i * step }));
 }
 
 /**
@@ -65,7 +71,7 @@ function Segment({ from, to, y, link }: { from: number; to: number; y: number; l
 
 export function ChainCircuit({ model }: { model: HudModel }) {
   const nodes = layoutNodes(model.links);
-  const y = 96;
+  const y = 56;
   if (nodes.length < 2) return null;
 
   return (
@@ -88,43 +94,20 @@ export function ChainCircuit({ model }: { model: HudModel }) {
               <Glow x={n.x} y={y} tone={tone} pulse={broken} />
               <rect
                 x={n.x - NODE}
-                y={y - 26}
+                y={y - 24}
                 width={NODE * 2}
-                height={52}
+                height={48}
                 rx={6}
                 className="cc-box"
               />
               <text x={n.x} y={y + 5} className="cc-label">{short(n.label)}</text>
               {n.link && (
-                <text x={n.x} y={y + 44} className="cc-status">{n.link.statusLabel}</text>
+                <text x={n.x} y={y + 46} className="cc-status">{n.link.statusLabel}</text>
               )}
             </g>
           );
         })}
       </svg>
-
-      {model.broken && <BreakCallout link={model.broken} />}
-    </div>
-  );
-}
-
-/**
- * Bruddet er sidens vigtigste oplysning lige nu. To linjer, ingen
- * forklaring — hvorfor det betyder noget, står i dokumentvisningen.
- */
-function BreakCallout({ link }: { link: HudLink }) {
-  return (
-    <div className="cc-break">
-      <p className="cc-break-where">
-        <span className="cc-break-dot" aria-hidden />
-        Kæden stopper ved {link.label}
-      </p>
-      {link.next && (
-        <p className="cc-break-next">
-          <span className="cc-break-next-label">Afventer</span>
-          <strong>{link.next}</strong>
-        </p>
-      )}
     </div>
   );
 }

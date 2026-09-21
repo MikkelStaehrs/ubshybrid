@@ -6,8 +6,8 @@
 // den kommer fra pathState(), signalDelivery() og agentstatus, ikke fra
 // noget, komponenten fandt på.
 import { agentStates, decidedAgents, describeScope, type AgentState } from "./agents";
-import { costOf, totalPerMaaned } from "./agent-cost";
-import { firstRunBlocker, pathToProduction } from "./agent-runs";
+import { costOf, totalPerMaaned, SMÅBELØB_UNDER } from "./agent-cost";
+import { firstRunBlocker, pathToProduction, runsFor, type AgentRun } from "./agent-runs";
 import { machineState } from "./hologram";
 import { layoutLine } from "./layout";
 import { LINES } from "./lines";
@@ -116,6 +116,14 @@ export interface HudModel {
   decided: number;
   ideas: number;
   totalKr: number;
+  /** Under grænsen er selve tallet pointen — det koster nærmest ingenting. */
+  smaabeloeb: boolean;
+  /**
+   * Kørsler, nyeste først. Tom indtil fase 4, og det er sandheden: der er
+   * ikke kaldt et API fra dette repo. Loggen står tom frem for at vise et
+   * eksempel, der kunne forveksles med en kørsel, der havde fundet sted.
+   */
+  runs: AgentRun[];
 }
 
 /**
@@ -229,5 +237,7 @@ export function hudModel(lineId: string): HudModel | null {
     decided: decidedAgents(states).length,
     ideas: states.length - decidedAgents(states).length,
     totalKr: totalPerMaaned(states.map((st) => st.agent)),
+    smaabeloeb: totalPerMaaned(states.map((st) => st.agent)) < SMÅBELØB_UNDER,
+    runs: runsFor(),
   };
 }

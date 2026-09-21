@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { AGENT_ENGINE_LABEL } from "./agents";
+import { SMÅBELØB_UNDER } from "./agent-cost";
 import { hudAgentState, hudModel, hudState } from "./ai-hud";
 
 const m = hudModel("sliberi");
@@ -72,7 +74,10 @@ describe("HUD'ens sprog", () => {
   /** Alle strenge, brugeren kan komme til at se i HUD'en. */
   const visibleStrings = (): string[] => [
     ...m.links.flatMap((l) => [l.label, l.statusLabel, l.next ?? ""]),
-    ...m.agents.flatMap((a) => [a.name, a.statusLabel, a.til, a.scopeLabel, a.cadence, a.gratis ?? ""]),
+    ...m.agents.flatMap((a) => [
+      a.name, a.statusLabel, a.til, a.scopeLabel, a.cadence,
+      a.gratis ?? "", AGENT_ENGINE_LABEL[a.engine],
+    ]),
     m.lineName,
   ].filter(Boolean);
 
@@ -118,5 +123,39 @@ describe("HUD'ens sprog", () => {
       assert.ok(l.label.split(/\s+/).length <= 4, `"${l.label}" er for lang`);
       assert.ok(l.statusLabel.split(/\s+/).length <= 4, `"${l.statusLabel}" er for lang`);
     }
+  });
+});
+
+describe("kompositionen har noget at vise i hver zone", () => {
+  it("bruddet står midt i scenen og peger ét sted hen", () => {
+    // Zonen er tom uden det her — bruddet er sidens blikfang.
+    assert.ok(m.broken, "der skal være et brud at vise");
+    assert.ok(m.broken.label.length > 0);
+    assert.ok(m.broken.next);
+  });
+
+  it("loggen er tom, og det er sandheden", () => {
+    // Der er ikke kaldt et API fra dette repo. En eksempelrække ville
+    // kunne forveksles med en kørsel, der havde fundet sted.
+    assert.deepEqual(m.runs, []);
+  });
+
+  it("omkostningen er et småbeløb, og modellen siger det selv", () => {
+    assert.ok(m.totalKr > 0, "de besluttede claude-agenter koster noget");
+    assert.equal(m.smaabeloeb, m.totalKr < SMÅBELØB_UNDER);
+    assert.equal(m.smaabeloeb, true);
+  });
+
+  it("kun besluttede agenter tæller med i totalen", () => {
+    const ideer = m.agents.filter((a) => a.idea);
+    assert.equal(ideer.length, m.ideas);
+    const besluttet = m.agents.filter((a) => !a.idea).reduce((sum, a) => sum + a.kr, 0);
+    assert.ok(Math.abs(besluttet - m.totalKr) < 1e-9, `${besluttet} mod ${m.totalKr}`);
+    // Idéerne har et estimat, men det ligger uden for totalen.
+    assert.ok(ideer.some((a) => a.kr > 0), "en idé har stadig et prisskøn");
+  });
+
+  it("kæden har led nok til et bånd", () => {
+    assert.ok(m.links.length >= 4, "båndet ville se tomt ud med færre");
   });
 });
