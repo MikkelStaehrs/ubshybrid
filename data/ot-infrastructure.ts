@@ -2,7 +2,7 @@
 //
 // Håndholdt fil, som resten af OT-dataene. Det meste står som "missing" — det
 // findes ikke i dag. Det er ikke en mangel ved listen, men listens egentlige
-// budskab: FT-756 kan måle nok så fint, men der er ingen vej fra måleren til
+// budskab: FT-743 kan måle nok så fint, men der er ingen vej fra måleren til
 // en database, før de her ting er på plads.
 //
 // `requiredFor` peger på leddene i datavejen. Det er den binding, der farver

@@ -52,7 +52,7 @@ export const OT_PROCUREMENT_LABEL: Record<OtStatus, string> = {
 /** IO-skabets mål i meter. */
 const CABINET_SIZE = { x: 1, z: 0.45, h: 2 };
 
-/** Hvor højt over elevatorens top markøren sidder. */
+/** Standardplacering: lidt over maskinens top, hvor afkastet sidder. */
 const SENSOR_LIFT = 0.35;
 
 export type Point3 = [number, number, number];
@@ -321,13 +321,13 @@ export function layoutOt(layer: OtLayer, layout: Layout, lineId: string): OtLayo
 
   const sensors: PlacedSensor[] = layer.sensors.map((s) => {
     const machine = byWid.get(s.machineId);
-    // Markøren sidder ved afkastet, i nedstrøms ende af elevatorens top.
-    const [x, z] = machine ? fromMachine(machine, machine.size.x * 0.85, 0) : [0, 0];
-    return {
-      ...s,
-      machine,
-      pos: machine ? ([x, machine.size.h + SENSOR_LIFT, z] as Point3) : null,
-    };
+    if (!machine) return { ...s, machine, pos: null };
+    // Placeringen står i dataene. Uden den: afkastet i nedstrøms ende af toppen.
+    const mx = s.mount?.x ?? machine.size.x * 0.85;
+    const mz = s.mount?.z ?? 0;
+    const my = s.mount?.y ?? machine.size.h + SENSOR_LIFT;
+    const [x, z] = fromMachine(machine, mx, mz);
+    return { ...s, machine, pos: [x, my, z] as Point3 };
   });
 
   const cables: OtCable[] = sensors.flatMap((s) => {

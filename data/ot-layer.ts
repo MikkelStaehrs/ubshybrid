@@ -15,15 +15,21 @@ const CABINET = "RIO-SLIB-01";
  * Kun piloten står her. Hvad der ellers kunne sættes op, hører hjemme i
  * sensorkataloget og i de idéer, man selv stikker ind på kortet — ikke i
  * projektdata, hvor det ville ligne noget, der var besluttet.
+ *
+ * Måleren sidder ved linjens indgang: i afkastet fra påslag 611 ned i
+ * elevator 743. Derfor måler den hele fødningen ind i sliberiet og ikke
+ * kun ét sted midt på strækket.
  */
 const sliberiSensors: OtSensor[] = [
   {
-    id: "FT-756",
+    id: "FT-743",
     type: "Materialestrøm",
     catalogType: "flow",
     model: "Mütec FS 550",
     signal: "4-20 mA",
-    machineId: "756",
+    machineId: "743",
+    // Opstrøms og lavt: indløbet, ikke afkastet i toppen.
+    mount: { x: -0.9, y: 1.4 },
     cabinetId: CABINET,
     phase: 1,
     status: "test",

@@ -234,7 +234,7 @@ export interface OtCabinet {
 }
 
 export interface OtSensor {
-  /** Tag efter ISA-skik, fx "FT-756" — flowtransmitter på elevator 756. */
+  /** Tag efter ISA-skik, fx "FT-743" — flowtransmitter ved elevator 743. */
   id: string;
   /** Hvad den måler, i klar tekst. */
   type: string;
@@ -245,8 +245,17 @@ export interface OtSensor {
   catalogType?: string;
   model: string;
   signal: OtSignal;
-  /** W-ID på maskinen. Sensoren sidder ved elevatorens afkast. */
+  /** W-ID på maskinen, sensoren hører til. */
   machineId: string;
+  /**
+   * Hvor på maskinen den sidder, i meter i maskinens egne akser: `x` langs
+   * længdeaksen (negativ = opstrøms), `y` over gulvet, `z` på tværs.
+   *
+   * Uden `mount` sidder den i afkastet øverst — det er, hvor en
+   * flowmåler på en elevator normalt hænger. Skal den sidde et andet
+   * sted, skrives målene her, ét sted, frem for i tegnekoden.
+   */
+  mount?: { x: number; y: number; z?: number };
   cabinetId: string;
   phase: OtPhase;
   status: OtStatus;

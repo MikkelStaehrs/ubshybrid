@@ -31,7 +31,7 @@ const sliberi: Agent[] = [
         need: "Driftssignal (DI) pr. maskine i sporet",
       },
       {
-        signalId: "FT-756",
+        signalId: "FT-743",
         required: false,
         need: "Materialestrøm ind i sporene, målt før fordeleren",
       },
@@ -56,7 +56,7 @@ const sliberi: Agent[] = [
         need: "Driftssignal (DI) pr. maskine i sporet",
       },
       {
-        signalId: "FT-756",
+        signalId: "FT-743",
         required: false,
         need: "Materialestrøm ind i sporene, målt før fordeleren",
       },
@@ -105,7 +105,7 @@ const sliberi: Agent[] = [
         need: "Driftssignal (DI) pr. maskine på linjen",
       },
       {
-        signalId: "FT-756",
+        signalId: "FT-743",
         required: false,
         need: "Materialestrøm gennem linjen",
       },

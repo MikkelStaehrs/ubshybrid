@@ -121,8 +121,8 @@ Kun **påkrævede** inputs tæller. En stoprapport kan skrives uden flowmåling,
 ikke uden driftssignal — så flow er `required: false`.
 
 Et input **leverer** først, når kæden står hele vejen til databasen. "Monteret"
-er en delstatus: FT-756 hænger på elevatoren, men der er ingen vej fra den til
-en database, så den tæller nul. Et `dataset`-input måler i stedet **dækning**
+er en delstatus: FT-743 sidder ved linjens indgang, men der er ingen vej
+frem til en database, så den tæller nul. Et `dataset`-input måler i stedet **dækning**
 over agentens scope — "3 af 26 maskiner har vedligeholdshistorik" — og leverer
 først over `DATASET_COVERAGE_MIN`. Tærsklen er valgt, ikke målt.
 
@@ -229,8 +229,13 @@ Har signalet et andet måleområde end de nuværende, så tilføj det i `SCALE` 
   defineres i alle tre temablokke i `factory-map.css`.
 - **Stiplet betyder "findes ikke endnu"** — kabler, zonekanter, DIN-blokke,
   trådnet i 3D. Brug det konsekvent.
-- Kør `npm run build` før commit. TypeScript er strict, og build fanger det,
-  typecheck alene ikke gør.
+- **Stage filer eksplicit.** Brug aldrig `git add -A`, når der ligger
+  uafsluttet arbejde i træet — det fejer andres eller ens eget halvfærdige
+  arbejde med ind under en besked, der ikke beskriver det. Nævn filerne, eller
+  stage dem mappe for mappe, og læs `git diff --cached --name-only` igennem
+  før commit.
+- Kør `npm test` og `npm run build` før commit. TypeScript er strict, og build
+  fanger det, typecheck alene ikke gør.
 
 ## Åbne ender
 
@@ -239,7 +244,7 @@ Har signalet et andet måleområde end de nuværende, så tilføj det i `SCALE` 
   menneskernes adgangskode.
 - **Stopgrænsen på 120 sekunder er valgt, ikke aftalt.** Den skal forbi
   driften, før nogen regner tilgængelighed på den.
-- **Måleområdet 0–40 t/t for FT-756 er en pladsholder.** Det skal rettes, før
+- **Måleområdet 0–40 t/t for FT-743 er en pladsholder.** Det skal rettes, før
   nogen aflæser tallene.
 - **Den tværgående agent venter på linje nr. 2.** Der er ikke noget at gå på
   tværs af endnu.

@@ -8,7 +8,7 @@
 export type Quality = "good" | "stale" | "fault" | "no-source";
 
 export interface SignalValue {
-  /** Sensorens tag, fx "FT-756". */
+  /** Sensorens tag, fx "FT-743". */
   signalId: string;
   /** Råsignalet i mA, som det står på kanalen. */
   raw: number;
@@ -72,7 +72,7 @@ export function describeFault(ma: number): string | null {
  * område, så visningen kan bygges. De skal rettes, før nogen aflæser dem.
  */
 const SCALE: Record<string, { unit: string; min: number; max: number }> = {
-  "FT-756": { unit: "t/t", min: 0, max: 40 },
+  "FT-743": { unit: "t/t", min: 0, max: 40 },
 };
 
 const DEFAULT_SCALE = { unit: "%", min: 0, max: 100 };
@@ -120,7 +120,7 @@ export const QUALITY_LABEL: Record<Quality, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Simuleret FT-756.
+ * Simuleret FT-743.
  *
  * Kører i tre tilstande med ophold, så billedet ikke flimrer: normal drift med
  * støj, stop (4 mA — sløjfen lever, men der løber ingenting), og kabelbrud
@@ -163,7 +163,7 @@ class MockSource implements LiveSource {
     const timestamp = new Date(now).toISOString();
     return this.signalIds.map((signalId) => {
       // Kun piloten er simuleret. Resten har ingen kilde — det er sandheden.
-      if (signalId !== "FT-756") {
+      if (signalId !== "FT-743") {
         return { signalId, raw: NaN, value: null, unit: "", quality: "no-source", timestamp };
       }
       const raw = this.ma(now);

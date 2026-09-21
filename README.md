@@ -52,7 +52,7 @@ Bestemmer, hvor **Live**-visningen henter tal fra. Læses på serveren i
 
 | Værdi | |
 |---|---|
-| `mock` | Simulerer FT-756 i browseren: 4–20 mA med støj, af og til stop på 4 mA, sjældent kabelbrud under 3,6 mA. Visningen viser et tydeligt **Simulerede data**-banner |
+| `mock` | Simulerer FT-743 ved linjens indgang i browseren: 4–20 mA med støj, af og til stop på 4 mA, sjældent kabelbrud under 3,6 mA. Visningen viser et tydeligt **Simulerede data**-banner |
 | `api` | Henter `/api/live`, som læser seneste værdier fra MSSQL |
 
 Alt andet end `api` — også en tom variabel — betyder `mock`. Det er med

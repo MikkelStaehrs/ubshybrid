@@ -217,8 +217,8 @@ function DataTab({ c, sensors, report, infra }: {
 }) {
   const first = sensors[0];
   const channel = first ? report.channel.get(first.id) ?? "AI1" : "AI1";
-  const tag = first?.id ?? "FT-756";
-  const wid = first?.machineId ?? "756";
+  const tag = first?.id ?? "FT-743";
+  const wid = first?.machineId ?? "743";
   const states = pathState(infra, c, first);
 
   const detail: Record<OtPathStep, string> = {
