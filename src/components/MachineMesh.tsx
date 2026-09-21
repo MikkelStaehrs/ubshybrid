@@ -4,6 +4,7 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useRef } from "react";
 import type { Group, Mesh } from "three";
 import { shortWIds, type PlacedMachine } from "../lib/layout";
+import { formFor, shapeFor, type Primitive } from "../lib/machine-form";
 import type { SceneTheme } from "../lib/useSceneTheme";
 
 interface Props {
@@ -18,15 +19,6 @@ interface Props {
   onHover: (id: string | null) => void;
 }
 
-// Illustrative former ud fra navnet — nemme at udvide når vi kender modellerne.
-type Shape = "box" | "drum" | "tower" | "sieve" | "deck";
-function shapeFor(name: string): Shape {
-  if (/tri[øo]r/i.test(name)) return "drum";
-  if (/jet\s?pe[ae]ler|nordmark/i.test(name)) return "tower";
-  if (/^kb[-\s]/i.test(name)) return "sieve";
-  if (/alfa/i.test(name)) return "deck";
-  return "box";
-}
 
 function Mat({ color, theme, dimmed, glow }: { color: string; theme: SceneTheme; dimmed: boolean; glow: number }) {
   return (
@@ -40,6 +32,60 @@ function Mat({ color, theme, dimmed, glow }: { color: string; theme: SceneTheme;
       opacity={dimmed ? 0.16 : 1}
       depthWrite={!dimmed}
     />
+  );
+}
+
+/** Ét bærende volumen fra machine-form.ts, tegnet som mesh. */
+function Volume({ p, mat, body, steel }: {
+  p: Primitive;
+  mat: (c: string) => React.ReactNode;
+  body: string;
+  steel: string;
+}) {
+  const color = p.steel ? steel : body;
+  if (p.form === "box") {
+    return (
+      <mesh castShadow receiveShadow={p.receive} position={p.at} rotation={p.rot ?? [0, 0, 0]}>
+        <boxGeometry args={p.size} />{mat(color)}
+      </mesh>
+    );
+  }
+  if (p.form === "cylinder") {
+    return (
+      <mesh castShadow position={p.at} rotation={p.rot ?? [0, 0, 0]}>
+        <cylinderGeometry args={[p.rTop, p.rBottom, p.h, p.sides]} />{mat(color)}
+      </mesh>
+    );
+  }
+  return (
+    <mesh castShadow position={p.at}>
+      <sphereGeometry args={[p.r, 20, 14]} />{mat(color)}
+    </mesh>
+  );
+}
+
+/**
+ * Overfladepynt, der ikke hører til silhuetten: CT-scannerens åbning.
+ * Hologrammet sampler den ikke — den ændrer ikke på, hvordan maskinen ser
+ * ud på afstand.
+ */
+function ornaments(
+  m: PlacedMachine,
+  mat: (c: string) => React.ReactNode,
+  steel: string,
+): React.ReactNode {
+  if (m.kind !== "analysis" || !/ct|scanner/i.test(m.name)) return null;
+  const { x, z, h } = m.size;
+  const bore = Math.min(z, h) * 0.22;
+  return (
+    <>
+      <mesh castShadow position={[x / 2 + 0.02, h * 0.55, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[bore, 0.06, 12, 32]} />{mat(steel)}
+      </mesh>
+      <mesh position={[x / 2 + 0.02, h * 0.55, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <circleGeometry args={[bore, 32]} />{mat(steel)}
+      </mesh>
+    </>
   );
 }
 
@@ -65,143 +111,17 @@ export function MachineMesh({ m, theme, selected, hovered, related, dimmed, show
     onPointerOut: () => onHover(null),
   };
 
-  let parts: React.ReactNode;
-  if (m.kind === "elevator") {
-    parts = (
-      <>
-        <mesh castShadow receiveShadow position={[0, 0.45, 0]}><boxGeometry args={[x * 1.35, 0.9, z * 1.5]} />{mat(steel)}</mesh>
-        <mesh castShadow position={[0, h / 2, 0]}><boxGeometry args={[x * 0.7, h, z]} />{mat(body)}</mesh>
-        <mesh castShadow position={[0, h + 0.35, 0.1]}><boxGeometry args={[x * 1.3, 0.8, z * 1.6]} />{mat(body)}</mesh>
-      </>
-    );
-  } else if (m.kind === "distributor") {
-    parts = (
-      <>
-        <mesh castShadow position={[0, 0.8, 0]}><cylinderGeometry args={[x * 0.45, x * 0.45, 1.6, 24]} />{mat(body)}</mesh>
-        <mesh castShadow position={[0, 1.95, 0]}><coneGeometry args={[x * 0.45, 0.7, 24]} />{mat(steel)}</mesh>
-      </>
-    );
-  } else if (m.kind === "intake") {
-    const n = Math.max(1, m.wIds.length);
-    const unitZ = z / n;
-    parts = Array.from({ length: n }, (_, i) => {
-      const oz = -z / 2 + unitZ * (i + 0.5);
-      return n > 1 ? (
-        // Vippestol: ramme + vippet kar
-        <group key={i} position={[0, 0, oz]}>
-          <mesh castShadow position={[0, 0.5, 0]}><boxGeometry args={[x * 0.7, 1, unitZ * 0.7]} />{mat(steel)}</mesh>
-          <mesh castShadow position={[0.2, 1.25, 0]} rotation={[0, 0, -0.35]}><boxGeometry args={[x * 0.75, 0.5, unitZ * 0.8]} />{mat(body)}</mesh>
-        </group>
-      ) : (
-        // Påslag: tragt på ben
-        <group key={i} position={[0, 0, oz]}>
-          {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => (
-            <mesh key={`${sx}${sz}`} castShadow position={[sx * x * 0.3, 0.45, sz * unitZ * 0.3]}><boxGeometry args={[0.14, 0.9, 0.14]} />{mat(steel)}</mesh>
-          )))}
-          <mesh castShadow position={[0, 1.35, 0]} rotation={[0, Math.PI / 4, 0]}>
-            <cylinderGeometry args={[x * 0.62, x * 0.18, 0.9, 4]} />{mat(body)}
-          </mesh>
-        </group>
-      );
-    });
-  } else if (m.kind === "person") {
-    // Piktogram frem for forsøg på realisme — han er her for sjov.
-    const legH = h * 0.47;
-    const torsoH = h * 0.3;
-    const headR = h * 0.075;
-    parts = (
-      <>
-        {[-1, 1].map((sx) => (
-          <mesh key={`ben${sx}`} castShadow position={[0, legH / 2, sx * z * 0.22]}>
-            <boxGeometry args={[x * 0.34, legH, z * 0.3]} />{mat(body)}
-          </mesh>
-        ))}
-        <mesh castShadow position={[0, legH + torsoH / 2, 0]}>
-          <boxGeometry args={[x * 0.62, torsoH, z]} />{mat(body)}
-        </mesh>
-        {[-1, 1].map((sx) => (
-          <mesh key={`arm${sx}`} castShadow position={[0, legH + torsoH * 0.55, sx * (z / 2 + 0.06)]}>
-            <boxGeometry args={[x * 0.26, torsoH * 0.92, 0.1]} />{mat(body)}
-          </mesh>
-        ))}
-        <mesh castShadow position={[0, legH + torsoH + headR * 1.35, 0]}>
-          <sphereGeometry args={[headR, 20, 14]} />{mat(body)}
-        </mesh>
-      </>
-    );
-  } else if (m.kind === "analysis") {
-    // CT-scanner: massiv kasse med en åbning i enden. Videometer: bånd gennem
-    // en kuppel, på et bord — derfor tegnes bordet med.
-    const isScanner = /ct|scanner/i.test(m.name);
-    if (isScanner) {
-      const bore = Math.min(z, h) * 0.22;
-      parts = (
-        <>
-          <mesh castShadow receiveShadow position={[0, h / 2, 0]}><boxGeometry args={[x, h, z]} />{mat(body)}</mesh>
-          <mesh castShadow position={[x / 2 + 0.02, h * 0.55, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <torusGeometry args={[bore, 0.06, 12, 32]} />{mat(steel)}
-          </mesh>
-          <mesh position={[x / 2 + 0.02, h * 0.55, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <circleGeometry args={[bore, 32]} />{mat(steel)}
-          </mesh>
-        </>
-      );
-    } else {
-      const tableH = h * 0.66;
-      const domeR = Math.min(0.2, z * 0.28);
-      parts = (
-        <>
-          {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => (
-            <mesh key={`${sx}${sz}`} castShadow position={[sx * x * 0.42, tableH / 2, sz * z * 0.36]}>
-              <boxGeometry args={[0.06, tableH, 0.06]} />{mat(steel)}
-            </mesh>
-          )))}
-          <mesh castShadow receiveShadow position={[0, tableH, 0]}><boxGeometry args={[x, 0.05, z]} />{mat(steel)}</mesh>
-          {/* Transportbåndet er 30 cm bredt — et af de få rigtige mål vi har. */}
-          <mesh castShadow position={[0, tableH + 0.06, 0]}><boxGeometry args={[x * 0.95, 0.07, 0.3]} />{mat(body)}</mesh>
-          <mesh castShadow position={[0, tableH + 0.09, 0]}>
-            <sphereGeometry args={[domeR, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />{mat(body)}
-          </mesh>
-        </>
-      );
-    }
-  } else {
-    const shape = shapeFor(m.name);
-    const bodyH = h * 0.62;
-    parts = (
-      <>
-        <mesh castShadow receiveShadow position={[0, 0.08, 0]}><boxGeometry args={[x, 0.16, z]} />{mat(steel)}</mesh>
-        {shape === "drum" ? (
-          <>
-            <mesh castShadow position={[0, 0.55, 0]}><boxGeometry args={[x * 0.9, 0.8, z * 0.55]} />{mat(steel)}</mesh>
-            <mesh castShadow position={[0, 1.55, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[z * 0.36, z * 0.36, x * 0.95, 28]} />{mat(body)}
-            </mesh>
-          </>
-        ) : (
-          <mesh castShadow position={[0, 0.16 + bodyH / 2, 0]}><boxGeometry args={[x * 0.9, bodyH, z * 0.85]} />{mat(body)}</mesh>
-        )}
-        {shape === "tower" && (
-          <mesh castShadow position={[x * 0.15, 0.16 + bodyH + 0.55, 0]}><cylinderGeometry args={[z * 0.28, z * 0.28, 1.1, 24]} />{mat(steel)}</mesh>
-        )}
-        {shape === "sieve" && [0, 1, 2].map((i) => (
-          <mesh key={i} castShadow position={[0, 0.16 + bodyH + 0.14 + i * 0.26, 0]}>
-            <boxGeometry args={[x * (0.8 - i * 0.08), 0.18, z * (0.75 - i * 0.08)]} />{mat(i % 2 ? body : steel)}
-          </mesh>
-        ))}
-        {shape === "deck" && (
-          <mesh castShadow position={[0, 0.16 + bodyH + 0.2, 0]} rotation={[0.12, 0, 0.08]}>
-            <boxGeometry args={[x * 0.95, 0.12, z * 0.95]} />{mat(steel)}
-          </mesh>
-        )}
-        {(shape === "box" || shape === "drum") && (
-          <mesh castShadow position={[-x * 0.25, (shape === "drum" ? 2.2 : 0.16 + bodyH) + 0.3, 0]} rotation={[0, Math.PI / 4, 0]}>
-            <cylinderGeometry args={[0.55, 0.2, 0.6, 4]} />{mat(steel)}
-          </mesh>
-        )}
-      </>
-    );
-  }
+  // Grundformen kommer fra machine-form.ts — samme kilde som hologrammet.
+  const prims = formFor({ kind: m.kind, name: m.name, size: m.size, wIdCount: m.wIds.length });
+  const parts = (
+    <>
+      {prims.map((p, i) => (
+        <Volume key={i} p={p} mat={mat} body={body} steel={steel} />
+      ))}
+      {ornaments(m, mat, steel)}
+    </>
+  );
+
 
   const topY = m.kind === "elevator" ? h + 1 : m.kind === "process" ? h + 0.4 : h + 0.2;
 

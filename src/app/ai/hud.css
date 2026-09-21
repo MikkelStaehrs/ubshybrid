@@ -230,3 +230,74 @@
   .cc-break-where { font-size: 18px; }
   .cc-break-next { font-size: 15px; }
 }
+
+/* --- Hologrammet: hovedmotivet, bag alt andet ---------------------------- */
+.ai-hud { position: relative; }
+.holo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #050807;
+}
+.holo canvas { display: block; }
+
+/* Plus-gitter som registreringsmærker. Statisk, ét lag, koster ingenting. */
+.ai-hud::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(223, 233, 229, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(223, 233, 229, 0.05) 1px, transparent 1px);
+  background-size: 96px 96px;
+}
+
+/* Indholdet ligger over hologrammet. */
+.ai-hud > *:not(.holo) { position: relative; z-index: 2; }
+
+/* --- Det store udlæste tal ----------------------------------------------- */
+.holo-readout {
+  position: fixed;
+  left: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 28px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hud-line);
+  min-width: min(520px, calc(100% - var(--gutter) * 2));
+}
+.ro-group { display: flex; align-items: baseline; gap: 8px; }
+.ro-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.ro-value {
+  font-family: var(--font-display);
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  color: var(--hud-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ro-of { font-family: var(--font-mono); font-size: 13px; color: var(--hud-muted); }
+/* Farve er kun signal. Rav = test. Intet er i drift, så intet er grønt. */
+.ro-group.is-test .ro-value { color: var(--hud-test-lys); }
+
+@media (max-width: 720px) {
+  .ro-value { font-size: 32px; }
+  .holo-readout { gap: 6px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Hologrammet står stille af sig selv — Hologram.tsx slukker banen. */
+  .holo { filter: none; }
+}
