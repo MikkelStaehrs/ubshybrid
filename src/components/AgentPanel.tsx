@@ -110,13 +110,26 @@ export function AgentPanel({ st, colorIndex, ot, onClose }: {
 
       <section>
         <h3>Inputs</h3>
+        {/* Det, de alle venter på, siges én gang — ikke i hver eneste række. */}
+        {st.shared.length > 0 && (
+          <p className="fm-shared-block">
+            <span className="fm-shared-label">Venter på</span>
+            <span>{st.shared.join(" → ")}</span>
+          </p>
+        )}
         <ul className="fm-inputs">
           {[...required, ...supporting].map((i, n) => (
             <li key={n} className={`fm-input${i.have === i.total ? " is-ok" : i.have > 0 ? " is-partial" : " is-missing"}`}>
               <span className="fm-input-kind">{i.input.required ? "Påkrævet" : "Støttende"}</span>
               <span className="fm-input-label">{i.label}</span>
               <span className="fm-input-count fm-mono">{i.have} / {i.total}</span>
-              <span className="fm-input-detail">{i.detail}</span>
+              <span className="fm-input-detail">
+                {st.shared.length > 0 && i.chainBlocked
+                  ? i.blockedBy.length
+                    ? `Derudover: ${i.blockedBy.join(", ")}.`
+                    : "Intet derudover."
+                  : i.detail}
+              </span>
             </li>
           ))}
         </ul>

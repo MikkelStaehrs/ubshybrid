@@ -89,6 +89,14 @@ export interface AgentInputState {
   total: number;
   /** "0 af 10 maskiner har driftssignal". */
   detail: string;
+  /** Navnene på det, der blokerer netop dette input. Tom når intet gør. */
+  blockedBy: string[];
+  /**
+   * Venter inputtet på noget i kæden? Kun de inputs kan have en fælles
+   * blokering — et manglende driftssignal venter ikke på et uplink, det
+   * findes bare ikke, og det skal sige sit eget.
+   */
+  chainBlocked: boolean;
 }
 
 export interface AgentState {
@@ -101,6 +109,11 @@ export interface AgentState {
   upstream: PlacedMachine[];
   /** Én sætning om hvad der står i vejen. */
   summary: string;
+  /**
+   * Det, alle de manglende inputs venter på. Vises én gang øverst, så hvert
+   * input kun skal sige det, der er særligt for det.
+   */
+  shared: string[];
 }
 
 /** Personer er ikke maskiner og kan ikke bære et driftssignal. */
@@ -169,7 +182,15 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
         : reach === "unmounted" ? `${input.signalId} er kun ${s!.status === "idea" ? "en idé" : "planlagt"}`
           : reach === "mounted" ? `${input.signalId} monteret, venter på kæden${breaksAt ? ` (knækker ved ${breaksAt})` : ""}`
             : `${input.signalId} leverer`;
-    return { input, label: input.signalId, have: reach === "delivers" ? 1 : 0, total: 1, detail };
+    return {
+      input,
+      label: input.signalId,
+      have: reach === "delivers" ? 1 : 0,
+      total: 1,
+      detail,
+      blockedBy: breaksAt ? [breaksAt] : [],
+      chainBlocked: !!breaksAt,
+    };
   }
 
   // 2) En type fra kataloget, ét pr. maskine i scope.
@@ -186,7 +207,10 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
       total === 0 ? "Ingen maskiner i scope"
         : mounted > have ? `${have} af ${total} maskiner leverer ${label} (${mounted} monteret, venter på kæden)`
           : `${have} af ${total} maskiner har ${label}`;
-    return { input, label: kind?.label ?? input.type, have, total, detail };
+    return {
+      input, label: kind?.label ?? input.type, have, total, detail,
+      blockedBy: [], chainBlocked: false,
+    };
   }
 
   // 3) Et led i datavejen — vagtagentens verden.
@@ -198,6 +222,7 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
       ? pathState(ot.infrastructure, cabinet, ot.sensors[0]).find((s) => s.id === step)
       : undefined;
     const have = state && isDone(state.status) ? 1 : 0;
+    const blockedBy = have ? [] : (state?.blockedBy ?? []).map((n) => n.name);
     return {
       input,
       label,
@@ -205,13 +230,34 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
       total: 1,
       detail: have
         ? `${label} svarer`
-        : state?.blockedBy.length
-          ? `${label} venter på ${state.blockedBy.map((n) => n.name).join(", ")}`
+        : blockedBy.length
+          ? `${label} venter på ${blockedBy.join(", ")}`
           : `${label} findes ikke`,
+      blockedBy,
+      chainBlocked: blockedBy.length > 0,
     };
   }
 
-  return { input, label: "Ukendt input", have: 0, total: 1, detail: "Inputtet er ikke beskrevet" };
+  return {
+    input, label: "Ukendt input", have: 0, total: 1,
+    detail: "Inputtet er ikke beskrevet", blockedBy: [], chainBlocked: false,
+  };
+}
+
+/**
+ * Det, der blokerer *alle* de inputs, som mangler noget.
+ *
+ * Vagtagentens tre led venter i vid udstrækning på det samme — uplinket skal
+ * stå, før noget af det virker. Vises det pr. input, gentages stien tre gange.
+ * Her trækkes fællesmængden ud, så hvert input kun behøver vise sin rest.
+ *
+ * Fællesmængden er udledt af pathState-bruddene: sker der noget i
+ * infrastrukturen, flytter den sig af sig selv.
+ */
+function sharedBlockers(inputs: AgentInputState[]): string[] {
+  const blocked = inputs.filter((i) => i.have < i.total && i.chainBlocked);
+  if (blocked.length < 2) return [];
+  return blocked[0].blockedBy.filter((name) => blocked.every((i) => i.blockedBy.includes(name)));
 }
 
 export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): AgentState {
@@ -243,7 +289,13 @@ export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): A
           ? "Alle påkrævede inputs leverer. Agenten er ikke slået til endnu."
           : "Kører.";
 
-  return { agent, status, inputs, machines, upstream, summary };
+  const shared = sharedBlockers(inputs);
+  // Hvert input viser kun sin rest — fællesmængden står for sig.
+  const trimmed = inputs.map((i) => ({
+    ...i,
+    blockedBy: i.blockedBy.filter((n) => !shared.includes(n)),
+  }));
+  return { agent, status, inputs: trimmed, machines, upstream, summary, shared };
 }
 
 export function agentStates(lineId: string, layout: Layout, ot: OtLayout | null): AgentState[] {

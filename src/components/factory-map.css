@@ -1396,3 +1396,24 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 /* Statusprik i indløbspanelets agentliste. */
 .fm-dot.ags-dot { background: var(--st, var(--line)); border-radius: 50%; }
 .fm-dot.ags-dot.ags-missing { background: none; border: 1.5px dashed var(--st); }
+
+/* Den fælles blokering, sagt én gang i stedet for i hver række. */
+.fm-shared-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0 0 8px !important;
+  padding: 8px 10px;
+  border: 1px dashed var(--ot-missing);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ot-missing);
+}
+.fm-shared-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
