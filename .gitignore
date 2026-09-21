@@ -4,3 +4,6 @@ preview/dist
 next-env.d.ts
 *.tsbuildinfo
 .env*.local
+
+# Inspirationsbilleder til HUD-designet. Ligger lokalt, hører ikke i repoet.
+design/inspiration/
