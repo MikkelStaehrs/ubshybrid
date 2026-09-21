@@ -1,0 +1,232 @@
+/* ------------------------------------------------------------------------
+   AI-overblik, HUD — mørkt kontrolrum.
+
+   Paletten er scopet til .ai-hud og følger ikke brugerens tema: et
+   kontrolrum er mørkt, også for den der kører i lyst tema. Farverne er
+   kortets egne mørke værdier, ikke en generisk sci-fi-palet.
+
+   Regel: alt der lyser eller bevæger sig svarer til en tilstand fra
+   pathState(), signalDelivery() eller agentstatus. Ingen dekoration der
+   antyder aktivitet, der ikke findes.
+------------------------------------------------------------------------- */
+.ai-hud {
+  --hud-bg: #070a09;
+  --hud-panel: #0d1211;
+  --hud-line: #1e2a27;
+  --hud-ink: #dfe9e5;
+  --hud-muted: #7f918b;
+
+  /* Fra kortets palet: procesgrøn, elevatorrav, fejlrød. */
+  --hud-drift: #34806f;
+  --hud-drift-lys: #5fc4a9;
+  --hud-test: #c8962f;
+  --hud-test-lys: #f0bd5c;
+  --hud-brud: #e0705f;
+  --hud-moerk: #2b3936;
+
+  min-height: 100dvh;
+  padding: 28px var(--gutter) 64px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, #0d1413 0%, var(--hud-bg) 62%);
+  color: var(--hud-ink);
+  font-family: var(--font-ui);
+}
+.ai-hud * { box-sizing: border-box; }
+
+.hud-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1180px;
+  margin: 0 auto 26px;
+}
+.hud-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.hud-top h1 {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 44px;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.hud-switch {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--hud-line);
+  border-radius: 5px;
+  color: var(--hud-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hud-switch:hover { border-color: var(--hud-drift-lys); color: var(--hud-drift-lys); }
+
+.hud-section { max-width: 1180px; margin: 0 auto 30px; }
+.hud-section > h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.hud-reach { margin: 0 0 14px; font-size: 12px; color: var(--hud-muted); }
+.hud-reach strong { color: var(--hud-ink); font-family: var(--font-mono); }
+
+/* --- Kredsløbet ---------------------------------------------------------- */
+.cc {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--hud-line);
+  border-radius: 8px;
+  background: var(--hud-panel);
+}
+.cc-svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.tone-drift { --t: var(--hud-drift); --t-lys: var(--hud-drift-lys); }
+.tone-test { --t: var(--hud-test); --t-lys: var(--hud-test-lys); }
+.tone-brud { --t: var(--hud-brud); --t-lys: var(--hud-brud); }
+.tone-moerk { --t: var(--hud-moerk); --t-lys: var(--hud-moerk); }
+
+/* Gløden: forblødt, statisk, aldrig animeret med filteret på.
+   Kun opacity ændrer sig, og kun når en tilstand siger det. */
+.cc-glow {
+  fill: var(--t-lys);
+  opacity: 0.1;
+  filter: blur(14px);
+}
+.cc-node.tone-moerk .cc-glow { opacity: 0; }
+.cc-glow.is-pulse {
+  /* Sløringen beregnes én gang og lægges i sit eget lag. Derefter ændrer
+     kun alfa sig — filteret køres ikke om for hver frame. */
+  will-change: opacity;
+  animation: cc-breathe 2.6s ease-in-out infinite;
+}
+@keyframes cc-breathe {
+  0%, 100% { opacity: 0.22; }
+  50% { opacity: 0.5; }
+}
+
+.cc-box {
+  fill: #0a0f0e;
+  stroke: var(--t);
+  stroke-width: 1.5;
+}
+.cc-node.tone-moerk .cc-box { stroke-dasharray: 4 4; }
+.cc-node.is-broken .cc-box { stroke-width: 2.5; }
+
+.cc-label {
+  fill: var(--hud-ink);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  text-transform: uppercase;
+}
+.cc-node.tone-moerk .cc-label { fill: var(--hud-muted); }
+.cc-status {
+  fill: var(--t);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-anchor: middle;
+  text-transform: uppercase;
+}
+.cc-node.tone-moerk .cc-status { fill: var(--hud-muted); }
+
+.cc-track { stroke: var(--hud-moerk); stroke-width: 2; }
+.cc-seg.is-live .cc-track { stroke: var(--t); opacity: 0.4; }
+/* Pulsen løber kun på led, der leverer. Den findes ikke på de andre. */
+.cc-pulse {
+  stroke: var(--t-lys);
+  stroke-width: 3;
+  stroke-linecap: round;
+  animation: cc-run 2.2s linear infinite;
+}
+@keyframes cc-run {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* --- Bruddet: sidens vigtigste oplysning --------------------------------- */
+.cc-break {
+  padding: 16px 18px;
+  border: 1px solid var(--hud-brud);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(224, 112, 95, 0.12), transparent 70%);
+}
+.cc-break-dot {
+  display: inline-block;
+  margin-right: 10px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--hud-brud);
+  animation: cc-blink 2.6s ease-in-out infinite;
+}
+@keyframes cc-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.cc-break-where {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.cc-break-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 10px 0 0;
+  font-size: 17px;
+}
+.cc-break-next-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.cc-break-next strong { font-weight: 600; color: var(--hud-ink); }
+
+/* --- Stilstand ----------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  /* Alt står stille. Intet indhold går tabt: pulsen bliver en tændt linje,
+     gløden bliver stående, og bruddet er stadig markeret. */
+  .ai-hud *,
+  .ai-hud *::before,
+  .ai-hud *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .cc-pulse { stroke-dasharray: none; opacity: 0.9; }
+  .cc-glow.is-pulse { opacity: 0.36; }
+}
+
+@media (max-width: 720px) {
+  .ai-hud { padding-top: 20px; }
+  .hud-top h1 { font-size: 32px; }
+  .cc { padding: 12px; }
+  .cc-break-where { font-size: 18px; }
+  .cc-break-next { font-size: 15px; }
+}

@@ -133,6 +133,37 @@ pr. kørsel. Det skal kunne ses i fladen, før nogen slår noget til.
 **`til` og `svarerPaa`** er påkrævede. En agent uden modtager og uden ét
 spørgsmål, den besvarer, har intet formål — og så er den ikke færdigtænkt.
 
+## HUD'en på /ai
+
+`/ai` er et kontrolrum til en skærm i et mødelokale. `/ai?visning=dokument`
+er den samme viden til at læse og printe. De bygger på de samme funktioner —
+det er udtrykket, der skifter, ikke dataene.
+
+**Tre tilstande, ikke flere.** Under motorhjelmen har OT-laget seks statusser
+og agenterne fem. De bærer beslutninger og indkøb, og de er uændrede. På
+skærmen er spørgsmålet kun ét:
+
+| | |
+|---|---|
+| **PÅ PLADS** | findes og leverer |
+| **TEST** | findes, men ikke i drift |
+| **AFVENTER** | findes ikke endnu |
+
+Oversættelsen sker ét sted, i `hudState()` og `hudAgentState()` i
+`src/lib/ai-hud.ts`. Ord som "købes nu", "planlagt", "bestilt" og
+"mangler – nødvendig" hører til i dokumentvisningen og må ikke nå HUD'en.
+En test scanner modellens synlige strenge for dem.
+
+**Ingen forklarende sætninger.** Labels er på højst fire ord, og brudpanelet
+er to linjer: hvor kæden stopper, og hvad den afventer. Skal noget uddybes,
+hører det til i dokumentvisningen. Også det er en test.
+
+**Alt der bevæger sig, viser en tilstand.** En puls løber kun på led, der
+leverer, og stopper ved bruddet. Ingen tilfældig flimren, ingen tal der
+tæller op for syns skyld. Står noget stille i virkeligheden, står det stille
+på skærmen. `prefers-reduced-motion` slukker alle animationer uden at tabe
+indhold.
+
 ## Trin for trin
 
 ### Ny linje
