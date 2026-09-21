@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CanvasTexture, MathUtils, PerspectiveCamera, SRGBColorSpace, TextureLoader, Vector3, type Texture } from "three";
 import type { MapControls as MapControlsImpl } from "three-stdlib";
 import { flowPath, halfExtent, type Layout } from "../lib/layout";
+import type { AgentState } from "../lib/agents";
 import type { OtLayout, OtSelection, PlacedIdea } from "../lib/ot";
 import type { FloorplanImage, LineData, OtPhase } from "../lib/types";
 import type { SceneTheme } from "../lib/useSceneTheme";
@@ -12,12 +13,13 @@ import { FlowRibbon } from "./FlowRibbon";
 import { MachineMesh } from "./MachineMesh";
 import type { SignalValue } from "../lib/live-source";
 import { LiveLayer } from "./LiveLayer";
+import { AgentLayer } from "./AgentLayer";
 import { OtLayer } from "./OtLayer";
 
 export type ViewMode = "perspective" | "top";
 
 /** Hvilket lag kortet viser. Kameraet er det samme i begge. */
-export type MapLayer = "maintenance" | "ot" | "live";
+export type MapLayer = "maintenance" | "ot" | "live" | "agents";
 
 interface SceneProps {
   data: LineData;
@@ -46,6 +48,10 @@ interface SceneProps {
   liveValues: Map<string, SignalValue>;
   liveSelected: string | null;
   onLiveSelect: (signalId: string) => void;
+  /** Agenterne med udledt status. Tom uden for Agents-visningen. */
+  agents: AgentState[];
+  agentSelected: string | null;
+  onAgentSelect: (agentId: string | null) => void;
   onOtSelect: (sel: OtSelection | null) => void;
   onOtHover: (sel: OtSelection | null) => void;
 }
@@ -265,6 +271,9 @@ export function Scene(p: SceneProps) {
   // det er tallene ovenpå, der er nye.
   const ot = p.layer === "ot";
   const live = p.layer === "live";
+  const agentsView = p.layer === "agents";
+  // Både OT og Agents toner anlægget ned — laget ovenpå er det, man skal se.
+  const faded = ot || agentsView;
 
   // Pilene bevæger sig kun, hvor et flowsignal siger, at der løber noget.
   // Et signal i fejl eller uden kilde ved ingenting og får intet til at rulle.
@@ -324,7 +333,7 @@ export function Scene(p: SceneProps) {
             width={hot ? 1.0 : 0.85}
             y={hot ? 0.06 : 0.04}
             animate={live ? flowing.has(e.id) : p.animateFlow}
-            opacity={ot ? 0.12 : shown ? 1 : 0.15}
+            opacity={faded ? 0.12 : shown ? 1 : 0.15}
           />
         );
       })}
@@ -337,12 +346,23 @@ export function Scene(p: SceneProps) {
           selected={m.id === p.selectedId}
           hovered={m.id === p.hoveredId}
           related={related.has(m.id)}
-          dimmed={ot || !visible(m)}
+          dimmed={faded || !visible(m)}
           showLabel={p.showLabels}
           onSelect={p.onSelect}
           onHover={p.onHover}
         />
       ))}
+
+      {agentsView && (
+        <AgentLayer
+          states={p.agents}
+          ot={p.ot}
+          theme={theme}
+          selectedId={p.agentSelected}
+          showLabels={p.showLabels}
+          onSelect={p.onAgentSelect}
+        />
+      )}
 
       {live && p.ot && (
         <LiveLayer

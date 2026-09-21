@@ -1,7 +1,7 @@
 "use client";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { lineOpsFor, opsForMachine } from "../lib/agents";
+import { agentStates, lineOpsFor, opsForMachine, AGENT_STATUS_LABEL } from "../lib/agents";
 import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
 import type { LineOption } from "../lib/lines";
@@ -20,6 +20,7 @@ import type {
 import { useLiveSignals } from "../lib/useLiveSignals";
 import type { LiveSourceKind } from "../lib/live-source";
 import { useSceneTheme } from "../lib/useSceneTheme";
+import { AgentPanel } from "./AgentPanel";
 import { LivePanel } from "./LivePanel";
 import { SignalModal } from "./SignalModal";
 import { Field, Modal } from "./Modal";
@@ -246,6 +247,7 @@ export function FactoryMap({
   // Sensoridéer er en skitse i browseren — de rører ikke data/.
   const [ideas, setIdeas] = useState<SensorIdea[]>([]);
   const [liveSel, setLiveSel] = useState<string | null>(null);
+  const [agentSel, setAgentSel] = useState<string | null>(null);
   const isRoom = !!rooms?.some((r) => r.id === data.line.id);
   const showPicker = (lines?.length ?? 0) + (rooms?.length ?? 0) > 1 && !!onSelectLine;
 
@@ -275,6 +277,7 @@ export function FactoryMap({
     setOtHover(null);
     setIdeas([]);
     setLiveSel(null);
+    setAgentSel(null);
     setResetToken((t) => t + 1);
   }, [data.line.id]);
 
@@ -305,6 +308,10 @@ export function FactoryMap({
 
   const isOt = activeLayer === "ot";
   const isLive = activeLayer === "live";
+  const isAgents = activeLayer === "agents";
+  // Status udledes hver gang — den står ingen steder i dataene.
+  const agents = useMemo(() => agentStates(data.line.id, layout, ot), [data.line.id, layout, ot]);
+  const agentSelected = agentSel ? agents.find((a) => a.agent.id === agentSel) : undefined;
   const signalIds = useMemo(() => ot?.sensors.map((s) => s.id) ?? [], [ot]);
   const live = useLiveSignals(liveSource, signalIds, isLive);
   /** Tallet på hver faseknap er kumulativt, ligesom filteret selv. */
@@ -347,6 +354,12 @@ export function FactoryMap({
   const removeIdea = (id: string) => setIdeas((list) => list.filter((i) => i.id !== id));
 
   const select = (id: string | null) => {
+    if (isAgents) {
+      // En maskine hører til en agent — det er agenten, man vil se.
+      const owner = id ? agents.find((a) => a.machines.some((m) => m.id === id)) : undefined;
+      setAgentSel(owner?.agent.id ?? null);
+      return;
+    }
     setSelectedId(id);
     setSearchOpen(false);
     setHistoryOpen(false);
@@ -357,7 +370,7 @@ export function FactoryMap({
   };
 
   return (
-    <div className={`fm-root${selected && !isLive ? " has-panel" : ""}${isLive ? " is-live" : ""}`}>
+    <div className={`fm-root${(isAgents ? !!agentSelected : !!selected && !isLive) ? " has-panel" : ""}${isLive ? " is-live" : ""}`}>
       <div className="fm-canvas" data-hovering={hoveredId ? "" : undefined}>
         {theme && (
           <Canvas
@@ -389,6 +402,9 @@ export function FactoryMap({
               liveValues={live.values}
               liveSelected={liveSel}
               onLiveSelect={setLiveSel}
+              agents={isAgents ? agents : []}
+              agentSelected={agentSel}
+              onAgentSelect={setAgentSel}
               onOtSelect={setOtSel}
               onOtHover={setOtHover}
             />
@@ -479,6 +495,9 @@ export function FactoryMap({
               <button type="button" aria-pressed={activeLayer === "live"} onClick={() => setLayer("live")}>
                 Live
               </button>
+              <button type="button" aria-pressed={activeLayer === "agents"} onClick={() => setLayer("agents")}>
+                Agents
+              </button>
             </div>
           )}
 
@@ -494,7 +513,7 @@ export function FactoryMap({
           )}
 
           {/* Sporfilteret tonede maskiner — i OT-visningen er de tonet i forvejen. */}
-          {!isOt && data.lanes.length > 0 && (
+          {!isOt && !isAgents && data.lanes.length > 0 && (
           <div className="fm-seg" role="group" aria-label="Spor">
             {[null, ...data.lanes.slice().sort().reverse()].map((l) => (
               <button key={l ?? "all"} type="button" aria-pressed={lane === l} onClick={() => setLane(l)}>
@@ -510,7 +529,7 @@ export function FactoryMap({
           </div>
 
           <div className="fm-seg" role="group" aria-label="Lag">
-            {hasFlow && !isOt && (
+            {hasFlow && !isOt && !isAgents && (
               <button type="button" aria-pressed={animateFlow} onClick={() => setAnimateFlow((v) => !v)}>Flow</button>
             )}
             <button type="button" aria-pressed={showLabels} onClick={() => setShowLabels((v) => !v)}>Navne</button>
@@ -523,7 +542,32 @@ export function FactoryMap({
       </header>
 
       <aside className="fm-legend" aria-label="Signaturforklaring">
-        {isOt && ot ? (
+        {isAgents ? (
+          <>
+            <ul>
+              {agents.map((st, i) => (
+                <li key={st.agent.id}>
+                  <button
+                    type="button"
+                    className={`fm-legend-agent${agentSel === st.agent.id ? " is-selected" : ""}`}
+                    onClick={() => setAgentSel(st.agent.id)}
+                  >
+                    <span className={`fm-dot ag-${(i % 3) + 1}`} />
+                    {st.agent.name}
+                    <span className={`fm-legend-status ags-${st.status}`}>{AGENT_STATUS_LABEL[st.status]}</span>
+                  </button>
+                </li>
+              ))}
+              {agents.some((a) => a.upstream.length > 0) && (
+                <li><span className="fm-dot ag-shared" />Fælles indløb<span className="fm-mono">upstream</span></li>
+              )}
+            </ul>
+            <p>
+              Zonerne er agenternes ansvarsområder. Stiplet kant betyder, at agenten mangler sine
+              inputs — samme sprog som OT Layer.
+            </p>
+          </>
+        ) : isOt && ot ? (
           <>
             <ul>
               {statusCounts.map(({ s, n }) => (
@@ -580,7 +624,7 @@ export function FactoryMap({
         )}
       </aside>
 
-      {selected && !isLive && (
+      {selected && !isLive && !isAgents && (
         <aside className="fm-panel" aria-label={`${selected.name} ${selected.wIds.join("/")}`}>
           <div className="fm-plate">
             <div className="fm-plate-head">
@@ -739,6 +783,22 @@ export function FactoryMap({
             når kæden står.
           </span>
         </div>
+      )}
+
+      {isAgents && (
+        <div className="fm-mock-banner" role="status">
+          <strong>Eksempelrapporter</strong>
+          <span>Ingen agent kører endnu. Rapporterne i panelet er skabeloner, ikke resultater.</span>
+        </div>
+      )}
+
+      {isAgents && agentSelected && (
+        <AgentPanel
+          st={agentSelected}
+          colorIndex={agents.indexOf(agentSelected)}
+          ot={ot}
+          onClose={() => setAgentSel(null)}
+        />
       )}
 
       {isLive && ot && (
