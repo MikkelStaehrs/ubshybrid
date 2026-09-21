@@ -1,9 +1,11 @@
 import { AGENTS } from "../../data/agents";
 import { LINE_OPS } from "../../data/line-config";
 import type { Layout, PlacedMachine } from "./layout";
+import { historyFor } from "./maintenance";
 import { isDone, pathState, sensorType, signalDelivery, OT_PATH_STEPS, type OtLayout } from "./ot";
 import type {
-  Agent, AgentEngine, AgentInput, AgentRole, LineOps, MachineOps, OtSensor, StopReason,
+  Agent, AgentBeslutning, AgentEngine, AgentInput, AgentRole, LineOps, MachineOps, OtSensor,
+  StopReason,
 } from "./types";
 
 export function agentsFor(lineId: string): Agent[] {
@@ -65,20 +67,39 @@ export const AGENT_ROLE_LABEL: Record<AgentRole, string> = {
 /**
  * Fire trin, udledt af inputs — aldrig skrevet i hånden.
  *
- * "Klar" og "I drift" skilles af agentens `enabled`: at alle signaler findes
- * betyder ikke, at nogen har sat scriptet i gang.
+ * "Klar" og "I drift" skilles af agentens `beslutning`: at alle signaler
+ * findes betyder ikke, at nogen har sat scriptet i gang. Og en aktiveret
+ * agent uden data falder tilbage — den kan aldrig stå som "I drift" på
+ * ingenting.
  */
-export type AgentStatus = "missing" | "partial" | "ready" | "running";
+export type AgentStatus = "missing" | "partial" | "ready" | "running" | "idea";
 
 export const AGENT_STATUS_LABEL: Record<AgentStatus, string> = {
   missing: "Mangler – nødvendig",
   partial: "Delvis",
   ready: "Klar",
   running: "I drift",
+  idea: "Idé",
 };
 
 /** Rækkefølge i signaturforklaringen: længst fra at virke sidst. */
-export const AGENT_STATUS_ORDER: AgentStatus[] = ["running", "ready", "partial", "missing"];
+export const AGENT_STATUS_ORDER: AgentStatus[] = ["running", "ready", "partial", "missing", "idea"];
+
+export const AGENT_BESLUTNING_LABEL: Record<AgentBeslutning, string> = {
+  ide: "Idé — ikke besluttet",
+  besluttet: "Besluttet, ikke slået til",
+  aktiveret: "Slået til",
+};
+
+/**
+ * En idé er tænkt, ikke besluttet — som i OT-laget. Den tæller ikke med i
+ * optællinger og tegnes ikke på gulvet, før nogen siger ja til den.
+ */
+export const isAgentIdea = (st: { agent: Agent }) => st.agent.beslutning === "ide";
+
+/** De agenter, der faktisk er besluttet. Alt der tælles, tælles på dem. */
+export const decidedAgents = <T extends { agent: Agent }>(states: T[]) =>
+  states.filter((st) => !isAgentIdea(st));
 
 export interface AgentInputState {
   input: AgentInput;
@@ -115,6 +136,17 @@ export interface AgentState {
    */
   shared: string[];
 }
+
+/**
+ * Hvor stor en del af scopet en datakilde skal dække, før et påkrævet input
+ * tæller som leveret.
+ *
+ * Tallet er valgt, ikke målt. Firs procent er nok til at skrive noget
+ * meningsfuldt om en linje uden at kræve, at hver eneste maskine har en
+ * historik — men det er et skøn, og det skal forbi den, der skal bruge
+ * rapporten, før nogen regner på det.
+ */
+export const DATASET_COVERAGE_MIN = 0.8;
 
 /** Personer er ikke maskiner og kan ikke bære et driftssignal. */
 const realMachines = (ms: PlacedMachine[]) => ms.filter((m) => m.kind !== "person");
@@ -213,7 +245,29 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
     };
   }
 
-  // 3) Et led i datavejen — vagtagentens verden.
+  // 3) En datakilde, målt som dækning over scopet — som driftssignalerne.
+  if (input.dataset) {
+    const total = scope.length;
+    const have = scope.filter((m) => historyFor(m.wIds).length > 0).length;
+    const share = total > 0 ? have / total : 0;
+    return {
+      input,
+      label: "Vedligeholdshistorik",
+      // Et påkrævet input leverer først over tærsklen — ikke ved første række.
+      have: share >= DATASET_COVERAGE_MIN ? total : have,
+      total,
+      detail: total === 0
+        ? "Ingen maskiner i scope"
+        : `${have} af ${total} maskiner har vedligeholdshistorik`
+          + (share >= DATASET_COVERAGE_MIN
+            ? ""
+            : ` (kræver ${Math.round(DATASET_COVERAGE_MIN * 100)} %)`),
+      blockedBy: [],
+      chainBlocked: false,
+    };
+  }
+
+  // 4) Et led i datavejen — kædevagtens verden.
   if (input.chainStep) {
     const step = input.chainStep;
     const label = OT_PATH_STEPS.find((s) => s.id === step)?.label ?? step;
@@ -273,21 +327,27 @@ export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): A
   const complete = required.every((i) => i.have === i.total);
   const unmet = required.filter((i) => i.have < i.total);
 
-  const status: AgentStatus =
+  // En idé er ikke besluttet, og dens inputs afgør ingenting endnu.
+  // Ellers: inputs bestemmer, og beslutningen kan kun løfte til "I drift",
+  // aldrig dække over at der mangler data.
+  const fromInputs: AgentStatus =
     required.length === 0 || delivering.length === 0 ? "missing"
       : !complete ? "partial"
-        : agent.enabled ? "running" : "ready";
+        : agent.beslutning === "aktiveret" ? "running" : "ready";
+  const status: AgentStatus = agent.beslutning === "ide" ? "idea" : fromInputs;
 
   // Ikke småt begyndelsesbogstav — "IO-kobleren" må ikke blive til "io-kobleren".
   const missingText = unmet.map((i) => i.input.need).join("; ");
   const summary =
-    status === "missing"
-      ? `Ingen påkrævede inputs leverer. Mangler: ${missingText}.`
-      : status === "partial"
-        ? `${unmet.map((i) => i.detail).join(". ")}.`
-        : status === "ready"
-          ? "Alle påkrævede inputs leverer. Agenten er ikke slået til endnu."
-          : "Kører.";
+    status === "idea"
+      ? `Idé — ikke besluttet. Ville kræve: ${agent.inputs.filter((i) => i.required).map((i) => i.need).join("; ")}.`
+      : status === "missing"
+        ? `Ingen påkrævede inputs leverer. Mangler: ${missingText}.`
+        : status === "partial"
+          ? `${unmet.map((i) => i.detail).join(". ")}.`
+          : status === "ready"
+            ? "Alle påkrævede inputs leverer. Agenten er ikke slået til endnu."
+            : "Kører.";
 
   const shared = sharedBlockers(inputs);
   // Hvert input viser kun sin rest — fællesmængden står for sig.
@@ -320,7 +380,8 @@ export interface SharedInlet {
 export function sharedInlet(states: AgentState[]): SharedInlet | null {
   const byId = new Map<string, PlacedMachine>();
   const agents: AgentState[] = [];
-  for (const st of states) {
+  // En idé former ikke zonen. Den er ikke besluttet og ejer ingenting endnu.
+  for (const st of decidedAgents(states)) {
     if (st.upstream.length === 0) continue;
     agents.push(st);
     for (const m of st.upstream) byId.set(m.id, m);

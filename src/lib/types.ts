@@ -393,11 +393,21 @@ export interface LineOps {
 // Agenter
 //
 // Claude-scripts, der læser data og skriver tekst. De kører ikke endnu —
-// `enabled` er false på dem alle. Status hardcodes ikke: den udledes af, om
+// ingen har `beslutning: "aktiveret"`. Status hardcodes ikke: den udledes af, om
 // de signaler agenten har brug for, rent faktisk findes.
 // ---------------------------------------------------------------------------
 
 export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt";
+
+/**
+ * Hvor langt nogen har taget stilling til agenten.
+ *
+ * Det er en beslutning, ikke en status. Status udledes af den her sammen med
+ * inputs: en idé er ikke besluttet og vises som idé uanset hvad; en aktiveret
+ * agent uden data falder tilbage til Mangler eller Delvis, så "I drift" aldrig
+ * kan stå om noget, der ikke har noget at arbejde med.
+ */
+export type AgentBeslutning = "ide" | "besluttet" | "aktiveret";
 
 /**
  * Hvad der driver agenten.
@@ -436,8 +446,13 @@ export interface AgentInput {
   signalId?: string;
   /** Nøgle i sensorkataloget, fx "motor-run". */
   type?: string;
-  /** Led i datavejen — kun for vagtagenten. */
+  /** Led i datavejen — kun for kædevagten. */
   chainStep?: OtPathStep;
+  /**
+   * En datakilde frem for et signal. Måles som dækning over agentens scope,
+   * ligesom driftssignalerne: hvor mange af maskinerne har noget at vise.
+   */
+  dataset?: "maintenance";
   /**
    * Påkrævet: agenten kan ikke gøre sit arbejde uden. Støttende: rart at
    * have, men status regnes kun på de påkrævede. En stoprapport kræver
@@ -453,11 +468,14 @@ export interface Agent {
   role: AgentRole;
   /** Én sætning om hvad den leverer. */
   job: string;
+  /** Hvem rapporten er skrevet til. En agent uden modtager har intet formål. */
+  til: string;
+  /** Det ene spørgsmål, agenten skal besvare. Ét — ikke en liste. */
+  svarerPaa: string;
   scope: AgentScope;
   inputs: AgentInput[];
   engine: AgentEngine;
   /** Fx "Dagligt 06:00". */
   cadence: string;
-  /** Slået til på serveren. Falsk på alle, indtil noget faktisk kører. */
-  enabled: boolean;
+  beslutning: AgentBeslutning;
 }

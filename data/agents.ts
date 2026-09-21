@@ -1,12 +1,12 @@
 // Agenterne: Claude-scripts, der læser data og skriver tekst.
 //
-// De kører ikke endnu — `enabled` er false på dem alle, og der bliver ikke
-// kaldt noget API. Filen beskriver hvad de skal lave, hvad de skal bruge for
-// at kunne det, og hvor de kigger hen.
+// De kører ikke endnu — ingen har `beslutning: "aktiveret"`, og der bliver
+// ikke kaldt noget API. Filen beskriver hvad de skal lave, hvem det er til,
+// hvad de skal bruge for at kunne det, og hvor de kigger hen.
 //
-// Status står der ikke. Den udledes i src/lib/agents.ts af, om de signaler
-// agenten har brug for, rent faktisk findes i anlægget. Skrev vi status i
-// hånden, ville den før eller siden komme til at lyve.
+// Status står der ikke. Den udledes i src/lib/agents.ts af beslutningen og
+// af, om de signaler agenten har brug for, rent faktisk findes. Skrev vi
+// status i hånden, ville den før eller siden komme til at lyve.
 //
 // Den tværgående agent oprettes først, når der er mere end én linje at gå på
 // tværs af. Lige nu ville den kun have linje 2 at se på.
@@ -20,6 +20,8 @@ const sliberi: Agent[] = [
     id: "AG-SLIB-N",
     name: "Linjeagent Spor N",
     role: "linjeagent",
+    til: "Linjeleder",
+    svarerPaa: "Hvad skete i går, og hvad skal jeg kigge på?",
     job: "Daglig stoprapport for spor N: hvornår stod maskinerne stille, hvor længe, og hvad der gik forud.",
     scope: { kind: "lane", lane: "N", upstream: INLET },
     inputs: [
@@ -37,12 +39,14 @@ const sliberi: Agent[] = [
     // Skriver prosa ud fra tal, der skal vejes mod hinanden.
     engine: "claude",
     cadence: "Dagligt 06:00",
-    enabled: false,
+    beslutning: "besluttet",
   },
   {
     id: "AG-SLIB-S",
     name: "Linjeagent Spor S",
     role: "linjeagent",
+    til: "Linjeleder",
+    svarerPaa: "Hvad skete i går, og hvad skal jeg kigge på?",
     job: "Daglig stoprapport for spor S: hvornår stod maskinerne stille, hvor længe, og hvad der gik forud.",
     scope: { kind: "lane", lane: "S", upstream: INLET },
     inputs: [
@@ -59,12 +63,14 @@ const sliberi: Agent[] = [
     ],
     engine: "claude",
     cadence: "Dagligt 06:00",
-    enabled: false,
+    beslutning: "besluttet",
   },
   {
     id: "AG-SLIB-VAGT",
-    name: "Vagtagent",
+    name: "Kædevagt",
     role: "vagt",
+    til: "Systemansvarlig",
+    svarerPaa: "Kan jeg stole på data lige nu?",
     // Vagten ser ikke på maskinerne. Dens arbejde er at opdage, at tallene
     // holder op med at komme — og sige hvilket led der tav.
     job: "Melder når et led i signalkæden holder op med at svare, og hvilket et.",
@@ -78,7 +84,59 @@ const sliberi: Agent[] = [
     // og slet ikke fire gange i timen.
     engine: "kode",
     cadence: "Hver 15. minut",
-    enabled: false,
+    beslutning: "besluttet",
+  },
+
+  // --- Idéer -------------------------------------------------------------
+  // Tænkt, men ikke besluttet. De tæller ikke med i optællinger og får ingen
+  // zone på gulvet, før nogen siger ja til dem.
+  {
+    id: "AG-SLIB-SKIFT",
+    name: "Skifteagent",
+    role: "linjeagent",
+    til: "Operatør",
+    svarerPaa: "Hvad skal næste hold vide?",
+    job: "Overlevering ved skiftehold: hvad der kørte skævt, hvad der blev rørt ved, og hvad der stadig står åbent.",
+    scope: { kind: "line" },
+    inputs: [
+      {
+        type: "motor-run",
+        required: true,
+        need: "Driftssignal (DI) pr. maskine på linjen",
+      },
+      {
+        signalId: "FT-756",
+        required: false,
+        need: "Materialestrøm gennem linjen",
+      },
+    ],
+    engine: "claude",
+    cadence: "Ved hvert skiftehold",
+    beslutning: "ide",
+  },
+  {
+    id: "AG-SLIB-VEDL",
+    name: "Vedligeholdsagent",
+    role: "linjeagent",
+    til: "Vedligehold",
+    svarerPaa: "Hvilken maskine er på vej til at blive et problem?",
+    job: "Ugentligt overblik over de maskiner, hvor driftsmønster og historik peger samme vej.",
+    scope: { kind: "line" },
+    inputs: [
+      {
+        type: "motor-run",
+        required: true,
+        need: "Driftssignal (DI) pr. maskine på linjen",
+      },
+      {
+        dataset: "maintenance",
+        required: true,
+        need: "Vedligeholdshistorik på maskinerne",
+      },
+    ],
+    engine: "claude",
+    cadence: "Ugentligt, mandag 07:00",
+    beslutning: "ide",
   },
 ];
 

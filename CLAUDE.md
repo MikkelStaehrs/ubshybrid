@@ -91,25 +91,47 @@ udviskes: `planned` er besluttet og skal købes, `idea` er en mulighed ingen
 har sagt ja til — og `missing` er hverken af delene, men en forudsætning, der
 ikke findes. En manglende ting er ikke valgfri.
 
-**Agenter** får deres status af deres inputs i `src/lib/agents.ts`:
+**Agenter** får deres status af `beslutning` og af deres inputs i
+`src/lib/agents.ts`. `beslutning` er en beslutning, ikke en status — den siger,
+hvor langt nogen har taget stilling, og status udledes af den:
 
-| | |
+| `beslutning` | | |
+|---|---|---|
+| `ide` | **Idé** | uanset inputs |
+| `besluttet` | Mangler / Delvis / **Klar** | efter inputs |
+| `aktiveret` | Mangler / Delvis / **I drift** | efter inputs |
+
+| Status | |
 |---|---|
+| Idé | tænkt, men ikke besluttet — som `idea` i OT-laget |
 | Mangler – nødvendig | intet påkrævet input leverer |
 | Delvis | mindst ét påkrævet input leverer, men ikke alle |
-| Klar | alle påkrævede leverer, men `enabled` er false |
-| I drift | alle leverer, og agenten er slået til |
+| Klar | alle påkrævede leverer, men agenten er ikke slået til |
+| I drift | alle leverer, **og** agenten er slået til |
+
+En `aktiveret` agent uden data **falder tilbage** til Mangler eller Delvis.
+"I drift" må aldrig kunne stå om noget, der ikke har noget at arbejde med,
+bare fordi nogen huskede at slå den til. Reglen har en test.
+
+**Idéer tæller ikke med.** De får ingen zone på gulvet, former ikke
+fælleszonen og udelades af alle optællinger. Brug `decidedAgents()` — ikke
+rå `states` — hvert sted, der tælles.
 
 Kun **påkrævede** inputs tæller. En stoprapport kan skrives uden flowmåling,
 ikke uden driftssignal — så flow er `required: false`.
 
 Et input **leverer** først, når kæden står hele vejen til databasen. "Monteret"
 er en delstatus: FT-756 hænger på elevatoren, men der er ingen vej fra den til
-en database, så den tæller nul.
+en database, så den tæller nul. Et `dataset`-input måler i stedet **dækning**
+over agentens scope — "3 af 26 maskiner har vedligeholdshistorik" — og leverer
+først over `DATASET_COVERAGE_MIN`. Tærsklen er valgt, ikke målt.
 
-**`engine`** skiller `"kode"` fra `"claude"`. Vagtagentens kædetjek er ren
+**`engine`** skiller `"kode"` fra `"claude"`. Kædevagtens kædetjek er ren
 regel-logik og koster ingenting; linjeagenterne kalder API'et og koster penge
 pr. kørsel. Det skal kunne ses i fladen, før nogen slår noget til.
+
+**`til` og `svarerPaa`** er påkrævede. En agent uden modtager og uden ét
+spørgsmål, den besvarer, har intet formål — og så er den ikke færdigtænkt.
 
 ## Trin for trin
 
@@ -138,7 +160,8 @@ seksogtyve maskiner for at få en default.
 
 ### Ny agent
 
-I `data/agents.ts`. Husk `engine`, og sæt `enabled: false` — ingen agent skal
+I `data/agents.ts`. Husk `til`, `svarerPaa` og `engine`. Sæt `beslutning`
+til `"ide"`, hvis den bare er tænkt, ellers `"besluttet"` — ingen agent skal
 starte, fordi nogen tilføjede den. Skriv **ikke** en status; den udledes.
 
 `scope` kan være `line`, `lane`, `machines` eller `chain`, og kan have
@@ -146,9 +169,10 @@ starte, fordi nogen tilføjede den. Skriv **ikke** en status; den udledes.
 begge sporagenter: et stop der forklarer et stop i sporet, men det er ikke
 sporets ansvar og tæller ikke i status.
 
-`inputs` peger tre steder hen — et konkret `signalId`, en `type` fra
-sensorkataloget, der endnu ikke er sat op, eller et `chainStep`. `need` er den
-sætning, kortet skriver, når det mangler.
+`inputs` peger fire steder hen — et konkret `signalId`, en `type` fra
+sensorkataloget, der endnu ikke er sat op, et `chainStep`, eller et `dataset`
+målt som dækning over scopet. `need` er den sætning, kortet skriver, når det
+mangler.
 
 ### Nyt signal
 

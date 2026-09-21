@@ -2,7 +2,7 @@
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  agentStates, lineOpsFor, opsForMachine, sharedInlet,
+  agentStates, isAgentIdea, lineOpsFor, opsForMachine, sharedInlet,
   AGENT_ENGINE_LABEL, AGENT_STATUS_LABEL,
 } from "../lib/agents";
 import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
@@ -566,10 +566,11 @@ export function FactoryMap({
                 <li key={st.agent.id}>
                   <button
                     type="button"
-                    className={`fm-legend-agent${agentSel === st.agent.id ? " is-selected" : ""}`}
+                    className={`fm-legend-agent${agentSel === st.agent.id ? " is-selected" : ""}${isAgentIdea(st) ? " is-idea" : ""}`}
                     onClick={() => selectAgent(st.agent.id)}
                   >
-                    <span className={`fm-dot ag-${(i % 3) + 1}`} />
+                    {/* Idéer har ingen zonefarve, for de har ingen zone. */}
+                    <span className={`fm-dot ${isAgentIdea(st) ? "ag-idea" : `ag-${(i % 3) + 1}`}`} />
                     {st.agent.name}
                     <span className={`fm-engine eng-${st.agent.engine}`}>
                       {AGENT_ENGINE_LABEL[st.agent.engine]}

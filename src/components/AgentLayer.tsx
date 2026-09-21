@@ -1,7 +1,9 @@
 "use client";
 import { Html, Line } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
-import { describeScope, sharedInlet, AGENT_STATUS_LABEL, type AgentState } from "../lib/agents";
+import {
+  decidedAgents, describeScope, sharedInlet, AGENT_STATUS_LABEL, type AgentState,
+} from "../lib/agents";
 import { halfExtent, type PlacedMachine } from "../lib/layout";
 import { isDone, type OtLayout, type Point3 } from "../lib/ot";
 import type { SceneTheme } from "../lib/useSceneTheme";
@@ -222,7 +224,8 @@ export function AgentLayer({
         </group>
       )}
 
-      {states.map((st, i) => {
+      {/* Kun besluttede agenter tegnes. En idé har intet område at have. */}
+      {decidedAgents(states).map((st, i) => {
         const color = theme[agentToken(i)];
         const on = selectedId === st.agent.id;
         if (st.agent.scope.kind === "chain") {

@@ -1417,3 +1417,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   text-transform: uppercase;
   opacity: 0.85;
 }
+
+/* Idé-agenter: tænkt, ikke besluttet. Ingen zone, ingen zonefarve. */
+.ags-idea { --st: var(--ot-idea); }
+.fm-dot.ag-idea { background: none; border: 1.5px dashed var(--ot-idea); border-radius: 50%; }
+.fm-legend-agent.is-idea { opacity: 0.62; }
+.fm-agent-purpose dl { margin: 0; display: grid; }
+.fm-agent-purpose .fm-field { grid-template-columns: 84px 1fr; }
+.fm-agent-purpose .fm-field dd { font-weight: 500; }

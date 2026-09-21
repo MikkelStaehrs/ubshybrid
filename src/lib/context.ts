@@ -124,11 +124,16 @@ export interface AgentCtx {
   name: string;
   role: Agent["role"];
   engine: Agent["engine"];
+  /** Hvem rapporten er til. */
+  til: string;
+  /** Det ene spørgsmål, agenten besvarer. */
+  svarerPaa: string;
   job: string;
   scope: Agent["scope"];
   scopeLabel: string;
   cadence: string;
-  enabled: boolean;
+  /** "ide" | "besluttet" | "aktiveret". Status udledes af den og af inputs. */
+  beslutning: Agent["beslutning"];
   status: AgentState["status"];
   statusLabel: string;
   summary: string;
@@ -217,11 +222,13 @@ function agentCtx(st: AgentState): AgentCtx {
     name: a.name,
     role: a.role,
     engine: a.engine,
+    til: a.til,
+    svarerPaa: a.svarerPaa,
     job: a.job,
     scope: a.scope,
     scopeLabel: describeScope(a),
     cadence: a.cadence,
-    enabled: a.enabled,
+    beslutning: a.beslutning,
     status: st.status,
     statusLabel: AGENT_STATUS_LABEL[st.status],
     summary: st.summary,

@@ -1,6 +1,7 @@
 "use client";
 import {
-  describeScope, AGENT_ENGINE_LABEL, AGENT_ENGINE_NOTE, AGENT_ROLE_LABEL, AGENT_STATUS_LABEL,
+  describeScope, AGENT_BESLUTNING_LABEL, AGENT_ENGINE_LABEL, AGENT_ENGINE_NOTE,
+  AGENT_ROLE_LABEL, AGENT_STATUS_LABEL,
   type AgentState,
 } from "../lib/agents";
 import type { OtLayout } from "../lib/ot";
@@ -79,6 +80,14 @@ export function AgentPanel({ st, colorIndex, ot, onClose }: {
         </section>
       )}
 
+      {/* Hvem den er til, og hvad den svarer på — før hvad den gør. */}
+      <section className="fm-agent-purpose">
+        <dl>
+          <Field label="Til" value={a.til} />
+          <Field label="Svarer på" value={a.svarerPaa} />
+        </dl>
+      </section>
+
       <section>
         <h3>Job</h3>
         <p>{a.job}</p>
@@ -101,7 +110,7 @@ export function AgentPanel({ st, colorIndex, ot, onClose }: {
           )}
           <Field label="Kadence" value={a.cadence} />
           <Field label="Motor" value={`${AGENT_ENGINE_LABEL[a.engine]} — ${AGENT_ENGINE_NOTE[a.engine]}`} />
-          <Field label="Aktiveret" value={a.enabled ? "Ja" : "Nej — ingen agent kører endnu"} />
+          <Field label="Beslutning" value={AGENT_BESLUTNING_LABEL[a.beslutning]} />
         </dl>
         {st.upstream.length > 0 && (
           <p className="fm-ops-note">Indløbet må agenten se, men det tæller ikke i status — det er ikke sporets ansvar.</p>
