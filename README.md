@@ -9,6 +9,97 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
+Kortet er bag login fra første kald. Uden `.env.local` svarer det 503 — se
+**Opsætning** nedenfor.
+
+## Opsætning
+
+Alt styres af miljøvariabler i `.env.local`, som er git-ignoreret. Der står
+ingen værdier i repoet, og der skal aldrig komme nogen.
+
+```bash
+BASIC_AUTH_USER=
+BASIC_AUTH_PASSWORD=
+LIVE_SOURCE=mock
+```
+
+På Vercel sættes de samme navne under *Settings → Environment Variables*.
+
+### Login
+
+`src/proxy.ts` ligger foran alt: sider, API-ruter og JS-bundterne. Den
+matcher `/:path*`, så der er ingen vej uden om — heller ikke til
+`/api/context` eller `/api/live`.
+
+Den læser `BASIC_AUTH_USER` og `BASIC_AUTH_PASSWORD` og sammenligner i
+konstant tid. Der er **ingen indbygget standardbruger**: mangler en af
+variablerne, svarer hele appen 503 frem for at lukke op. Et glemt miljø skal
+fejle lukket.
+
+Det er ét delt login for alle, ikke en bruger pr. person, og der er ingen
+log ud-knap — browseren husker til vinduet lukkes. Til et internt kort er det
+som regel nok.
+
+> `/api/context` deler login med mennesker i dag. Før et script på serveren
+> begynder at hente den, skal den have sit eget token. Se *Åbne ender* i
+> [CLAUDE.md](CLAUDE.md).
+
+### LIVE_SOURCE
+
+Bestemmer, hvor **Live**-visningen henter tal fra. Læses på serveren i
+`src/app/page.tsx` og gives videre til kortet, så navnet kan stå uden
+`NEXT_PUBLIC`-præfiks.
+
+| Værdi | |
+|---|---|
+| `mock` | Simulerer FT-756 i browseren: 4–20 mA med støj, af og til stop på 4 mA, sjældent kabelbrud under 3,6 mA. Visningen viser et tydeligt **Simulerede data**-banner |
+| `api` | Henter `/api/live`, som læser seneste værdier fra MSSQL |
+
+Alt andet end `api` — også en tom variabel — betyder `mock`. Det er med
+vilje: falder en variabel væk, skal kortet simulere med banneret fremme, ikke
+foregive at vise målinger.
+
+**Før du skifter til `api`** skal tre ting være på plads:
+
+1. `/api/live` er en stub i dag. Den svarer `200` med `ok: false` og en
+   grund, så panelet kan skelne et dødt endpoint fra et levende uden database
+   bag. Den skal implementeres mod MSSQL.
+2. Databasen skal findes, og edge-collectoren skal skrive til den. Tabellen
+   skal bære **råsignalet i mA** som egen kolonne — uden det kan kabelbrud
+   ikke kendes fra et stop.
+3. Kæden fra IO-skab til database skal stå. Åbn IO-skabet i **OT Layer** →
+   fanen *Forudsætninger*; den tæller ned, hvor mange der mangler.
+
+Skifter du for tidligt, går der ikke noget i stykker — alle signaler står
+bare som *Ingen kilde*, og Forbindelser-panelet peger på det led, der tier.
+
+### Kommandoer
+
+```bash
+npm run dev      # udviklingsserver
+npm run build    # produktionsbuild, kør det før commit
+npm test         # node:test gennem tsx
+npm run parse    # Draw.io → data/lines/<id>.json
+```
+
+`npm run parse` tager tegningen som argument og **overskriver** filerne i
+`data/lines/`:
+
+```bash
+npm run parse -- data/drawio/flow-sliberi.drawio
+npm run parse -- data/drawio/analytics.drawio analytics "Analytics" 0
+```
+
+Håndholdte data — vedligehold, OT-lag, driftsparametre, agenter — ligger i
+andre filer og røres ikke. Se afsnittet om genereret kontra håndholdt i
+[CLAUDE.md](CLAUDE.md).
+
+`npm test` dækker grænseværdierne på strømsløjfen og dommen over et signal.
+Rører du skalering eller fejlgrænser, skal der følge en test med.
+
+Konventioner for kodestil, statusregler og hvad der ikke må gættes står i
+[CLAUDE.md](CLAUDE.md) — de gentages ikke her.
+
 ## Skabelon til line managers
 
 `templates/UBS-linjeskabelon.drawio` (fanen *Vejledning* forklarer det hele) og
