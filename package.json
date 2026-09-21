@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "parse": "tsx scripts/parse-drawio.ts",
     "preview": "tsx scripts/build-preview.ts",
     "template": "tsx scripts/make-template.ts"

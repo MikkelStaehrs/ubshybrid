@@ -52,14 +52,18 @@ export function isFaultMa(ma: number): boolean {
   return !Number.isFinite(ma) || ma < FAULT_LOW_MA || ma > FAULT_HIGH_MA;
 }
 
-/** "Sensorfejl (3,29 mA, under 4 mA)". null når signalet er i orden. */
+/**
+ * "Sensorfejl (3,29 mA, uden for 4–20 mA)". null når signalet er i orden.
+ *
+ * Teksten nævner måleområdet, ikke den grænse der blev overskredet: 20,5 mA
+ * er også over 20, men er inden for tolerancen og ikke en fejl. "Uden for
+ * 4–20 mA" er sandt i begge retninger uden at love noget forkert.
+ */
 export function describeFault(ma: number): string | null {
   if (!isFaultMa(ma)) return null;
   if (!Number.isFinite(ma)) return "Sensorfejl (intet råsignal)";
   const n = ma.toFixed(2).replace(".", ",");
-  return ma < FAULT_LOW_MA
-    ? `Sensorfejl (${n} mA, under ${NOMINAL_LOW_MA} mA)`
-    : `Sensorfejl (${n} mA, over ${NOMINAL_HIGH_MA} mA)`;
+  return `Sensorfejl (${n} mA, uden for ${NOMINAL_LOW_MA}–${NOMINAL_HIGH_MA} mA)`;
 }
 
 /**
