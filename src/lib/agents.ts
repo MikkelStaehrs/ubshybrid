@@ -3,7 +3,7 @@ import { LINE_OPS } from "../../data/line-config";
 import type { Layout, PlacedMachine } from "./layout";
 import { isDone, pathState, sensorType, OT_PATH_STEPS, type OtLayout } from "./ot";
 import type {
-  Agent, AgentInput, AgentRole, LineOps, MachineOps, StopReason,
+  Agent, AgentInput, AgentRole, LineOps, MachineOps, OtSensor, StopReason,
 } from "./types";
 
 export function agentsFor(lineId: string): Agent[] {
@@ -73,8 +73,9 @@ export interface AgentInputState {
   input: AgentInput;
   /** Hvad inputtet er, kort. */
   label: string;
+  /** Hvor mange der leverer — hele vejen til database, ikke bare monteret. */
   have: number;
-  required: number;
+  total: number;
   /** "0 af 10 maskiner har driftssignal". */
   detail: string;
 }
@@ -121,47 +122,52 @@ export function describeScope(agent: Agent): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Et signal tæller kun med, når det står fysisk — monteret eller i test.
- * Planlagt og idé er ikke noget, en agent kan læse fra.
+ * Hvor langt et signal er fra at kunne læses af en agent.
+ *
+ * "Monteret" er en delstatus, ikke et levende input: en agent læser fra
+ * databasen, så signalet leverer først, når kæden står hele vejen dertil.
+ * Dashboardet er ikke med i kravet — det er der for mennesker, ikke agenter.
  */
+type SignalReach = "absent" | "unmounted" | "mounted" | "delivers";
+
+function reachOf(s: OtSensor | undefined, ot: OtLayout | null): { reach: SignalReach; breaksAt?: string } {
+  if (!s || !ot) return { reach: "absent" };
+  if (!isDone(s.status)) return { reach: "unmounted" };
+  const cabinet = ot.cabinets.find((c) => c.id === s.cabinetId);
+  if (!cabinet) return { reach: "mounted", breaksAt: "IO-skab" };
+  const chain = pathState(ot.infrastructure, cabinet, s).filter((st) => st.id !== "dashboard");
+  const broken = chain.find((st) => !isDone(st.status));
+  return broken ? { reach: "mounted", breaksAt: broken.label } : { reach: "delivers" };
+}
+
 function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | null): AgentInputState {
   // 1) Et konkret signal.
   if (input.signalId) {
     const s = ot?.sensors.find((x) => x.id === input.signalId);
-    const have = s && isDone(s.status) ? 1 : 0;
-    return {
-      input,
-      label: input.signalId,
-      have,
-      required: 1,
-      detail: !s
-        ? `${input.signalId} findes ikke i anlægget`
-        : have
-          ? `${input.signalId} er monteret på W-ID ${s.machineId}`
-          : `${input.signalId} er kun ${s.status === "idea" ? "en idé" : "planlagt"}`,
-    };
+    const { reach, breaksAt } = reachOf(s, ot);
+    const detail =
+      reach === "absent" ? `${input.signalId} findes ikke i anlægget`
+        : reach === "unmounted" ? `${input.signalId} er kun ${s!.status === "idea" ? "en idé" : "planlagt"}`
+          : reach === "mounted" ? `${input.signalId} monteret, venter på kæden (knækker ved ${breaksAt})`
+            : `${input.signalId} leverer`;
+    return { input, label: input.signalId, have: reach === "delivers" ? 1 : 0, total: 1, detail };
   }
 
   // 2) En type fra kataloget, ét pr. maskine i scope.
   if (input.type) {
     const kind = sensorType(input.type);
-    const label = kind?.label ?? input.type;
-    const required = scope.length;
-    const wIds = new Set(
-      (ot?.sensors ?? [])
-        .filter((s) => s.catalogType === input.type && isDone(s.status))
-        .map((s) => s.machineId),
-    );
-    const have = scope.filter((m) => m.wIds.some((w) => wIds.has(w))).length;
-    return {
-      input,
-      label,
-      have,
-      required,
-      detail: required === 0
-        ? "Ingen maskiner i scope"
-        : `${have} af ${required} maskiner har ${label.toLowerCase()}`,
-    };
+    const label = (kind?.label ?? input.type).toLowerCase();
+    const total = scope.length;
+    const ofType = (ot?.sensors ?? []).filter((s) => s.catalogType === input.type);
+    const reachOn = (m: PlacedMachine) =>
+      ofType.filter((s) => m.wIds.includes(s.machineId)).map((s) => reachOf(s, ot).reach);
+    const mounted = scope.filter((m) => reachOn(m).some((r) => r === "mounted" || r === "delivers")).length;
+    const have = scope.filter((m) => reachOn(m).includes("delivers")).length;
+    const detail =
+      total === 0 ? "Ingen maskiner i scope"
+        : mounted > have ? `${have} af ${total} maskiner leverer ${label} (${mounted} monteret, venter på kæden)`
+          : `${have} af ${total} maskiner har ${label}`;
+    return { input, label: kind?.label ?? input.type, have, total, detail };
   }
 
   // 3) Et led i datavejen — vagtagentens verden.
@@ -177,7 +183,7 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
       input,
       label,
       have,
-      required: 1,
+      total: 1,
       detail: have
         ? `${label} svarer`
         : state?.blockedBy.length
@@ -186,31 +192,34 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
     };
   }
 
-  return { input, label: "Ukendt input", have: 0, required: 1, detail: "Inputtet er ikke beskrevet" };
+  return { input, label: "Ukendt input", have: 0, total: 1, detail: "Inputtet er ikke beskrevet" };
 }
 
 export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): AgentState {
   const machines = machinesInScope(agent, layout);
   const inputs = agent.inputs.map((i) => resolveInput(i, machines, ot));
 
-  const required = inputs.reduce((n, i) => n + i.required, 0);
-  const have = inputs.reduce((n, i) => n + i.have, 0);
-  const unmet = inputs.filter((i) => i.have < i.required);
+  // Status regnes kun på de påkrævede inputs. De støttende vises, men afgør
+  // ingenting — en stoprapport kan skrives uden flow, ikke uden driftssignal.
+  const required = inputs.filter((i) => i.input.required);
+  const delivering = required.filter((i) => i.have > 0);
+  const complete = required.every((i) => i.have === i.total);
+  const unmet = required.filter((i) => i.have < i.total);
 
   const status: AgentStatus =
-    required === 0 || have === 0 ? "missing"
-      : have < required ? "partial"
+    required.length === 0 || delivering.length === 0 ? "missing"
+      : !complete ? "partial"
         : agent.enabled ? "running" : "ready";
 
   // Ikke småt begyndelsesbogstav — "IO-kobleren" må ikke blive til "io-kobleren".
   const missingText = unmet.map((i) => i.input.need).join("; ");
   const summary =
     status === "missing"
-      ? `Ingen af de nødvendige signaler findes. Mangler: ${missingText}.`
+      ? `Ingen påkrævede inputs leverer. Mangler: ${missingText}.`
       : status === "partial"
         ? `${unmet.map((i) => i.detail).join(". ")}.`
         : status === "ready"
-          ? "Alle inputs findes. Agenten er ikke slået til endnu."
+          ? "Alle påkrævede inputs leverer. Agenten er ikke slået til endnu."
           : "Kører.";
 
   return { agent, status, inputs, machines, summary };

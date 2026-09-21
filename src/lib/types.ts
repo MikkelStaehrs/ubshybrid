@@ -420,6 +420,12 @@ export interface AgentInput {
   type?: string;
   /** Led i datavejen — kun for vagtagenten. */
   chainStep?: OtPathStep;
+  /**
+   * Påkrævet: agenten kan ikke gøre sit arbejde uden. Støttende: rart at
+   * have, men status regnes kun på de påkrævede. En stoprapport kræver
+   * driftssignal; flowet gør den bare bedre.
+   */
+  required: boolean;
   need: string;
 }
 

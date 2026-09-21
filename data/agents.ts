@@ -21,12 +21,14 @@ const sliberi: Agent[] = [
     scope: { kind: "lane", lane: "N" },
     inputs: [
       {
-        signalId: "FT-756",
-        need: "Materialestrøm ind i sporene, målt før fordeleren",
+        type: "motor-run",
+        required: true,
+        need: "Driftssignal (DI) pr. maskine i sporet",
       },
       {
-        type: "motor-run",
-        need: "Driftssignal (DI) pr. maskine i sporet",
+        signalId: "FT-756",
+        required: false,
+        need: "Materialestrøm ind i sporene, målt før fordeleren",
       },
     ],
     cadence: "Dagligt 06:00",
@@ -40,12 +42,14 @@ const sliberi: Agent[] = [
     scope: { kind: "lane", lane: "S" },
     inputs: [
       {
-        signalId: "FT-756",
-        need: "Materialestrøm ind i sporene, målt før fordeleren",
+        type: "motor-run",
+        required: true,
+        need: "Driftssignal (DI) pr. maskine i sporet",
       },
       {
-        type: "motor-run",
-        need: "Driftssignal (DI) pr. maskine i sporet",
+        signalId: "FT-756",
+        required: false,
+        need: "Materialestrøm ind i sporene, målt før fordeleren",
       },
     ],
     cadence: "Dagligt 06:00",
@@ -60,9 +64,9 @@ const sliberi: Agent[] = [
     job: "Melder når et led i signalkæden holder op med at svare, og hvilket et.",
     scope: { kind: "chain" },
     inputs: [
-      { chainStep: "kobler", need: "IO-kobleren skal svare på Modbus" },
-      { chainStep: "edge", need: "Edge-collectoren skal køre og poll'e" },
-      { chainStep: "mssql", need: "Databasen skal tage imod rækker" },
+      { chainStep: "kobler", required: true, need: "IO-kobleren skal svare på Modbus" },
+      { chainStep: "edge", required: true, need: "Edge-collectoren skal køre og poll'e" },
+      { chainStep: "mssql", required: true, need: "Databasen skal tage imod rækker" },
     ],
     cadence: "Hver 15. minut",
     enabled: false,
