@@ -387,6 +387,33 @@ export interface MachineOps {
   note?: string;
 }
 
+/** Lavt, passende eller højt flow. Grænserne er konfiguration, ikke kode. */
+export type FlowLevel = "lav" | "ok" | "hoej";
+
+/**
+ * Hvad et flowsignal betyder i tons og timer.
+ *
+ * Strømsløjfen giver kun procent af fuldt udslag — det er en form, ikke en
+ * mængde. Skal procenten blive til en takt, skal nogen sige, hvad 100 %
+ * er på netop denne linje. Det tal er en aftale med driften og hører
+ * derfor her, ikke i koden.
+ */
+export interface FlowOps {
+  /**
+   * Nominel kapacitet pr. signal-id, i linjens `rateUnit`. Tallet definerer
+   * 100 % og er samtidig den eneste kalibrering, der findes.
+   *
+   * Tom betyder "ikke udfyldt": procenten vises, takten gør ikke. Der
+   * gættes ikke en kapacitet, for så ville kortet vise et tal, ingen har
+   * sagt god for.
+   */
+  nominal: Record<string, number>;
+  /** Under denne procent er flowet lavt. Udeladt: se `FLOW_LOW_PCT`. */
+  lowPct?: number;
+  /** Over denne procent er flowet højt. Udeladt: se `FLOW_HIGH_PCT`. */
+  highPct?: number;
+}
+
 export interface LineOps {
   /** Enheden takt måles i på denne linje, fx "t/t". */
   rateUnit: string;
@@ -394,6 +421,8 @@ export interface LineOps {
   stopAfterSeconds: number;
   /** Linjens fælles kodeliste. */
   stopReasons: StopReason[];
+  /** Hvad flowsignalerne på linjen betyder. */
+  flow?: FlowOps;
   /** Kun de maskiner, der faktisk afviger. Resten arver. */
   machines?: Record<string, MachineOps>;
 }
@@ -462,6 +491,13 @@ export interface AgentInput {
    * ligesom driftssignalerne: hvor mange af maskinerne har noget at vise.
    */
   dataset?: "maintenance";
+  /**
+   * Materialestrømmen ind i agentens scope, målt før den første maskine den
+   * ejer. Agenten peger ikke på et bestemt tag: flytter måleren sig, eller
+   * kommer der en anden, skal inputtet stadig passe. Derfor er det stedet,
+   * der står her, og ikke sensorens navn.
+   */
+  inlet?: "materiale";
   /**
    * Påkrævet: agenten kan ikke gøre sit arbejde uden. Støttende: rart at
    * have, men status regnes kun på de påkrævede. En stoprapport kræver

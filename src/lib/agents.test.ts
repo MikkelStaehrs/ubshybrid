@@ -90,3 +90,52 @@ describe("dataset-input måler dækning", () => {
     assert.match(input.detail, /kræver \d+ %/);
   });
 });
+
+describe("materiale ved indgang", () => {
+  const laneAgents = () => ["AG-SLIB-N", "AG-SLIB-S"].map(byId);
+
+  it("begge sporagenter peger på stedet, ikke på et tag", () => {
+    // Måleren sad på elevator 756 og sidder nu ved indgangen. Havde inputtet
+    // stået som "FT-756", ville flytningen have gjort det forkert i tavshed.
+    for (const a of laneAgents()) {
+      const i = a.inputs.find((x) => x.inlet);
+      assert.ok(i, `${a.id} mangler indgangs-inputtet`);
+      assert.equal(i!.signalId, undefined, `${a.id} nævner stadig et tag`);
+    }
+  });
+
+  it("finder flowmåleren i det fælles indløb", () => {
+    for (const a of laneAgents()) {
+      const st = agentState(a, layout, real);
+      const i = st.inputs.find((x) => x.label === "Materiale ved indgang")!;
+      assert.match(i.detail, /FT-743/, i.detail);
+      // Kæden står ikke endnu: monteret, men leverer ikke.
+      assert.equal(i.have, 0);
+      assert.match(i.detail, /venter på kæden/);
+    }
+  });
+
+  it("leverer, når kæden står", () => {
+    const i = agentState(byId("AG-SLIB-N"), layout, whole).inputs
+      .find((x) => x.label === "Materiale ved indgang")!;
+    assert.equal(i.have, 1);
+    assert.match(i.detail, /FT-743 ved indgangen leverer/);
+  });
+
+  it("er støttende — status afhænger ikke af den", () => {
+    // En stoprapport kan skrives uden flowmåling, ikke uden driftssignal.
+    const a = byId("AG-SLIB-N");
+    assert.equal(a.inputs.find((x) => x.inlet)!.required, false);
+    const uden: Agent = { ...a, inputs: a.inputs.filter((x) => !x.inlet) };
+    assert.equal(agentState(a, layout, real).status, agentState(uden, layout, real).status);
+    assert.equal(agentState(a, layout, whole).status, agentState(uden, layout, whole).status);
+  });
+
+  it("siger det tydeligt, når der ingen måler er ved indgangen", () => {
+    const tom: OtLayout = { ...real, sensors: [] };
+    const i = agentState(byId("AG-SLIB-N"), layout, tom).inputs
+      .find((x) => x.label === "Materiale ved indgang")!;
+    assert.equal(i.have, 0);
+    assert.equal(i.detail, "Ingen flowmåling ved indgangen");
+  });
+});

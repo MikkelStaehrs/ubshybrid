@@ -59,6 +59,11 @@ Alt andet end `api` — også en tom variabel — betyder `mock`. Det er med
 vilje: falder en variabel væk, skal kortet simulere med banneret fremme, ikke
 foregive at vise målinger.
 
+Uanset kilde vises materialestrømmen i **procent af nominel kapacitet**, hvor
+4 mA er 0 % og 20 mA er 150 %. Procenten kan først blive til tons, når nogen
+har sagt, hvad 100 % er; indtil da står takten som "Ikke udfyldt". Tallet
+sættes i `flow.nominal` i `data/line-config.ts`.
+
 **Før du skifter til `api`** skal tre ting være på plads:
 
 1. `/api/live` er en stub i dag. Den svarer `200` med `ok: false` og en

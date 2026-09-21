@@ -204,7 +204,12 @@ function reachOf(s: OtSensor | undefined, ot: OtLayout | null): { reach: SignalR
   return { reach: "mounted", breaksAt: d.breaksAt };
 }
 
-function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | null): AgentInputState {
+function resolveInput(
+  input: AgentInput,
+  scope: PlacedMachine[],
+  upstream: PlacedMachine[],
+  ot: OtLayout | null,
+): AgentInputState {
   // 1) Et konkret signal.
   if (input.signalId) {
     const s = ot?.sensors.find((x) => x.id === input.signalId);
@@ -245,7 +250,38 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
     };
   }
 
-  // 3) En datakilde, målt som dækning over scopet — som driftssignalerne.
+  // 3) Materialestrømmen ind i scopet, uanset hvad måleren hedder.
+  if (input.inlet) {
+    // Indgangen er det, der ligger opstrøms — og for en agent, der ejer hele
+    // linjen, dens egen første maskine. Sensoren findes på stedet, ikke ved
+    // navn: flytter måleren sig, følger inputtet med af sig selv.
+    const where = upstream.length > 0 ? upstream : scope;
+    const wIds = new Set(where.flatMap((m) => m.wIds));
+    const målere = (ot?.sensors ?? []).filter(
+      (s) => s.catalogType === "flow" && wIds.has(s.machineId),
+    );
+    const reaches = målere.map((s) => ({ id: s.id, ...reachOf(s, ot) }));
+    const leverer = reaches.find((r) => r.reach === "delivers");
+    const monteret = reaches.find((r) => r.reach === "mounted");
+    const detail =
+      leverer ? `${leverer.id} ved indgangen leverer`
+        : monteret ? `${monteret.id} monteret ved indgangen, venter på kæden`
+          + (monteret.breaksAt ? ` (knækker ved ${monteret.breaksAt})` : "")
+          : reaches.length > 0
+            ? `${reaches[0].id} er kun planlagt`
+            : "Ingen flowmåling ved indgangen";
+    return {
+      input,
+      label: "Materiale ved indgang",
+      have: leverer ? 1 : 0,
+      total: 1,
+      detail,
+      blockedBy: monteret?.breaksAt ? [monteret.breaksAt] : [],
+      chainBlocked: !!monteret?.breaksAt,
+    };
+  }
+
+  // 4) En datakilde, målt som dækning over scopet — som driftssignalerne.
   if (input.dataset) {
     const total = scope.length;
     const have = scope.filter((m) => historyFor(m.wIds).length > 0).length;
@@ -267,7 +303,7 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
     };
   }
 
-  // 4) Et led i datavejen — kædevagtens verden.
+  // 5) Et led i datavejen — kædevagtens verden.
   if (input.chainStep) {
     const step = input.chainStep;
     const label = OT_PATH_STEPS.find((s) => s.id === step)?.label ?? step;
@@ -318,7 +354,7 @@ export function agentState(agent: Agent, layout: Layout, ot: OtLayout | null): A
   const machines = machinesInScope(agent, layout);
   const upstream = upstreamMachines(agent, layout);
   // Kun de ejede maskiner tæller — indløbet er kontekst, ikke ansvar.
-  const inputs = agent.inputs.map((i) => resolveInput(i, machines, ot));
+  const inputs = agent.inputs.map((i) => resolveInput(i, machines, upstream, ot));
 
   // Status regnes kun på de påkrævede inputs. De støttende vises, men afgør
   // ingenting — en stoprapport kan skrives uden flow, ikke uden driftssignal.

@@ -31,9 +31,11 @@ const sliberi: Agent[] = [
         need: "Driftssignal (DI) pr. maskine i sporet",
       },
       {
-        signalId: "FT-743",
+        // Stedet, ikke taget. Måleren sad på elevator 756 og sidder nu ved
+        // indgangen; flytter den sig igen, skal inputtet stadig passe.
+        inlet: "materiale",
         required: false,
-        need: "Materialestrøm ind i sporene, målt før fordeleren",
+        need: "Materialestrøm ind i sporene, målt ved linjens indgang",
       },
     ],
     // Skriver prosa ud fra tal, der skal vejes mod hinanden.
@@ -56,9 +58,11 @@ const sliberi: Agent[] = [
         need: "Driftssignal (DI) pr. maskine i sporet",
       },
       {
-        signalId: "FT-743",
+        // Stedet, ikke taget. Måleren sad på elevator 756 og sidder nu ved
+        // indgangen; flytter den sig igen, skal inputtet stadig passe.
+        inlet: "materiale",
         required: false,
-        need: "Materialestrøm ind i sporene, målt før fordeleren",
+        need: "Materialestrøm ind i sporene, målt ved linjens indgang",
       },
     ],
     engine: "claude",

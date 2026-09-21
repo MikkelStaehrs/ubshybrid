@@ -54,10 +54,16 @@ Grænserne står i `src/lib/live-source.ts` og kun der:
 ```
   < 3,6 mA        sensorfejl. Ingen måling.
   3,6 – 4,0 mA    under nulpunktet, inden for tolerancen. Klemmes til 0.
-  4,0 – 20,0 mA   måleområdet.
+  4,0 – 20,0 mA   måleområdet: 0 til 150 % af nominel kapacitet.
   20,0 – 21,0 mA  over fuldt udslag, inden for tolerancen. Klemmes til maks.
   > 21,0 mA       sensorfejl. Ingen måling.
 ```
+
+Sløjfen giver **procent af nominel kapacitet** og ikke andet. Fuldt udslag er
+150 %, så en overfødning kan ses — en måler, der topper ved 100, kan ikke
+vise den. Hvad de 100 % *er* i tons, står ikke i koden: det er en aftale med
+driften og ligger som `flow.nominal` i `data/line-config.ts`. Er den tom,
+viser kortet procenten og skriver "Ikke udfyldt", hvor takten skulle stå.
 
 Skalaen **ekstrapoleres aldrig**. Gjorde den det, ville 3,7 mA give en negativ
 materialestrøm, og sådan noget findes ikke. Ved fejl er `value` `null`, og
@@ -65,6 +71,27 @@ UI'et viser en streg — ikke et tal.
 
 Et stop på 4,0 mA er en måling: sløjfen lever, der løber bare ingenting. Det
 er ikke en fejl, og det skal ikke behandles som en.
+
+### Kører eller kører ikke
+
+`src/lib/flow.ts` lægger de to ting oven på procenten, der gør den brugbar:
+kalibreringen og tilstanden.
+
+Tilstanden har **hysterese**: over `KOERER_OVER_PCT` kører linjen, under
+`STAAR_UNDER_PCT` står den, og imellem beholder den, hvad den var. Uden
+båndet ville en måler, der vipper omkring nul, lave et stop i sekundet.
+Tilstanden udledes af forløbet i `runSegments()`, aldrig af den seneste
+prøve alene — hysterese virker ikke på ét punkt.
+
+**Sensorfejl er en tredje tilstand, ikke et stop.** En måler, der er holdt op
+med at svare, siger ingenting om, hvorvidt der løber materiale. Et "kører
+ikke" bliver først et stop, når det har varet længere end
+`stopAfterSeconds`; en fejlperiode bliver det aldrig. Reglen har en test.
+
+Nøgletallene følger samme linje: fejltid tæller hverken som oppetid eller
+nedetid, og totalen springer et hul over frem for at brolægge det. Totalen er
+et integral af øjebliksmålinger og skal mærkes **"Estimat"**. Før der er
+historik nok, står der **"Afventer historik"** — ikke et tal.
 
 ## Ingen gæt
 
@@ -80,7 +107,7 @@ Kortet må aldrig vise noget, der ser ud som en måling uden at være det.
 - Mangler noget en kilde, så sig det i fladen. OEE-sektionen står tom med en
   begrundelse frem for et tomt felt med et gæt i.
 - Adresser og tal, der er foreslået og ikke aftalt, skrives som forslag
-  (registerkortet, måleområdet 0–40 t/t, stopgrænsen på 120 s).
+  (registerkortet, stopgrænsen på 120 s, grænserne for lavt og højt flow).
 
 ## Status udledes
 
@@ -200,10 +227,15 @@ starte, fordi nogen tilføjede den. Skriv **ikke** en status; den udledes.
 begge sporagenter: et stop der forklarer et stop i sporet, men det er ikke
 sporets ansvar og tæller ikke i status.
 
-`inputs` peger fire steder hen — et konkret `signalId`, en `type` fra
-sensorkataloget, der endnu ikke er sat op, et `chainStep`, eller et `dataset`
-målt som dækning over scopet. `need` er den sætning, kortet skriver, når det
-mangler.
+`inputs` peger fem steder hen — et konkret `signalId`, en `type` fra
+sensorkataloget, der endnu ikke er sat op, et `inlet` (materialestrømmen ind
+i scopet), et `chainStep`, eller et `dataset` målt som dækning over scopet.
+`need` er den sætning, kortet skriver, når det mangler.
+
+Peg på **stedet frem for taget**, når stedet er pointen. Sporagenterne
+bruger `inlet: "materiale"` og ikke `signalId: "FT-743"`: flytter måleren
+sig igen, skal inputtet stadig passe. Et `signalId` er til, når det er
+præcis den måler, der skal bruges.
 
 ### Nyt signal
 
@@ -211,8 +243,14 @@ I `data/ot-layer.ts` under `sensors`. Husk `catalogType` — uden den kan en
 agent ikke vide, at den slags signal, den mangler, allerede sidder på
 maskinen. Kanal og registeradresse udledes; skriv dem ikke.
 
-Har signalet et andet måleområde end de nuværende, så tilføj det i `SCALE` i
-`src/lib/live-source.ts` **og skriv en test for grænserne** (se nedenfor).
+Flowsignaler skalerer alle ens: 4–20 mA er 0–150 % af nominel kapacitet.
+Skal et signal have et andet spænd, hører det på sensoren — ikke som en
+undtagelse i `live-source.ts`. Uanset hvad: **skriv en test for grænserne**
+(se nedenfor).
+
+Nominel kapacitet for signalet sættes i `flow.nominal` i
+`data/line-config.ts`, nøglet på signal-id. Lad den stå tom, indtil driften
+har sagt tallet.
 
 ## Konventioner
 
@@ -244,8 +282,14 @@ Har signalet et andet måleområde end de nuværende, så tilføj det i `SCALE` 
   menneskernes adgangskode.
 - **Stopgrænsen på 120 sekunder er valgt, ikke aftalt.** Den skal forbi
   driften, før nogen regner tilgængelighed på den.
-- **Måleområdet 0–40 t/t for FT-743 er en pladsholder.** Det skal rettes, før
-  nogen aflæser tallene.
+- **100 %-punktet er ikke aftalt.** `flow.nominal` står tom, så kortet viser
+  procent og ingen tons. Tallet — det, der gør procent til t/t — aftales med
+  driften efter test, og det er den eneste kalibrering, der findes.
+- **FS 550 er en trendmåler, ikke en masseflowmåler.** Den siger, om der
+  løber mere eller mindre end før, ikke hvor mange tons der passerer. Enhver
+  total udledt af den er et estimat og skal blive ved med at hedde det.
+- **Hysteresen og de fem/to procent er valgt, ikke målt.** De skal forbi
+  driften sammen med stopgrænsen.
 - **Den tværgående agent venter på linje nr. 2.** Der er ikke noget at gå på
   tværs af endnu.
 - **Fase 4 er et Python-script på serveren**, der henter `/api/context`,

@@ -1,5 +1,7 @@
 "use client";
 import { useMemo } from "react";
+import { lineOpsFor } from "../lib/agents";
+import { nominalFor, rateFrom, runSegments, RUN_STATE_LABEL } from "../lib/flow";
 import { describeFault, QUALITY_LABEL, type Quality, type SignalValue } from "../lib/live-source";
 import type { PlacedSensor } from "../lib/ot";
 import { summarise, type Sample } from "../lib/useLiveSignals";
@@ -72,17 +74,28 @@ function Sparkline({ samples }: { samples: Sample[] }) {
   );
 }
 
-export function SignalModal({ sensor, value, samples, channel, onClose }: {
+export function SignalModal({ sensor, value, samples, channel, lineId, onClose }: {
   sensor: PlacedSensor;
   value: SignalValue | undefined;
   samples: Sample[];
   channel: string | null;
+  lineId: string;
   onClose: () => void;
 }) {
   const stats = summarise(samples);
   const quality: Quality = value?.quality ?? "no-source";
   const fault = value && quality === "fault" ? describeFault(value.raw) : null;
   const faults = samples.filter((s) => s.quality === "fault").length;
+
+  // Procenten står på måleren. Takten kræver, at nogen har sagt hvad hundrede
+  // procent er, og tilstanden kræver et forløb — hysteresen virker ikke på
+  // ét punkt. Begge dele hentes derfor samme sted som Live-panelet.
+  const isFlow = sensor.catalogType === "flow";
+  const ops = lineOpsFor(lineId);
+  const nominal = isFlow ? nominalFor(ops, sensor.id) : null;
+  const rate = isFlow ? rateFrom(value?.value ?? null, nominal) : null;
+  const segments = isFlow ? runSegments(samples) : [];
+  const state = segments.length > 0 ? segments[segments.length - 1].state : null;
 
   return (
     <Modal
@@ -112,6 +125,14 @@ export function SignalModal({ sensor, value, samples, channel, onClose }: {
             {value && Number.isFinite(value.raw) ? `${num(value.raw, 2)} mA` : "intet råsignal"}
           </span>
         </div>
+        {isFlow && (
+          <p className="fm-live-now-note">
+            {state && <span className={`fm-run-state run-${state}`}>{RUN_STATE_LABEL[state]}</span>}
+            {rate === null
+              ? ` Takt: Ikke udfyldt — nominel kapacitet for ${sensor.id} er ikke aftalt.`
+              : ` Svarer til ${num(rate)} ${ops!.rateUnit} ved en kapacitet på ${num(nominal!, 0)} ${ops!.rateUnit}.`}
+          </p>
+        )}
         {fault && <p className="fm-warn"><span>{fault} — der er ingen måling at vise.</span></p>}
       </section>
 

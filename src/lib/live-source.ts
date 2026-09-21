@@ -38,7 +38,7 @@ export const STALE_AFTER_MS = 10_000;
  *
  *   < 3,6 mA          sløjfen er brudt. Ingen måling.
  *   3,6 – 4,0 mA      under nulpunktet, men inden for tolerancen. Klemmes til 0.
- *   4,0 – 20,0 mA     måleområdet.
+ *   4,0 – 20,0 mA     måleområdet: 0 til 150 % af nominel kapacitet.
  *   20,0 – 21,0 mA    over fuldt udslag, inden for tolerancen. Klemmes til maks.
  *   > 21,0 mA         kortslutning eller forkert kobling. Ingen måling.
  */
@@ -67,18 +67,19 @@ export function describeFault(ma: number): string | null {
 }
 
 /**
- * Skalering pr. signal. Hører egentlig hjemme på sensoren i data/ot-layer.ts,
- * men måleområdet er ikke fastlagt endnu — tallene her er et pladsholder-
- * område, så visningen kan bygges. De skal rettes, før nogen aflæser dem.
+ * Transmitterens spænd: 4 mA er intet, 20 mA er 150 % af nominel kapacitet.
+ *
+ * Halvtreds procents overhøjde er der, fordi en måler, der topper ved 100 %,
+ * ikke kan vise en overfødning — og en overfødning er netop det, man vil
+ * kunne se. Hvad de 100 % *er* i tons, står ikke her: det er en aftale med
+ * driften og ligger i data/line-config.ts.
  */
-const SCALE: Record<string, { unit: string; min: number; max: number }> = {
-  "FT-743": { unit: "t/t", min: 0, max: 40 },
-};
+export const FULL_SCALE_PCT = 150;
 
-const DEFAULT_SCALE = { unit: "%", min: 0, max: 100 };
+export const PERCENT_UNIT = "%";
 
 export interface Scaled {
-  /** null ved sensorfejl. Der er ingen måling at vise. */
+  /** Procent af nominel kapacitet. null ved sensorfejl — ingen måling. */
   value: number | null;
   unit: string;
   /** true når værdien er klemt til en ende af skalaen. */
@@ -86,23 +87,34 @@ export interface Scaled {
 }
 
 /**
- * Råsignal til måleenhed.
+ * Råsignal til procent af nominel kapacitet.
+ *
+ * Sløjfen kender ikke tons. Den kender en strøm mellem to grænser, og det
+ * eneste ærlige, der kan læses ud af den alene, er hvor stor en del af
+ * fuldt udslag den ligger på. Omregningen til en takt kræver en kalibrering
+ * og sker i flow.ts — der, hvor kapaciteten er kendt.
  *
  * Skalaen ekstrapoleres aldrig: tolerancebåndene i hver ende klemmes til
  * skalaens ender, og uden for sløjfen er der ingen værdi. Ellers ville
  * 3,7 mA give en negativ materialestrøm, og det findes ikke.
  */
-export function scaleFromMa(signalId: string, ma: number): Scaled {
-  const s = SCALE[signalId] ?? DEFAULT_SCALE;
-  if (isFaultMa(ma)) return { value: null, unit: s.unit, clamped: false };
-  if (ma <= NOMINAL_LOW_MA) return { value: s.min, unit: s.unit, clamped: ma < NOMINAL_LOW_MA };
-  if (ma >= NOMINAL_HIGH_MA) return { value: s.max, unit: s.unit, clamped: ma > NOMINAL_HIGH_MA };
+export function scaleFromMa(ma: number): Scaled {
+  if (isFaultMa(ma)) return { value: null, unit: PERCENT_UNIT, clamped: false };
+  if (ma <= NOMINAL_LOW_MA) return { value: 0, unit: PERCENT_UNIT, clamped: ma < NOMINAL_LOW_MA };
+  if (ma >= NOMINAL_HIGH_MA) {
+    return { value: FULL_SCALE_PCT, unit: PERCENT_UNIT, clamped: ma > NOMINAL_HIGH_MA };
+  }
   const span = NOMINAL_HIGH_MA - NOMINAL_LOW_MA;
   return {
-    value: s.min + ((ma - NOMINAL_LOW_MA) / span) * (s.max - s.min),
-    unit: s.unit,
+    value: ((ma - NOMINAL_LOW_MA) / span) * FULL_SCALE_PCT,
+    unit: PERCENT_UNIT,
     clamped: false,
   };
+}
+
+/** Den strøm, der svarer til en given procent. Bruges af simulatoren og tests. */
+export function maFromPercent(pct: number): number {
+  return NOMINAL_LOW_MA + (pct / FULL_SCALE_PCT) * (NOMINAL_HIGH_MA - NOMINAL_LOW_MA);
 }
 
 export function qualityOf(ma: number, timestamp: string, now = Date.now()): Quality {
@@ -152,10 +164,13 @@ class MockSource implements LiveSource {
   private ma(now: number): number {
     this.roll(now);
     if (this.mode === "break") return 3.1 + Math.random() * 0.3;
-    if (this.mode === "stop") return 4 + (Math.random() - 0.5) * 0.04;
-    // Langsom drift plus lidt støj — ligner en materialestrøm mere end hvid støj.
+    // Stop: sløjfen lever, der løber bare ingenting. Nul procent, ikke en fejl.
+    if (this.mode === "stop") return NOMINAL_LOW_MA + (Math.random() - 0.5) * 0.04;
+    // Langsom drift plus lidt støj — ligner en materialestrøm mere end hvid
+    // støj. Den vandrer omkring nominel kapacitet og krydser både den lave
+    // grænse og hundrede procent, så visningen viser alle tre niveauer.
     this.drift = Math.max(-1, Math.min(1, this.drift + (Math.random() - 0.5) * 0.12));
-    return 13 + this.drift * 3.2 + (Math.random() - 0.5) * 0.5;
+    return maFromPercent(92 + this.drift * 20 + (Math.random() - 0.5) * 4);
   }
 
   async getSnapshot(): Promise<SignalValue[]> {
@@ -167,7 +182,7 @@ class MockSource implements LiveSource {
         return { signalId, raw: NaN, value: null, unit: "", quality: "no-source", timestamp };
       }
       const raw = this.ma(now);
-      const { value, unit } = scaleFromMa(signalId, raw);
+      const { value, unit } = scaleFromMa(raw);
       return { signalId, raw, value, unit, quality: qualityOf(raw, timestamp, now), timestamp };
     });
   }
@@ -208,7 +223,7 @@ class ApiSource implements LiveSource {
         if (!s) return { signalId, raw: NaN, value: null, unit: "", quality: "no-source", timestamp };
         // Råsignalet er kilden. Skalering og kvalitet regnes her, så de altid
         // følger den samme regel — også hvis databasen har gemt noget andet.
-        const { value, unit } = scaleFromMa(signalId, s.raw);
+        const { value, unit } = scaleFromMa(s.raw);
         return { ...s, value, unit: s.unit || unit, quality: qualityOf(s.raw, s.timestamp) };
       });
     } catch {

@@ -1425,3 +1425,86 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fm-agent-purpose dl { margin: 0; display: grid; }
 .fm-agent-purpose .fm-field { grid-template-columns: 84px 1fr; }
 .fm-agent-purpose .fm-field dd { font-weight: 500; }
+
+/* --- Materialestrøm ------------------------------------------------------
+   Procenten står på måleren, takten kræver en kalibrering, og tilstanden
+   kommer fra tidslinjen. Farverne er de samme, resten af Live-visningen
+   bruger: grøn leverer, grå står stille, rød er en fejl, rav er uden for
+   det gode bånd. Der er ikke opfundet nye — betydningerne findes allerede. */
+.fm-flow { display: grid; gap: 10px; }
+.fm-flow-now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+.fm-run-state {
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.fm-run-state.run-koerer { color: var(--live-good); }
+.fm-run-state.run-staar { color: var(--live-none); }
+.fm-run-state.run-fejl { color: var(--live-fault); }
+.fm-run-state.run-ukendt { color: var(--muted); border-style: dashed; }
+
+.fm-flow-pct { font-size: 30px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+.fm-flow-unit { font-size: 15px; color: var(--muted); margin-left: -6px; }
+.fm-flow-level {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--lvl, var(--muted));
+  margin-left: auto;
+}
+.fm-flow-level.lvl-ok { --lvl: var(--live-good); }
+/* Lavt og højt er begge uden for det aftalte bånd. Etiketten siger hvilket. */
+.fm-flow-level.lvl-lav, .fm-flow-level.lvl-hoej { --lvl: var(--live-stale); }
+
+.fm-flow-rate { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.fm-flow-rate strong { color: var(--ot-missing); }
+
+/* Bredden er tid. Ingen minimumsbredde: et kort udfald skal se kort ud. */
+.fm-timeline {
+  display: flex;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.fm-tl-seg { display: block; height: 100%; }
+.fm-tl-seg.tl-koerer { background: var(--live-good); }
+.fm-tl-seg.tl-staar { background: var(--live-none); opacity: 0.45; }
+.fm-tl-seg.tl-fejl {
+  /* Stribet: et hul i målingen er ikke en måling. */
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--live-fault) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.fm-flow-stops { margin: 0; font-size: 12px; color: var(--muted); }
+
+.fm-flow-figures { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fm-flow-figures > div {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.fm-flow-figures dt {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fm-flow-figures dd { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
+.fm-flow-figures dd.fm-flow-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.fm-live-now-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }

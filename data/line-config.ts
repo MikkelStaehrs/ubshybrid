@@ -17,6 +17,22 @@ const sliberi: LineOps = {
   // før nogen regner tilgængelighed på det.
   stopAfterSeconds: 120,
 
+  // Hvad flowsignalet betyder.
+  //
+  // `nominal` er nominel kapacitet pr. signal i `rateUnit` og definerer
+  // 100 %. Den står tom: ingen har aftalt, hvad fuld fødning er på
+  // sliberiet, og indtil da viser kortet procent og skriver "Ikke udfyldt",
+  // hvor takten skulle stå. Skrev vi et tal her, ville alle tons på skærmen
+  // være gættet.
+  //
+  //   flow: { nominal: { "FT-743": 32 } },
+  //
+  // Grænserne for lavt og højt flow er udeladt og arver 70 og 100 procent
+  // fra src/lib/flow.ts.
+  flow: {
+    nominal: {},
+  },
+
   stopReasons: [
     { code: "TILSTOP", label: "Tilstopning" },
     { code: "MATERIALE", label: "Manglende materiale" },

@@ -9,13 +9,17 @@
 // er præcis den JSON, agenten senere får i hånden — ikke mere.
 import { lineOpsFor, opsForMachine, agentStates, describeScope, AGENT_STATUS_LABEL, type AgentState } from "./agents";
 import { NOTE_FIELD, OPS_FIELDS, OT_FIELDS, STAMDATA_FIELDS } from "./fields";
+import {
+  flowLimits, nominalFor, KOERER_OVER_PCT, STAAR_UNDER_PCT, type RunState,
+} from "./flow";
+import { FULL_SCALE_PCT } from "./live-source";
 import { layoutLine, type PlacedMachine } from "./layout";
 import { LINES } from "./lines";
 import {
   channelReport, isDone, layoutOt, otLayerFor, pathState, registerMap, signalDelivery,
   OT_STATUS_LABEL, type DeliveryBasis, type OtLayout, type PlacedSensor,
 } from "./ot";
-import type { Agent, FlowEdge, OtInfraNode, OtStatus } from "./types";
+import type { Agent, FlowEdge, LineOps, OtInfraNode, OtStatus } from "./types";
 
 export const SITE = "UBS · Holeby";
 
@@ -92,6 +96,41 @@ export interface CabinetCtx {
   hardwareCount: number;
 }
 
+/**
+ * Hvad et flowsignal betyder — og hvad der endnu ikke kan siges om det.
+ *
+ * Sløjfen giver procent af nominel kapacitet. Takten kræver en kalibrering,
+ * og tilstanden kræver en aflæsning. Serveren har ingen af delene i dag:
+ * den kan se kæden, ikke måleren. Felterne står derfor som null med en
+ * `basis`, der siger hvorfor — frem for at agenten skal gætte på, om et
+ * manglende tal betyder nul eller ingen viden.
+ */
+export type FlowBasis = "ingen-aflaesning" | "aflaesning";
+
+export interface FlowCtx {
+  /** Sløjfens spænd: 4 mA er 0 %, 20 mA er fuldt udslag. */
+  spanPct: { min: number; max: number };
+  /** Nominel kapacitet, altså 100 %, i `rateUnit`. null = ikke aftalt. */
+  nominal: number | null;
+  rateUnit: string;
+  /** Uden kalibrering findes takten ikke — kun procenten. */
+  calibration: "kalibreret" | "ikke-kalibreret";
+  /** Under `lowPct` er flowet lavt, over `highPct` er det højt. */
+  lowPct: number;
+  highPct: number;
+  /** Hysteresen bag kører / kører ikke. */
+  runsOverPct: number;
+  stopsUnderPct: number;
+  /** Hvor længe "kører ikke" skal vare, før det tæller som et stop. */
+  stopAfterSeconds: number;
+  /** Seneste måling. null når ingen har læst måleren. */
+  percent: number | null;
+  rate: number | null;
+  /** "koerer" | "staar" | "fejl". null uden aflæsning. */
+  state: RunState | null;
+  basis: FlowBasis;
+}
+
 export interface SignalCtx {
   id: string;
   type: string;
@@ -117,6 +156,8 @@ export interface SignalCtx {
    * leverer rigtige råsignaler.
    */
   deliveryBasis: DeliveryBasis;
+  /** Kun på flowsignaler. null for alt andet. */
+  flow: FlowCtx | null;
 }
 
 export interface AgentCtx {
@@ -184,7 +225,37 @@ function machineCtx(
   };
 }
 
-function signalCtx(s: PlacedSensor, ot: OtLayout): SignalCtx {
+/**
+ * Flow-blokken for ét signal. null for alt, der ikke måler en materialestrøm.
+ *
+ * Alle grænser kommer fra de samme steder, Live-visningen læser: spændet fra
+ * live-source.ts, kalibrering og niveauer fra line-config.ts gennem flow.ts.
+ * Der regnes ikke et eneste tal her, som fladen ikke også ville få.
+ */
+function flowCtx(s: PlacedSensor, ops: LineOps | undefined): FlowCtx | null {
+  if (s.catalogType !== "flow") return null;
+  const nominal = nominalFor(ops, s.id);
+  const limits = flowLimits(ops);
+  return {
+    spanPct: { min: 0, max: FULL_SCALE_PCT },
+    nominal,
+    rateUnit: ops?.rateUnit ?? "",
+    calibration: nominal === null ? "ikke-kalibreret" : "kalibreret",
+    lowPct: limits.lowPct,
+    highPct: limits.highPct,
+    runsOverPct: KOERER_OVER_PCT,
+    stopsUnderPct: STAAR_UNDER_PCT,
+    stopAfterSeconds: ops?.stopAfterSeconds ?? 0,
+    // Serveren læser ikke måleren. Den kender reglerne, ikke tallet — og
+    // det skal stå som ingen viden, ikke som nul.
+    percent: null,
+    rate: null,
+    state: null,
+    basis: "ingen-aflaesning",
+  };
+}
+
+function signalCtx(s: PlacedSensor, ot: OtLayout, ops: LineOps | undefined): SignalCtx {
   // Samme dom som agentstatussen og Live-visningen bruger.
   const verdict = signalDelivery(s, ot);
   const cabinet = ot.cabinets.find((c) => c.id === s.cabinetId);
@@ -212,6 +283,7 @@ function signalCtx(s: PlacedSensor, ot: OtLayout): SignalCtx {
     delivers: verdict.delivers,
     deliveryReason: verdict.reason,
     deliveryBasis: verdict.basis,
+    flow: flowCtx(s, ops),
   };
 }
 
@@ -327,7 +399,7 @@ export function buildContext(lineId: string | null, agentId: string | null): Con
         hardwareCount: c.hardware.length,
       };
     }),
-    signals: ot ? sensors.map((s) => signalCtx(s, ot)) : [],
+    signals: ot ? sensors.map((s) => signalCtx(s, ot, lineOps)) : [],
     infrastructure: ot?.infrastructure ?? [],
     agents: agents.map(agentCtx),
     scope,

@@ -1,10 +1,15 @@
 "use client";
-import { describeFault, QUALITY_LABEL, type Quality, type SignalValue } from "../lib/live-source";
+import { lineOpsFor } from "../lib/agents";
+import {
+  flowLimits, keyFigures, levelOf, nominalFor, rateFrom, runSegments, segmentMs, stopsFrom,
+  FLOW_LEVEL_LABEL, RUN_STATE_LABEL, type RunSegment,
+} from "../lib/flow";
+import { describeFault, QUALITY_LABEL, FULL_SCALE_PCT, type Quality, type SignalValue } from "../lib/live-source";
 import {
   isDone, pathState, registerMap, signalDelivery, OT_STATUS_LABEL,
   type CabinetReport, type OtLayout, type PlacedSensor,
 } from "../lib/ot";
-import type { LiveState } from "../lib/useLiveSignals";
+import type { LiveState, Sample } from "../lib/useLiveSignals";
 import type { OtStatus } from "../lib/types";
 
 /** "for 3 s siden". Null bliver til en streg, ikke til "aldrig". */
@@ -18,6 +23,141 @@ function ago(t: number | null | undefined): string {
 
 const num = (v: number, digits = 1) =>
   Number.isFinite(v) ? v.toFixed(digits).replace(".", ",") : "—";
+
+/** "4 min 10 s". Varigheder læses som varigheder, ikke som millisekunder. */
+function varighed(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
+  return m % 60 ? `${Math.floor(m / 60)} t ${m % 60} min` : `${Math.floor(m / 60)} t`;
+}
+
+/**
+ * Tidslinjen: kørte, stod, eller tav måleren.
+ *
+ * Bredden er tid. Et stræk, der fylder lidt, varede kort — der er ikke et
+ * minimum, for så ville en tre sekunders udfald se ud som et stop.
+ */
+function Timeline({ segments }: { segments: RunSegment[] }) {
+  const total = segments.reduce((sum, s) => sum + segmentMs(s), 0);
+  if (total <= 0) return <p className="fm-muted">Ingen historik endnu.</p>;
+  return (
+    <div className="fm-timeline" role="img" aria-label="Forløb: kører, kører ikke, sensorfejl">
+      {segments.map((s, i) => (
+        <span
+          key={i}
+          className={`fm-tl-seg tl-${s.state}`}
+          style={{ width: `${(segmentMs(s) / total) * 100}%` }}
+          title={`${RUN_STATE_LABEL[s.state]} · ${varighed(segmentMs(s))}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Materialestrømmen ind i linjen.
+ *
+ * Sløjfen giver procent af nominel kapacitet. Takten kræver, at nogen har
+ * sagt, hvad hundrede procent er — står den ikke i line-config.ts, står der
+ * "Ikke udfyldt" her, og ikke et tal.
+ *
+ * Tilstanden kommer fra tidslinjen og ikke fra den seneste prøve alene:
+ * hysteresen sidder i runSegments, og den ville ikke virke på ét punkt.
+ */
+function FlowSection({ sensor, value, samples, lineId, delivers }: {
+  sensor: PlacedSensor;
+  value: SignalValue | undefined;
+  samples: Sample[];
+  lineId: string;
+  delivers: boolean;
+}) {
+  const ops = lineOpsFor(lineId);
+  const limits = flowLimits(ops);
+  const nominal = nominalFor(ops, sensor.id);
+  const pct = value?.value ?? null;
+  const rate = rateFrom(pct, nominal);
+
+  const segments = runSegments(samples);
+  const state = segments.length > 0 ? segments[segments.length - 1].state : null;
+  const stops = ops ? stopsFrom(segments, ops.stopAfterSeconds) : [];
+  const figures = keyFigures(samples, nominal);
+
+  return (
+    <section className="fm-flow">
+      <h3>Materialestrøm · {sensor.id}</h3>
+
+      <div className="fm-flow-now">
+        <span className={`fm-run-state run-${state ?? "ukendt"}`}>
+          {state ? RUN_STATE_LABEL[state] : "AFVENTER MÅLING"}
+        </span>
+        <span className="fm-flow-pct fm-mono">{pct === null ? "—" : num(pct)}</span>
+        <span className="fm-flow-unit">%</span>
+        {pct !== null && (
+          <span className={`fm-flow-level lvl-${levelOf(pct, limits)}`}>
+            {FLOW_LEVEL_LABEL[levelOf(pct, limits)]}
+          </span>
+        )}
+      </div>
+
+      <p className="fm-flow-rate">
+        {rate === null ? (
+          <>
+            <strong>Ikke udfyldt.</strong> Nominel kapacitet for {sensor.id} er ikke aftalt, så
+            procenten kan ikke blive til {ops?.rateUnit ?? "en takt"}. Sæt den i
+            data/line-config.ts, når driften har sagt, hvad fuld fødning er.
+          </>
+        ) : (
+          <>
+            <span className="fm-mono">{num(rate)} {ops!.rateUnit}</span> af {num(nominal!, 0)}{" "}
+            {ops!.rateUnit} ved 100 %. Fuldt udslag er {FULL_SCALE_PCT} %.
+          </>
+        )}
+      </p>
+
+      {!delivers && (
+        <p className="fm-muted">
+          Tallene er ikke hentet gennem kæden. De siger noget om måleren, ikke om databasen.
+        </p>
+      )}
+
+      <Timeline segments={segments} />
+      <p className="fm-flow-stops">
+        {ops
+          ? stops.length === 0
+            ? `Ingen stop over ${ops.stopAfterSeconds} s i perioden.`
+            : `${stops.length === 1 ? "1 stop" : `${stops.length} stop`} over ${ops.stopAfterSeconds} s: ${stops.map((s) => varighed(segmentMs(s))).join(", ")}.`
+          : "Ingen stopdefinition på linjen."}
+      </p>
+
+      <dl className="fm-flow-figures">
+        <div>
+          <dt>Oppetid</dt>
+          <dd className="fm-mono">
+            {figures ? `${num(figures.uptimePct)} %` : "Afventer historik"}
+          </dd>
+          {figures && figures.faultMs > 0 && (
+            <dd className="fm-flow-hint">{varighed(figures.faultMs)} uden måling, holdt udenfor</dd>
+          )}
+        </div>
+        <div>
+          <dt>Total indgang</dt>
+          <dd className="fm-mono">
+            {!figures
+              ? "Afventer historik"
+              : figures.total === null
+                ? "Ikke udfyldt"
+                : `${num(figures.total, 2)} ${ops!.rateUnit.split("/")[0]}`}
+          </dd>
+          {figures && figures.total !== null && (
+            <dd className="fm-flow-hint">Estimat · integral over {varighed(figures.spanMs)}</dd>
+          )}
+        </div>
+      </dl>
+    </section>
+  );
+}
 
 /**
  * Kæden fra kobler til API, led for led.
@@ -85,11 +225,12 @@ function ChainStatus({ ot, live, sourceKind }: {
   );
 }
 
-export function LivePanel({ ot, report, live, sourceKind, selectedId, onSelect }: {
+export function LivePanel({ ot, report, live, sourceKind, lineId, selectedId, onSelect }: {
   ot: OtLayout;
   report: CabinetReport | null;
   live: LiveState;
   sourceKind: "mock" | "api";
+  lineId: string;
   selectedId: string | null;
   onSelect: (signalId: string) => void;
 }) {
@@ -102,6 +243,9 @@ export function LivePanel({ ot, report, live, sourceKind, selectedId, onSelect }
     return signalDelivery(s, ot, v && Number.isFinite(v.raw) ? { raw: v.raw } : null);
   };
   const withData = ot.sensors.filter((s) => deliveryOf(s).delivers).length;
+  // Materialestrømmen får sit eget afsnit. Den er det eneste signal i
+  // anlægget, der bærer en tilstand — resten er tal uden en dom endnu.
+  const flowSensors = ot.sensors.filter((s) => s.catalogType === "flow");
 
   const source = (s: PlacedSensor) => {
     const r = regById.get(s.id);
@@ -117,6 +261,17 @@ export function LivePanel({ ot, report, live, sourceKind, selectedId, onSelect }
           {withData} af {ot.sensors.length} signaler leverer data
         </span>
       </header>
+
+      {flowSensors.map((s) => (
+        <FlowSection
+          key={s.id}
+          sensor={s}
+          value={live.values.get(s.id)}
+          samples={live.history.get(s.id) ?? []}
+          lineId={lineId}
+          delivers={deliveryOf(s).delivers}
+        />
+      ))}
 
       <section>
         <h3>Kæden</h3>

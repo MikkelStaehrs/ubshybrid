@@ -853,6 +853,7 @@ export function FactoryMap({
           report={reports?.get(ot.cabinets[0]?.id ?? "") ?? null}
           live={live}
           sourceKind={liveSource}
+          lineId={data.line.id}
           selectedId={liveSel}
           onSelect={setLiveSel}
         />
@@ -864,6 +865,7 @@ export function FactoryMap({
           value={live.values.get(liveSensor.id)}
           samples={live.history.get(liveSensor.id) ?? []}
           channel={channelOf(liveSensor)}
+          lineId={data.line.id}
           onClose={() => setLiveSel(null)}
         />
       )}
