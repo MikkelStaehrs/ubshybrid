@@ -9,7 +9,8 @@ import {
 export interface Sample {
   t: number;
   raw: number;
-  value: number;
+  /** null ved sensorfejl — en prøve uden måling. */
+  value: number | null;
   quality: Quality;
 }
 
@@ -97,7 +98,9 @@ export function useLiveSignals(
 
 /** Min, maks og gennemsnit over de prøver, der faktisk bar en værdi. */
 export function summarise(samples: Sample[]) {
-  const ok = samples.filter((s) => Number.isFinite(s.value) && s.quality !== "fault");
+  const ok = samples.filter(
+    (s): s is Sample & { value: number } => s.value !== null && Number.isFinite(s.value) && s.quality !== "fault",
+  );
   if (ok.length === 0) return null;
   let min = Infinity;
   let max = -Infinity;

@@ -12,8 +12,8 @@ import { NOTE_FIELD, OPS_FIELDS, OT_FIELDS, STAMDATA_FIELDS } from "./fields";
 import { layoutLine, type PlacedMachine } from "./layout";
 import { LINES } from "./lines";
 import {
-  channelReport, isDone, layoutOt, otLayerFor, pathState, registerMap,
-  OT_STATUS_LABEL, type OtLayout, type PlacedSensor,
+  channelReport, isDone, layoutOt, otLayerFor, pathState, registerMap, signalDelivery,
+  OT_STATUS_LABEL, type DeliveryBasis, type OtLayout, type PlacedSensor,
 } from "./ot";
 import type { Agent, FlowEdge, OtInfraNode, OtStatus } from "./types";
 
@@ -107,8 +107,16 @@ export interface SignalCtx {
   register: { address: string; datatype: string } | null;
   /** Kæden fra måling til database, led for led. */
   chain: { step: string; label: string; status: OtStatus; statusLabel: string }[];
-  /** true når hele kæden står, og en agent kan læse signalet fra databasen. */
+  /** true når en agent kan læse signalet fra databasen. */
   delivers: boolean;
+  /** Hvorfor ikke, ved navn: "sensorfejl", "kæden knækker ved …". */
+  deliveryReason: string | null;
+  /**
+   * Er dommen tjekket mod en faktisk måling, eller kun mod kæden? Serveren
+   * kan ikke se måleren endnu, så den står som "kæde" indtil /api/live
+   * leverer rigtige råsignaler.
+   */
+  deliveryBasis: DeliveryBasis;
 }
 
 export interface AgentCtx {
@@ -171,6 +179,8 @@ function machineCtx(
 }
 
 function signalCtx(s: PlacedSensor, ot: OtLayout): SignalCtx {
+  // Samme dom som agentstatussen og Live-visningen bruger.
+  const verdict = signalDelivery(s, ot);
   const cabinet = ot.cabinets.find((c) => c.id === s.cabinetId);
   const report = cabinet ? channelReport(cabinet, ot.sensors, 1) : null;
   const register = report ? registerMap(report, [s])[0] : undefined;
@@ -193,7 +203,9 @@ function signalCtx(s: PlacedSensor, ot: OtLayout): SignalCtx {
     channel: report?.channel.get(s.id) ?? null,
     register: register ? { address: register.address, datatype: register.datatype } : null,
     chain,
-    delivers: chain.length > 0 && chain.every((st) => isDone(st.status)),
+    delivers: verdict.delivers,
+    deliveryReason: verdict.reason,
+    deliveryBasis: verdict.basis,
   };
 }
 

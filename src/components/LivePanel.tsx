@@ -1,7 +1,7 @@
 "use client";
-import { QUALITY_LABEL, type Quality, type SignalValue } from "../lib/live-source";
+import { describeFault, QUALITY_LABEL, type Quality, type SignalValue } from "../lib/live-source";
 import {
-  isDone, pathState, registerMap, OT_STATUS_LABEL,
+  isDone, pathState, registerMap, signalDelivery, OT_STATUS_LABEL,
   type CabinetReport, type OtLayout, type PlacedSensor,
 } from "../lib/ot";
 import type { LiveState } from "../lib/useLiveSignals";
@@ -96,7 +96,12 @@ export function LivePanel({ ot, report, live, sourceKind, selectedId, onSelect }
   const cabinet = ot.cabinets[0];
   const registers = report ? registerMap(report, ot.sensors) : [];
   const regById = new Map(registers.map((r) => [r.sensorId, r]));
-  const withData = ot.sensors.filter((s) => live.values.get(s.id)?.quality !== "no-source").length;
+  // Samme dom som agentstatussen: kæden skal stå, og måleren skal svare.
+  const deliveryOf = (s: PlacedSensor) => {
+    const v = live.values.get(s.id);
+    return signalDelivery(s, ot, v && Number.isFinite(v.raw) ? { raw: v.raw } : null);
+  };
+  const withData = ot.sensors.filter((s) => deliveryOf(s).delivers).length;
 
   const source = (s: PlacedSensor) => {
     const r = regById.get(s.id);
@@ -130,19 +135,26 @@ export function LivePanel({ ot, report, live, sourceKind, selectedId, onSelect }
             {ot.sensors.map((s) => {
               const v: SignalValue | undefined = live.values.get(s.id);
               const q: Quality = v?.quality ?? "no-source";
+              const fault = v && q === "fault" ? describeFault(v.raw) : null;
+              const delivery = deliveryOf(s);
               return (
                 <li key={s.id} className={`fm-sigrow q-${q}${selectedId === s.id ? " is-selected" : ""}`}>
                   <button type="button" onClick={() => onSelect(s.id)}>
                     <span className="fm-sig-id fm-mono">{s.id}</span>
                     <span className="fm-sig-raw fm-mono">{v ? `${num(v.raw, 2)} mA` : "—"}</span>
                     <span className="fm-sig-val fm-mono">
-                      {v && Number.isFinite(v.value) ? `${num(v.value)} ${v.unit}` : "—"}
+                      {v && v.value !== null ? `${num(v.value)} ${v.unit}` : "—"}
                     </span>
                     <span className="fm-sig-seen fm-mono">
                       {v && q !== "no-source" ? ago(new Date(v.timestamp).getTime()) : "—"}
                     </span>
                     <span className="fm-sig-src">{source(s)}</span>
                     <span className="fm-sig-q">{QUALITY_LABEL[q]}</span>
+                    {/* Ved fejl: sig hvad der er galt, ikke bare at noget er. */}
+                    {fault && <span className="fm-sig-fault">{fault}</span>}
+                    {!fault && !delivery.delivers && (
+                      <span className="fm-sig-why">Leverer ikke: {delivery.reason}.</span>
+                    )}
                   </button>
                 </li>
               );

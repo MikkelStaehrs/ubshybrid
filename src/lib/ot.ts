@@ -1,3 +1,4 @@
+import { isFaultMa } from "./live-source";
 import { OT_INFRASTRUCTURE } from "../../data/ot-infrastructure";
 import { OT_LAYERS } from "../../data/ot-layer";
 import { OT_SENSOR_TYPES, SENSOR_TYPE_BY_KEY } from "../../data/ot-sensor-types";
@@ -599,6 +600,58 @@ export function pathState(
       blockedBy: deps.filter((n) => !isDone(n.status)),
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Hvad dommen er tjekket imod. En agent skal kunne se forskel på "kæden
+ * findes ikke" og "kæden findes, og måleren svarede forkert".
+ */
+export type DeliveryBasis = "kæde" | "kæde+aflæsning";
+
+export interface SignalDelivery {
+  /** Kan en agent læse signalet fra databasen lige nu? */
+  delivers: boolean;
+  /** Hvorfor ikke, ved navn. null når den leverer. */
+  reason: string | null;
+  /** Leddet kæden knækker ved. Kun sat når det er kæden, der mangler. */
+  breaksAt?: string;
+  basis: DeliveryBasis;
+}
+
+/**
+ * Den ene dom over et signal. Live-visningen, agentstatussen og
+ * /api/context spørger her — ingen af dem regner selv.
+ *
+ * To ting skal holde: kæden skal stå hele vejen til databasen, og måleren
+ * skal svare inden for sløjfen. Er kæden hel, men råsignalet uden for
+ * 3,6–21 mA, leverer signalet ikke, og årsagen er sensorfejl.
+ *
+ * `reading` er valgfri, fordi serveren ikke kan se måleren: uden den er
+ * dommen truffet på kæden alene, og `basis` siger det.
+ */
+export function signalDelivery(
+  sensor: OtSensor | undefined,
+  ot: OtLayout | null,
+  reading?: { raw: number } | null,
+): SignalDelivery {
+  const basis: DeliveryBasis = reading ? "kæde+aflæsning" : "kæde";
+  if (!sensor || !ot) return { delivers: false, reason: "signalet findes ikke", basis };
+  if (!isDone(sensor.status)) {
+    return { delivers: false, reason: sensor.status === "idea" ? "kun en idé" : "ikke monteret", basis };
+  }
+  const cabinet = ot.cabinets.find((c) => c.id === sensor.cabinetId);
+  if (!cabinet) return { delivers: false, reason: "intet IO-skab", breaksAt: "IO-skab", basis };
+
+  // Dashboardet er for mennesker. En agent læser fra databasen.
+  const chain = pathState(ot.infrastructure, cabinet, sensor).filter((st) => st.id !== "dashboard");
+  const broken = chain.find((st) => !isDone(st.status));
+  if (broken) {
+    return { delivers: false, reason: `kæden knækker ved ${broken.label}`, breaksAt: broken.label, basis };
+  }
+  if (reading && isFaultMa(reading.raw)) return { delivers: false, reason: "sensorfejl", basis };
+  return { delivers: true, reason: null, basis };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { AGENTS } from "../../data/agents";
 import { LINE_OPS } from "../../data/line-config";
 import type { Layout, PlacedMachine } from "./layout";
-import { isDone, pathState, sensorType, OT_PATH_STEPS, type OtLayout } from "./ot";
+import { isDone, pathState, sensorType, signalDelivery, OT_PATH_STEPS, type OtLayout } from "./ot";
 import type {
   Agent, AgentInput, AgentRole, LineOps, MachineOps, OtSensor, StopReason,
 } from "./types";
@@ -134,20 +134,18 @@ export function describeScope(agent: Agent): string {
 /**
  * Hvor langt et signal er fra at kunne læses af en agent.
  *
- * "Monteret" er en delstatus, ikke et levende input: en agent læser fra
- * databasen, så signalet leverer først, når kæden står hele vejen dertil.
- * Dashboardet er ikke med i kravet — det er der for mennesker, ikke agenter.
+ * "Monteret" er en delstatus, ikke et levende input. Dommen træffes af
+ * signalDelivery() i ot.ts — den samme, /api/context og Live-visningen
+ * bruger. Her oversættes den bare til de fire trin, panelet skriver ud.
  */
 type SignalReach = "absent" | "unmounted" | "mounted" | "delivers";
 
 function reachOf(s: OtSensor | undefined, ot: OtLayout | null): { reach: SignalReach; breaksAt?: string } {
+  const d = signalDelivery(s, ot);
+  if (d.delivers) return { reach: "delivers" };
   if (!s || !ot) return { reach: "absent" };
   if (!isDone(s.status)) return { reach: "unmounted" };
-  const cabinet = ot.cabinets.find((c) => c.id === s.cabinetId);
-  if (!cabinet) return { reach: "mounted", breaksAt: "IO-skab" };
-  const chain = pathState(ot.infrastructure, cabinet, s).filter((st) => st.id !== "dashboard");
-  const broken = chain.find((st) => !isDone(st.status));
-  return broken ? { reach: "mounted", breaksAt: broken.label } : { reach: "delivers" };
+  return { reach: "mounted", breaksAt: d.breaksAt };
 }
 
 function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | null): AgentInputState {
@@ -158,7 +156,7 @@ function resolveInput(input: AgentInput, scope: PlacedMachine[], ot: OtLayout | 
     const detail =
       reach === "absent" ? `${input.signalId} findes ikke i anlægget`
         : reach === "unmounted" ? `${input.signalId} er kun ${s!.status === "idea" ? "en idé" : "planlagt"}`
-          : reach === "mounted" ? `${input.signalId} monteret, venter på kæden (knækker ved ${breaksAt})`
+          : reach === "mounted" ? `${input.signalId} monteret, venter på kæden${breaksAt ? ` (knækker ved ${breaksAt})` : ""}`
             : `${input.signalId} leverer`;
     return { input, label: input.signalId, have: reach === "delivers" ? 1 : 0, total: 1, detail };
   }

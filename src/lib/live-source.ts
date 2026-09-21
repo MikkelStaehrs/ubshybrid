@@ -12,8 +12,11 @@ export interface SignalValue {
   signalId: string;
   /** Råsignalet i mA, som det står på kanalen. */
   raw: number;
-  /** Skaleret måleværdi. */
-  value: number;
+  /**
+   * Skaleret måleværdi — null når råsignalet er uden for sløjfen. En sensor
+   * i fejl har ingen måling, og et tal her ville være opdigtet.
+   */
+  value: number | null;
   unit: string;
   quality: Quality;
   /** ISO-tid for målingen. */
@@ -29,9 +32,35 @@ export type LiveSourceKind = "mock" | "api";
 /** En værdi tæller som gammel, når den er ældre end det her. */
 export const STALE_AFTER_MS = 10_000;
 
-/** Uden for 3,6–21 mA er sløjfen i stykker, ikke bare i ro. */
+/**
+ * Strømsløjfens fire grænser. De ligger her og kun her — både Live-visningen,
+ * agentstatussen og /api/context regner efter dem.
+ *
+ *   < 3,6 mA          sløjfen er brudt. Ingen måling.
+ *   3,6 – 4,0 mA      under nulpunktet, men inden for tolerancen. Klemmes til 0.
+ *   4,0 – 20,0 mA     måleområdet.
+ *   20,0 – 21,0 mA    over fuldt udslag, inden for tolerancen. Klemmes til maks.
+ *   > 21,0 mA         kortslutning eller forkert kobling. Ingen måling.
+ */
 export const FAULT_LOW_MA = 3.6;
+export const NOMINAL_LOW_MA = 4;
+export const NOMINAL_HIGH_MA = 20;
 export const FAULT_HIGH_MA = 21;
+
+/** Uden for sløjfen er der ikke en dårlig måling — der er ingen måling. */
+export function isFaultMa(ma: number): boolean {
+  return !Number.isFinite(ma) || ma < FAULT_LOW_MA || ma > FAULT_HIGH_MA;
+}
+
+/** "Sensorfejl (3,29 mA, under 4 mA)". null når signalet er i orden. */
+export function describeFault(ma: number): string | null {
+  if (!isFaultMa(ma)) return null;
+  if (!Number.isFinite(ma)) return "Sensorfejl (intet råsignal)";
+  const n = ma.toFixed(2).replace(".", ",");
+  return ma < FAULT_LOW_MA
+    ? `Sensorfejl (${n} mA, under ${NOMINAL_LOW_MA} mA)`
+    : `Sensorfejl (${n} mA, over ${NOMINAL_HIGH_MA} mA)`;
+}
 
 /**
  * Skalering pr. signal. Hører egentlig hjemme på sensoren i data/ot-layer.ts,
@@ -44,15 +73,36 @@ const SCALE: Record<string, { unit: string; min: number; max: number }> = {
 
 const DEFAULT_SCALE = { unit: "%", min: 0, max: 100 };
 
-/** 4–20 mA til måleenhed. Uden for området fortsætter linjen bare. */
-export function scaleFromMa(signalId: string, ma: number) {
+export interface Scaled {
+  /** null ved sensorfejl. Der er ingen måling at vise. */
+  value: number | null;
+  unit: string;
+  /** true når værdien er klemt til en ende af skalaen. */
+  clamped: boolean;
+}
+
+/**
+ * Råsignal til måleenhed.
+ *
+ * Skalaen ekstrapoleres aldrig: tolerancebåndene i hver ende klemmes til
+ * skalaens ender, og uden for sløjfen er der ingen værdi. Ellers ville
+ * 3,7 mA give en negativ materialestrøm, og det findes ikke.
+ */
+export function scaleFromMa(signalId: string, ma: number): Scaled {
   const s = SCALE[signalId] ?? DEFAULT_SCALE;
-  const value = s.min + ((ma - 4) / 16) * (s.max - s.min);
-  return { value, unit: s.unit };
+  if (isFaultMa(ma)) return { value: null, unit: s.unit, clamped: false };
+  if (ma <= NOMINAL_LOW_MA) return { value: s.min, unit: s.unit, clamped: ma < NOMINAL_LOW_MA };
+  if (ma >= NOMINAL_HIGH_MA) return { value: s.max, unit: s.unit, clamped: ma > NOMINAL_HIGH_MA };
+  const span = NOMINAL_HIGH_MA - NOMINAL_LOW_MA;
+  return {
+    value: s.min + ((ma - NOMINAL_LOW_MA) / span) * (s.max - s.min),
+    unit: s.unit,
+    clamped: false,
+  };
 }
 
 export function qualityOf(ma: number, timestamp: string, now = Date.now()): Quality {
-  if (!Number.isFinite(ma) || ma < FAULT_LOW_MA || ma > FAULT_HIGH_MA) return "fault";
+  if (isFaultMa(ma)) return "fault";
   return now - new Date(timestamp).getTime() > STALE_AFTER_MS ? "stale" : "good";
 }
 
@@ -110,7 +160,7 @@ class MockSource implements LiveSource {
     return this.signalIds.map((signalId) => {
       // Kun piloten er simuleret. Resten har ingen kilde — det er sandheden.
       if (signalId !== "FT-756") {
-        return { signalId, raw: NaN, value: NaN, unit: "", quality: "no-source", timestamp };
+        return { signalId, raw: NaN, value: null, unit: "", quality: "no-source", timestamp };
       }
       const raw = this.ma(now);
       const { value, unit } = scaleFromMa(signalId, raw);
@@ -139,7 +189,7 @@ class ApiSource implements LiveSource {
     const timestamp = new Date().toISOString();
     const blank = (): SignalValue[] =>
       this.signalIds.map((signalId) => ({
-        signalId, raw: NaN, value: NaN, unit: "", quality: "no-source", timestamp,
+        signalId, raw: NaN, value: null, unit: "", quality: "no-source", timestamp,
       }));
 
     try {
@@ -151,9 +201,11 @@ class ApiSource implements LiveSource {
       const byId = new Map(body.signals.map((s) => [s.signalId, s]));
       return this.signalIds.map((signalId) => {
         const s = byId.get(signalId);
-        if (!s) return { signalId, raw: NaN, value: NaN, unit: "", quality: "no-source", timestamp };
-        // Kvaliteten regnes her, så den altid følger den samme regel.
-        return { ...s, quality: qualityOf(s.raw, s.timestamp) };
+        if (!s) return { signalId, raw: NaN, value: null, unit: "", quality: "no-source", timestamp };
+        // Råsignalet er kilden. Skalering og kvalitet regnes her, så de altid
+        // følger den samme regel — også hvis databasen har gemt noget andet.
+        const { value, unit } = scaleFromMa(signalId, s.raw);
+        return { ...s, value, unit: s.unit || unit, quality: qualityOf(s.raw, s.timestamp) };
       });
     } catch {
       return blank();

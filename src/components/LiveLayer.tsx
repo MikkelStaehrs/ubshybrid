@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import type { Mesh } from "three";
 import type { PlacedSensor } from "../lib/ot";
-import type { Quality, SignalValue } from "../lib/live-source";
+import { describeFault, type Quality, type SignalValue } from "../lib/live-source";
 import type { SceneTheme } from "../lib/useSceneTheme";
 
 interface Props {
@@ -24,9 +24,12 @@ const QUALITY_TOKEN: Record<Quality, ColorToken> = {
   "no-source": "live-none",
 };
 
-/** Værdien som den skrives i badgen. To decimaler er mere, end måleren kan. */
+/**
+ * Værdien som den skrives i badgen. En sensor i fejl har ingen måling, så
+ * der står en streg — aldrig et tal, og aldrig et negativt et.
+ */
 function show(v: SignalValue): string {
-  if (v.quality === "no-source" || !Number.isFinite(v.value)) return "—";
+  if (v.value === null || !Number.isFinite(v.value)) return "—";
   const n = Math.abs(v.value) >= 100 ? v.value.toFixed(0) : v.value.toFixed(1);
   return `${n.replace(".", ",")} ${v.unit}`;
 }
@@ -42,6 +45,7 @@ function LiveMarker({ s, v, theme, on, onSelect }: {
   const quality: Quality = v?.quality ?? "no-source";
   const color = theme[QUALITY_TOKEN[quality]];
   const live = quality === "good";
+  const fault = v && quality === "fault" ? describeFault(v.raw) : null;
 
   useFrame(({ clock }) => {
     if (!head.current) return;
@@ -74,11 +78,12 @@ function LiveMarker({ s, v, theme, on, onSelect }: {
         <button
           type="button"
           className={`fm-live-badge q-${quality}${on ? " is-selected" : ""}`}
+          title={fault ?? undefined}
           onClick={(e) => { e.stopPropagation(); onSelect(); }}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <span className="fm-live-value">{v ? show(v) : "—"}</span>
-          <span className="fm-live-tag">{s.id}</span>
+          <span className="fm-live-tag">{fault ? "Sensorfejl" : s.id}</span>
         </button>
       </Html>
     </group>

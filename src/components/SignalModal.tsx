@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { QUALITY_LABEL, type Quality, type SignalValue } from "../lib/live-source";
+import { describeFault, QUALITY_LABEL, type Quality, type SignalValue } from "../lib/live-source";
 import type { PlacedSensor } from "../lib/ot";
 import { summarise, type Sample } from "../lib/useLiveSignals";
 import { Field, Modal } from "./Modal";
@@ -22,7 +22,9 @@ function Sparkline({ samples }: { samples: Sample[] }) {
   const H = 96;
 
   const path = useMemo(() => {
-    const ok = samples.filter((s) => Number.isFinite(s.value));
+    const ok = samples.filter(
+      (s): s is Sample & { value: number } => s.value !== null && Number.isFinite(s.value),
+    );
     if (ok.length < 2) return null;
     const t0 = ok[0].t;
     const span = Math.max(1, ok[ok.length - 1].t - t0);
@@ -79,6 +81,7 @@ export function SignalModal({ sensor, value, samples, channel, onClose }: {
 }) {
   const stats = summarise(samples);
   const quality: Quality = value?.quality ?? "no-source";
+  const fault = value && quality === "fault" ? describeFault(value.raw) : null;
   const faults = samples.filter((s) => s.quality === "fault").length;
 
   return (
@@ -102,13 +105,14 @@ export function SignalModal({ sensor, value, samples, channel, onClose }: {
       <section className="fm-modal-body">
         <div className="fm-live-now">
           <span className="fm-live-now-value fm-mono">
-            {value && Number.isFinite(value.value) ? num(value.value) : "—"}
+            {value && value.value !== null ? num(value.value) : "—"}
           </span>
-          <span className="fm-live-now-unit">{value?.unit || ""}</span>
+          <span className="fm-live-now-unit">{value && value.value !== null ? value.unit : ""}</span>
           <span className="fm-live-now-raw fm-mono">
             {value && Number.isFinite(value.raw) ? `${num(value.raw, 2)} mA` : "intet råsignal"}
           </span>
         </div>
+        {fault && <p className="fm-warn"><span>{fault} — der er ingen måling at vise.</span></p>}
       </section>
 
       <section className="fm-modal-body">

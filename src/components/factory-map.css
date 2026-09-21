@@ -1372,3 +1372,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   font-size: 12px;
 }
 .fm-report { white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
+
+.fm-sig-fault, .fm-sig-why { grid-column: 1 / -1; font-size: 11px; line-height: 1.4; }
+.fm-sig-fault { color: var(--live-fault); }
+.fm-sig-why { color: var(--muted); }
