@@ -1272,3 +1272,5 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   .fm-live-panel { top: auto; left: var(--gutter); width: auto; max-height: 52%; }
   .fm-mock-banner { display: none; }
 }
+
+.fm-ops-note { margin-top: 8px !important; font-size: 11px; color: var(--muted); line-height: 1.45; }

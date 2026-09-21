@@ -1,6 +1,7 @@
 "use client";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { lineOpsFor, opsForMachine } from "../lib/agents";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
 import type { LineOption } from "../lib/lines";
 import {
@@ -260,6 +261,7 @@ export function FactoryMap({
 
   // OT-installationen findes kun for de linjer, der har fået den projekteret.
   const otData = useMemo(() => otLayerFor(data.line.id), [data.line.id]);
+  const lineOps = useMemo(() => lineOpsFor(data.line.id), [data.line.id]);
   const ot = useMemo(
     () => (otData ? layoutOt(otData, layout, data.line.id) : null),
     [otData, layout, data.line.id],
@@ -336,6 +338,8 @@ export function FactoryMap({
   /** Forudsætninger der ikke findes i dag — det er dem, kortet skal råbe op om. */
   const missingInfra = ot?.infrastructure.filter((n) => !isDone(n.status)).length ?? 0;
   const liveSensor = liveSel ? ot?.sensors.find((x) => x.id === liveSel) : undefined;
+  // Linjens driftsparametre med maskinens egne afvigelser lagt ovenpå.
+  const ops = selected ? opsForMachine(lineOps, selected.wIds) : null;
   const otSensor = otSel?.kind === "sensor" ? ot?.sensors.find((s) => s.id === otSel.id) : undefined;
   // Porten i kortet åbner samme modal, men på forudsætningerne — det er dem,
   // den stiplede streg handler om.
@@ -627,6 +631,31 @@ export function FactoryMap({
             <h3>Stamdata</h3>
             <dl>{DETAIL_ROWS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>
           </section>
+
+          {ops && (
+            <section>
+              <h3>Drift</h3>
+              <dl>
+                <Field
+                  label="Normtakt"
+                  value={ops.normtakt !== undefined ? `${ops.normtakt} ${ops.rateUnit}` : undefined}
+                />
+                <Field
+                  label="Stop efter"
+                  value={`${ops.stopAfterSeconds} s${ops.overrides.has("stopAfterSeconds") ? " · afviger fra linjen" : ""}`}
+                />
+                <Field
+                  label="Stopårsager"
+                  value={`${ops.stopReasons.length} koder${ops.overrides.has("stopReasons") ? " · egen liste" : " · linjens liste"}`}
+                />
+                <Field label="Driftsnote" value={ops.note} />
+              </dl>
+              <p className="fm-ops-note">
+                Kapacitet ovenfor er maskinens maksimum fra tegningen. Normtakt er den takt, den
+                forventes at køre med i drift — to forskellige tal.
+              </p>
+            </section>
+          )}
 
           <section>
             <h3>OT & el</h3>

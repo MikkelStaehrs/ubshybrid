@@ -236,8 +236,13 @@ export interface OtCabinet {
 export interface OtSensor {
   /** Tag efter ISA-skik, fx "FT-756" — flowtransmitter på elevator 756. */
   id: string;
-  /** Hvad den måler. */
+  /** Hvad den måler, i klar tekst. */
   type: string;
+  /**
+   * Nøgle ind i sensorkataloget, fx "flow". Uden den kan en agent ikke vide,
+   * om den slags signal, den har brug for, allerede sidder på maskinen.
+   */
+  catalogType?: string;
   model: string;
   signal: OtSignal;
   /** W-ID på maskinen. Sensoren sidder ved elevatorens afkast. */
@@ -339,4 +344,95 @@ export interface OtInfraNode {
   /** De led i datavejen, der ikke virker uden den. */
   requiredFor: OtPathStep[];
   note?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Driftsparametre
+//
+// Normtakt, stopdefinition og stopårsager er aftaler om driften, ikke noget
+// der står på tegningen. De ligger derfor i data/line-config.ts og overlever
+// en `npm run parse`, som vedligehold og OT-laget gør.
+//
+// Alt defineres på linjen. En maskine arver linjens værdier og kan afvige —
+// så slipper man for at udfylde seksogtyve maskiner for at få en default.
+// ---------------------------------------------------------------------------
+
+export interface StopReason {
+  /** Kort kode, fx "TILSTOP". Den er nøglen, labelen kan skrives om. */
+  code: string;
+  label: string;
+}
+
+export interface MachineOps {
+  /**
+   * Forventet takt i drift, i linjens `rateUnit`. Maskinens maksimum står
+   * som `kapacitet` i stamdata og kommer fra tegningen — de to er ikke
+   * det samme tal, og må ikke lægges oven i hinanden.
+   */
+  normtakt?: number;
+  /** Afviger maskinen fra linjens stopdefinition. */
+  stopAfterSeconds?: number;
+  /** Afviger maskinen fra linjens kodeliste. */
+  stopReasons?: StopReason[];
+  /** Driftsnote. Adskilt fra `noter` i stamdata, der kommer fra tegningen. */
+  note?: string;
+}
+
+export interface LineOps {
+  /** Enheden takt måles i på denne linje, fx "t/t". */
+  rateUnit: string;
+  /** Hvor længe en maskine skal stå stille, før det tæller som et stop. */
+  stopAfterSeconds: number;
+  /** Linjens fælles kodeliste. */
+  stopReasons: StopReason[];
+  /** Kun de maskiner, der faktisk afviger. Resten arver. */
+  machines?: Record<string, MachineOps>;
+}
+
+// ---------------------------------------------------------------------------
+// Agenter
+//
+// Claude-scripts, der læser data og skriver tekst. De kører ikke endnu —
+// `enabled` er false på dem alle. Status hardcodes ikke: den udledes af, om
+// de signaler agenten har brug for, rent faktisk findes.
+// ---------------------------------------------------------------------------
+
+export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt";
+
+/**
+ * Hvad agenten kigger på. Vagtagenten ser på signalkæden frem for maskiner —
+ * dens arbejde er at opdage, at data holder op med at komme.
+ */
+export type AgentScope =
+  | { kind: "line" }
+  | { kind: "lane"; lane: string }
+  | { kind: "machines"; wIds: string[] }
+  | { kind: "chain" };
+
+/**
+ * Ét input agenten har brug for. Enten et konkret signal, der findes i dag,
+ * en type fra sensorkataloget der skal sættes op, eller et led i kæden.
+ * `need` er den sætning, kortet skriver, når det mangler.
+ */
+export interface AgentInput {
+  signalId?: string;
+  /** Nøgle i sensorkataloget, fx "motor-run". */
+  type?: string;
+  /** Led i datavejen — kun for vagtagenten. */
+  chainStep?: OtPathStep;
+  need: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  role: AgentRole;
+  /** Én sætning om hvad den leverer. */
+  job: string;
+  scope: AgentScope;
+  inputs: AgentInput[];
+  /** Fx "Dagligt 06:00". */
+  cadence: string;
+  /** Slået til på serveren. Falsk på alle, indtil noget faktisk kører. */
+  enabled: boolean;
 }

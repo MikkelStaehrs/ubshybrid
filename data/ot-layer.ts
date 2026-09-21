@@ -20,6 +20,7 @@ const sliberiSensors: OtSensor[] = [
   {
     id: "FT-756",
     type: "Materialestrøm",
+    catalogType: "flow",
     model: "Mütec FS 550",
     signal: "4-20 mA",
     machineId: "756",
