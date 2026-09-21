@@ -8,6 +8,7 @@
 import { agentStates, decidedAgents, describeScope, type AgentState } from "./agents";
 import { costOf, totalPerMaaned } from "./agent-cost";
 import { firstRunBlocker, pathToProduction } from "./agent-runs";
+import { machineState } from "./hologram";
 import { layoutLine } from "./layout";
 import { LINES } from "./lines";
 import {
@@ -104,6 +105,8 @@ export interface HudAgent {
 export interface HudModel {
   lineId: string;
   lineName: string;
+  /** Maskinerne fordelt på de tre tilstande. Det store udlæste tal. */
+  tally: { drift: number; test: number; afventer: number; total: number };
   links: HudLink[];
   /** Hvor mange led der leverer, ud af hvor mange. */
   reach: { delivers: number; total: number };
@@ -204,9 +207,21 @@ export function hudModel(lineId: string): HudModel | null {
     };
   });
 
+  // Samme udregning som hologrammet bruger til punkttætheden.
+  const tally = { drift: 0, test: 0, afventer: 0, total: 0 };
+  for (const m of layout.machines) {
+    if (m.kind === "person") continue;
+    tally.total++;
+    const st = machineState(m, ot);
+    if (st === "paa-plads") tally.drift++;
+    else if (st === "test") tally.test++;
+    else tally.afventer++;
+  }
+
   return {
     lineId,
     lineName: data.line.name,
+    tally,
     links,
     reach: { delivers: links.filter((l) => l.delivers).length, total: links.length },
     broken: links.find((l) => l.broken) ?? null,

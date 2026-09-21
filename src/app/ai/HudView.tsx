@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { HudModel } from "../../lib/ai-hud";
 import { SITE } from "../../lib/context";
+import type { OtLayout } from "../../lib/ot";
+import type { LineData } from "../../lib/types";
 import { ChainCircuit } from "./ChainCircuit";
+import { Hologram } from "./Hologram";
 import "./hud.css";
 
 /**
@@ -13,11 +16,35 @@ import "./hud.css";
  * pathState(), signalDelivery() og agentstatus. Der er ingen tilstand her
  * inde og intet, der bevæger sig uden at svare til noget virkeligt.
  */
-export function HudView({ model, measure }: { model: HudModel; measure?: boolean }) {
+export function HudView({ model, line, ot, measure }: {
+  model: HudModel;
+  line: LineData;
+  ot: OtLayout | null;
+  measure?: boolean;
+}) {
   useFrameProbe(measure);
+  const still = useReducedMotion();
 
   return (
     <main className="ai-hud">
+      <Hologram data={line} ot={ot} still={still} />
+
+      <div className="holo-readout">
+        <span className="ro-group">
+          <span className="ro-label">I drift</span>
+          <span className="ro-value">{model.tally.drift}</span>
+          <span className="ro-of">/ {model.tally.total}</span>
+        </span>
+        <span className="ro-group is-test">
+          <span className="ro-label">Test</span>
+          <span className="ro-value">{model.tally.test}</span>
+        </span>
+        <span className="ro-group">
+          <span className="ro-label">Afventer</span>
+          <span className="ro-value">{model.tally.afventer}</span>
+        </span>
+      </div>
+
       <header className="hud-top">
         <div>
           <div className="hud-eyebrow">{SITE} · {model.lineName}</div>
@@ -35,6 +62,19 @@ export function HudView({ model, measure }: { model: HudModel; measure?: boolean
       </section>
     </main>
   );
+}
+
+/** Beder brugeren om ro, står hologrammet stille — bane og strøm slukkes. */
+function useReducedMotion(): boolean {
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    const mq = matchMedia("(prefers-reduced-motion: reduce)");
+    const set = () => setStill(mq.matches);
+    set();
+    mq.addEventListener("change", set);
+    return () => mq.removeEventListener("change", set);
+  }, []);
+  return still;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { KIND_SIZE } from "./machine-form";
 import type { LineData, Machine, MachineKind } from "./types";
 
 // Draw.io-pixels → meter. Flowdiagrammet er ikke målfast, så vi bruger to
@@ -5,15 +6,9 @@ import type { LineData, Machine, MachineKind } from "./types";
 export const SCALE_ALONG = 1 / 18;
 export const SCALE_ACROSS = 1 / 15;
 
-/** Fodaftryk (meter) og højde pr. maskintype. x = langs flowet, z = på tværs. */
-export const KIND_SIZE: Record<MachineKind, { x: number; z: number; h: number }> = {
-  intake: { x: 2.6, z: 2.6, h: 1.8 },
-  elevator: { x: 1.1, z: 1.1, h: 5.2 },
-  distributor: { x: 1.6, z: 1.6, h: 2.2 },
-  process: { x: 3.2, z: 2.6, h: 2.4 },
-  analysis: { x: 1.6, z: 0.9, h: 1.3 },
-  person: { x: 0.5, z: 0.36, h: 1.8 },
-};
+// Målene bor i machine-form.ts sammen med grundformerne, så kortet og
+// hologrammet ikke kan komme til at måle maskinerne forskelligt.
+export { KIND_SIZE } from "./machine-form";
 
 export const KIND_LABEL: Record<MachineKind, string> = {
   intake: "Indtag",
