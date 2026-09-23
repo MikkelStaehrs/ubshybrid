@@ -2,11 +2,12 @@
 import { ANALYSE, FLASKEHALS, KASTEBORD } from "../../../data/fremskrivning";
 import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
-import { ledNavn, type HudAgent, type HudLink, type HudModel, type LinkTone } from "../../lib/ai-hud";
+import { ledNavn, type HudAgent, type HudLink, type HudModel, type HudOrdre, type LinkTone } from "../../lib/ai-hud";
 import {
   flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
-import type { MaskinLaesning, TelemetriBillede } from "../../lib/telemetri";
+import type { KanalSpec } from "../../../data/fremskrivning";
+import { graense, type MaskinLaesning, type TelemetriBillede } from "../../lib/telemetri";
 import { Afkod, Bjaelke, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
 import { TAKT_MS, type Historik } from "./useTelemetri";
 
@@ -49,6 +50,34 @@ export const Sim = () => <span className="hp-sim" title="Simuleret — ikke mål
 const Afventer = ({ tekst = "Afventer signal" }: { tekst?: string }) => (
   <p className="hp-afventer"><span className="hp-afventer-mark" aria-hidden />{tekst}</p>
 );
+
+// ---------------------------------------------------------------------------
+// Ordren
+
+/**
+ * Hvad linjen kører. Der er ingen forbindelse til ordresystemet endnu, så i
+ * den rigtige visning står felterne tomme — og i demoen er de opdigtede og
+ * mærket.
+ */
+export function OrdrePanel({ ordre, nr, still }: { ordre: HudOrdre; nr: number; still?: boolean }) {
+  const felter = [
+    { label: "Ordre nr.", value: ordre.ordreNr },
+    { label: "Genetik", value: ordre.genetik },
+    { label: "Varietet", value: ordre.varietet },
+  ];
+  return (
+    <Panel label="Ordre" nr={nr} still={still} right={ordre.opdigtet ? <Sim /> : undefined}>
+      <dl className="hp-ordre">
+        {felter.map((f) => (
+          <div key={f.label}>
+            <dt>{f.label}</dt>
+            <dd className={f.value ? undefined : "is-tom"}>{f.value ?? "Ikke udfyldt"}</dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Scenens overskrift
@@ -321,7 +350,7 @@ export function KlimaPanel({ billede, historik, nr, still }: {
         <div className="hp-klima">
           {billede.hal.map((k) => (
             <div key={k.spec.id} className={`hp-klima-rk${k.alarm ? " is-alarm" : ""}`}>
-              <span className="hp-klima-lbl">{k.spec.label}</span>
+              <span className="hp-klima-lbl">{k.spec.label}<Graense k={k.spec} /></span>
               <span className="hp-klima-tal"><Tal v={k.value} d={k.spec.decimaler} /><i>{k.spec.unit}</i></span>
               <Kurve serie={historik.get(`hal:${k.spec.id}`) ?? []} tone={k.alarm ? "brud" : "drift"} hoejde={22} graense={k.spec.alarmHoej !== undefined ? [k.spec.alarmHoej] : undefined} />
             </div>
@@ -364,7 +393,7 @@ export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBilled
                 <span className="hp-kb-navn">{a.kort}</span>
                 {ANALYSE.klasser.map((k, i) => (
                   <span key={k} className={`hp-fv-tal d-${i}`}>
-                    {a.andele ? <Tal v={a.andele[i]} d={1} /> : "–"}
+                    {a.andele ? <><Tal v={a.andele[i]} d={1} /><i>%</i></> : "–"}
                   </span>
                 ))}
                 <span className="hp-fv-baand">
@@ -402,7 +431,7 @@ export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBille
                 if (!k) return <span key={id} />;
                 return (
                   <span key={id} className={`hp-kb-celle${k.alarm ? " is-alarm" : ""}`}>
-                    <Tal v={k.value} d={1} className="hp-kb-tal" />
+                    <span className="hp-kb-tal"><Tal v={k.value} d={1} />{k.value !== null && <i>{k.spec.unit}</i>}</span>
                     <Bjaelke v={k.value} max={id === "nots" ? 12 : 100} graense={k.spec.alarmHoej} alarm={k.alarm} />
                   </span>
                 );
@@ -413,6 +442,12 @@ export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBille
       )}
     </Panel>
   );
+}
+
+/** Grænsen ved en kanals navn. Har den ingen, står der ingenting. */
+function Graense({ k }: { k: KanalSpec }) {
+  const g = graense(k);
+  return g ? <b className="hp-graense">{g}</b> : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,7 +470,7 @@ export function FokusPanel({ m, historik, sim }: { m: MaskinLaesning | null; his
         <div className="hf-kanaler">
           {m.kanaler.map((k) => (
             <div key={k.spec.id} className={`hf-kanal${k.alarm ? " is-alarm" : ""}`}>
-              <span className="hf-lbl">{k.spec.label}</span>
+              <span className="hf-lbl">{k.spec.label}<Graense k={k.spec} /></span>
               <span className="hf-tal"><Tal v={k.value} d={k.spec.decimaler} /><i>{k.spec.unit}</i></span>
               <Kurve
                 serie={historik.get(`m:${m.id}:${k.spec.id}`) ?? []}

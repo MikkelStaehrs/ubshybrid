@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import sliberi from "../../data/lines/sliberi.json";
 import { layoutLine } from "./layout";
 import { FAULT_LOW_MA } from "./live-source";
-import { kanalerFor, maskinFart, simulator, tomtBillede, INDKOERING_S, SIM, type TelemetriBillede } from "./telemetri";
+import { graense, kanalerFor, maskinFart, simulator, tomtBillede, INDKOERING_S, SIM, type TelemetriBillede } from "./telemetri";
 import type { LineData } from "./types";
 
 const layout = layoutLine(sliberi as LineData);
@@ -205,6 +205,41 @@ describe("analysen og kastebordene", () => {
   });
 });
 
+describe("grænserne", () => {
+  it("hver kanal på en maskine har en grænse — eller en grund til ikke at have en", () => {
+    // Min/max for alle sensorer: en kanal uden nogen af delene er ikke
+    // færdigtænkt, og så ville et tal kunne løbe af sporet uden at melde.
+    for (const m of layout.machines) {
+      for (const k of kanalerFor(m)) {
+        const har = k.alarmLav !== undefined || k.alarmHoej !== undefined;
+        assert.ok(har || k.ingenGraense, `${m.name}: ${k.label} har hverken grænse eller grund`);
+        if (k.alarmLav !== undefined && k.alarmHoej !== undefined) {
+          assert.ok(k.alarmLav < k.nominal && k.nominal < k.alarmHoej, `${m.name}: ${k.label} står uden for sit eget bånd`);
+        }
+      }
+    }
+  });
+
+  it("andet kastebord har sine egne, strammere grænser", () => {
+    const kb = (navn: string) => kanalerFor(layout.machines.find((m) => m.name === navn)!);
+    for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
+      for (const id of ["bigf", "bigh", "nots"]) {
+        const a = kb(foerste).find((k) => k.id === id)!.alarmHoej!;
+        const b = kb(andet).find((k) => k.id === id)!.alarmHoej!;
+        assert.ok(b < a, `${andet} ${id}: ${b} er ikke strammere end ${a}`);
+      }
+    }
+  });
+
+  it("læses som et bånd, et loft eller en bund", () => {
+    assert.equal(graense({ alarmLav: 2.0, alarmHoej: 2.8, decimaler: 2 }), "2,0–2,8");
+    assert.equal(graense({ alarmHoej: 70, decimaler: 1 }), "max 70");
+    assert.equal(graense({ alarmLav: 10, decimaler: 0 }), "min 10");
+    assert.equal(graense({ alarmLav: 1300, alarmHoej: 1600, decimaler: 0 }), "1.300–1.600");
+    assert.equal(graense({ decimaler: 1 }), null);
+  });
+});
+
 describe("kæden tæller hvert signal", () => {
   it("kanalerne, hallen, flowet og ét driftssignal pr. maskine", () => {
     const b = forloeb[forloeb.length - 1];
@@ -274,7 +309,7 @@ describe("alarmerne er værd at lytte til", () => {
 
   it("en maskine på vej op i fart melder ikke 'for langsom'", () => {
     const slut = forloeb[forloeb.length - 1];
-    const lav = slut.haendelser.filter((h) => h.niveau === "alarm" && /Omdrejninger|Hastighed/.test(h.tekst));
+    const lav = slut.haendelser.filter((h) => h.niveau === "alarm" && /Omdrejninger|Hastighed|Strøm|Dæk|Luft/.test(h.tekst));
     for (const h of lav) {
       // Hver lav-alarm skal ligge mindst en indkøringstid efter en genstart
       // af samme maskine — ellers er det indkøringen, der alarmerer.
@@ -376,8 +411,10 @@ describe("en flaskehals, der ikke går over", () => {
   });
 
   it("melder, når data begynder at gå tabt", () => {
-    const slut = tvunget[tvunget.length - 1];
-    assert.ok(slut.haendelser.some((h) => /Buffer fuld/.test(h.tekst) && h.niveau === "alarm"));
+    // Loggen husker de seneste hændelser, ikke alle. Spørgsmålet er, om det
+    // blev meldt — ikke om det stadig står der et kvarter senere.
+    const meldt = tvunget.some((b) => b.haendelser.some((h) => /Buffer fuld/.test(h.tekst) && h.niveau === "alarm"));
+    assert.ok(meldt);
   });
 
   it("loggen siger Server og DIN-skab — ikke edge og kobler", () => {

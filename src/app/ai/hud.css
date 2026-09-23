@@ -536,6 +536,33 @@
 .hp-fv-hoved span { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; color: var(--hud-muted); }
 .hp-fv-tal { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
 .hp-fv-rk.is-alarm .hp-fv-tal.d-3 { color: var(--hud-brud); }
+.hp-fv-tal i, .hp-kb-tal i { font-style: normal; font-size: 8px; color: var(--hud-muted); margin-left: 2px; }
+
+/* Ordren. Tre felter side om side — masterdata, ikke en måling. */
+.hp-ordre { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.hp-ordre dt { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--hud-muted); }
+.hp-ordre dd {
+  margin: 3px 0 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--hud-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Samme udtryk som W/HR's "Ikke udfyldt": et felt, nogen skal udfylde. */
+.hp-ordre dd.is-tom { font-family: var(--font-ui); font-size: 11px; color: var(--hud-test-lys); }
+
+/* Grænsen ved en kanals navn: båndet, den skal holde sig inden for. */
+.hp-graense {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--hud-dim);
+}
 .hp-fv-baand { grid-column: 2 / -1; display: flex; height: 4px; gap: 2px; }
 .hp-fv-rk.is-stop .hp-kb-navn { color: var(--hud-brud); }
 .hp-fv-rk.is-styret .hp-kb-navn { color: var(--hud-test-lys); }

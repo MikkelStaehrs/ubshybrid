@@ -5,7 +5,7 @@
 // bevæger sig på skærmen, skal kunne peges tilbage på en tilstand her — og
 // den kommer fra pathState(), signalDelivery() og agentstatus, ikke fra
 // noget, komponenten fandt på.
-import { FLOW_NOMINAL } from "../../data/fremskrivning";
+import { FLOW_NOMINAL, ORDRE } from "../../data/fremskrivning";
 import { agentState, agentsFor, decidedAgents, describeScope, lineOpsFor, type AgentState } from "./agents";
 import { nominalFor } from "./flow";
 import { costOf, totalPerMaaned, SMÅBELØB_UNDER } from "./agent-cost";
@@ -164,9 +164,31 @@ export interface HudFlow {
   rateUnit: string;
 }
 
+/**
+ * Hvad linjen kører: ordren, genetikken og varieteten.
+ *
+ * Masterdata, ikke en måling — men heller ikke noget, fladen må gætte på. Der
+ * er ingen forbindelse til ordresystemet endnu, så i den rigtige visning er
+ * felterne null, og fladen skriver "Ikke udfyldt". Kun fremskrivningen har
+ * værdier, og de er opdigtede.
+ */
+export interface HudOrdre {
+  ordreNr: string | null;
+  genetik: string | null;
+  varietet: string | null;
+  /** Værdierne er demoens, ikke ordresystemets. Fladen skal mærke dem. */
+  opdigtet: boolean;
+}
+
+function ordreFor(fremskrevet: boolean): HudOrdre {
+  if (fremskrevet) return { ...ORDRE, opdigtet: true };
+  return { ordreNr: null, genetik: null, varietet: null, opdigtet: false };
+}
+
 export interface HudModel {
   lineId: string;
   lineName: string;
+  ordre: HudOrdre;
   /** Maskinerne fordelt på de tre tilstande. Det store udlæste tal. */
   tally: { drift: number; test: number; afventer: number; total: number };
   /** Hver maskines HUD-tilstand, nøglet på maskinens id. Grundlaget for `tally`. */
@@ -505,6 +527,7 @@ export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudMod
   return {
     lineId,
     lineName: data.line.name,
+    ordre: ordreFor(fremskrevet),
     tally,
     maskinTilstand,
     flow: flowFor(lineId, ot, fremskrevet),

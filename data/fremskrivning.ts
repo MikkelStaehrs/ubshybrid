@@ -44,6 +44,13 @@ export interface KanalSpec {
   alarmHoej?: number;
   /** Under den her er det en alarm — kun mens maskinen kører. */
   alarmLav?: number;
+  /**
+   * Hvorfor kanalen ingen grænse har. Hver kanal på en maskine har en
+   * grænse eller en grund — en kanal uden nogen af delene er ikke
+   * færdigtænkt. Mangler kun den ene side, er det, fordi den anden ikke er
+   * en fejl: en kold motor er ikke et problem.
+   */
+  ingenGraense?: string;
   decimaler: number;
   /**
    * Hvor værdien falder hen, når maskinen står. Udeladt: den står stille,
@@ -88,42 +95,46 @@ export const KANALER: KanalGruppe[] = [
     kanaler: [
       // Tunge side af kastebordet: hvad ender der, som ikke burde. Tallene
       // er første bord i sporet; det andet står i AFVIGELSER.
-      { id: "bigf", label: "BIGF", unit: "%", maaler: "analyzer", nominal: 68, spredning: 2.2, min: 0, max: 100, decimaler: 1, traeghed: 0.08 },
-      { id: "bigh", label: "BIGH", unit: "%", maaler: "analyzer", nominal: 21, spredning: 1.6, min: 0, max: 100, decimaler: 1, traeghed: 0.08 },
+      { id: "bigf", label: "BIGF", unit: "%", maaler: "analyzer", nominal: 68, spredning: 2.2, min: 0, max: 100, alarmHoej: 76, decimaler: 1, traeghed: 0.08 },
+      { id: "bigh", label: "BIGH", unit: "%", maaler: "analyzer", nominal: 21, spredning: 1.6, min: 0, max: 100, alarmHoej: 27, decimaler: 1, traeghed: 0.08 },
       { id: "nots", label: "NOTS", unit: "%", maaler: "analyzer", nominal: 4.2, spredning: 0.9, min: 0, max: 100, alarmHoej: 8, decimaler: 1, traeghed: 0.06 },
-      // Et rystebord ryster med vilje. Grænsen er ikke vibrationens.
-      { ...vibration, id: "dæk", label: "Dæk", nominal: 5.8, spredning: 0.3, alarmHoej: 8.5 },
+      // Et rystebord ryster med vilje. Grænsen er ikke vibrationens — og
+      // ryster dækket for lidt, sorterer bordet ikke.
+      { ...vibration, id: "dæk", label: "Dæk", nominal: 5.8, spredning: 0.3, alarmHoej: 8.5, alarmLav: 4.5 },
     ],
   },
   {
     navn: /jet\s?pe[ae]ler/i,
     kanaler: [
-      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 1450, spredning: 12, min: 0, max: 1800, alarmLav: 1300, decimaler: 0, hvile: 0, traeghed: 0.35 },
+      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 1450, spredning: 12, min: 0, max: 1800, alarmLav: 1300, alarmHoej: 1600, decimaler: 0, hvile: 0, traeghed: 0.35 },
       // Slibningen varmer frøet. Bliver det for varmt, tager spireevnen skade.
       { id: "froetemp", label: "Frø", unit: "°C", maaler: "temperature", nominal: 31, spredning: 1.1, min: 10, max: 60, alarmHoej: 38, decimaler: 1, hvile: 22, traeghed: 0.03 },
       // Strømmen kommer fra frekvensomformeren, ikke fra en måler i skabet.
-      { id: "stroem", label: "Strøm", unit: "A", maaler: "drive", nominal: 18.5, spredning: 0.8, min: 0, max: 40, alarmHoej: 26, decimaler: 1, hvile: 0, traeghed: 0.3 },
+      // For lidt strøm, mens den kører, er en jetpealer, der ikke sliber:
+      // remmen er af, eller der kommer intet frø.
+      { id: "stroem", label: "Strøm", unit: "A", maaler: "drive", nominal: 18.5, spredning: 0.8, min: 0, max: 40, alarmLav: 12, alarmHoej: 26, decimaler: 1, hvile: 0, traeghed: 0.3 },
     ],
   },
   {
     navn: /tri[øo]r/i,
     kanaler: [
-      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 42, spredning: 0.6, min: 0, max: 60, alarmLav: 36, decimaler: 1, hvile: 0, traeghed: 0.3 },
+      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 42, spredning: 0.6, min: 0, max: 60, alarmLav: 36, alarmHoej: 48, decimaler: 1, hvile: 0, traeghed: 0.3 },
       motortemperatur,
     ],
   },
   {
     navn: /alfa/i,
     kanaler: [
-      { ...vibration, id: "dæk", label: "Dæk", nominal: 6.4, spredning: 0.4, alarmHoej: 9 },
-      // Blæserens ydelse, som omformeren melder den.
-      { id: "luft", label: "Luft", unit: "%", maaler: "drive", nominal: 72, spredning: 1.5, min: 0, max: 100, decimaler: 0, hvile: 0, traeghed: 0.25 },
+      { ...vibration, id: "dæk", label: "Dæk", nominal: 6.4, spredning: 0.4, alarmHoej: 9, alarmLav: 4.5 },
+      // Blæserens ydelse, som omformeren melder den. For lidt luft skiller
+      // ikke; for meget blæser godt frø med ud.
+      { id: "luft", label: "Luft", unit: "%", maaler: "drive", nominal: 72, spredning: 1.5, min: 0, max: 100, alarmLav: 60, alarmHoej: 85, decimaler: 0, hvile: 0, traeghed: 0.25 },
     ],
   },
   {
     navn: /carter/i,
     kanaler: [
-      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 38, spredning: 0.5, min: 0, max: 55, alarmLav: 32, decimaler: 1, hvile: 0, traeghed: 0.3 },
+      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 38, spredning: 0.5, min: 0, max: 55, alarmLav: 32, alarmHoej: 44, decimaler: 1, hvile: 0, traeghed: 0.3 },
       motortemperatur,
     ],
   },
@@ -134,7 +145,7 @@ export const KANALER: KanalGruppe[] = [
   {
     kind: "elevator",
     kanaler: [
-      { id: "hastighed", label: "Hastighed", unit: "m/s", maaler: "speed", nominal: 2.4, spredning: 0.03, min: 0, max: 3.5, alarmLav: 2.0, decimaler: 2, hvile: 0, traeghed: 0.5 },
+      { id: "hastighed", label: "Hastighed", unit: "m/s", maaler: "speed", nominal: 2.4, spredning: 0.03, min: 0, max: 3.5, alarmLav: 2.0, alarmHoej: 2.8, decimaler: 2, hvile: 0, traeghed: 0.5 },
       motortemperatur,
       vibration,
     ],
@@ -142,13 +153,17 @@ export const KANALER: KanalGruppe[] = [
   {
     kind: "distributor",
     kanaler: [
-      { id: "andelN", label: "Andel N", unit: "%", maaler: "position", nominal: 50, spredning: 1.2, min: 0, max: 100, decimaler: 1, traeghed: 0.1 },
+      {
+        id: "andelN", label: "Andel N", unit: "%", maaler: "position", nominal: 50, spredning: 1.2, min: 0, max: 100, decimaler: 1, traeghed: 0.1,
+        ingenGraense: "Følger sporene. Står et spor, skal den stå på 0 eller 100 — et fast bånd ville melde hver gang.",
+      },
     ],
   },
   {
     navn: /påslag/i,
     kanaler: [
-      { id: "niveau", label: "Niveau", unit: "%", maaler: "level-radar", nominal: 58, spredning: 9, min: 0, max: 100, alarmLav: 10, decimaler: 0, traeghed: 0.05 },
+      // Tomt løber elevatoren tør; fuldt løber påslaget over.
+      { id: "niveau", label: "Niveau", unit: "%", maaler: "level-radar", nominal: 58, spredning: 9, min: 0, max: 100, alarmLav: 10, alarmHoej: 92, decimaler: 0, traeghed: 0.05 },
     ],
   },
 ];
@@ -189,15 +204,32 @@ export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec
   // Andet kastebord i hvert spor. Der er markant mindre at fange, og NOTS er
   // næsten væk — ses den her, har første bord ikke gjort sit arbejde.
   "746": {
-    bigf: { nominal: 38, spredning: 1.6 },
-    bigh: { nominal: 8, spredning: 0.8 },
+    bigf: { nominal: 38, spredning: 1.6, alarmHoej: 45 },
+    bigh: { nominal: 8, spredning: 0.8, alarmHoej: 12 },
     nots: { nominal: 0.3, spredning: 0.12, alarmHoej: 1.5 },
   },
   "745": {
-    bigf: { nominal: 39, spredning: 1.6 },
-    bigh: { nominal: 8.5, spredning: 0.8 },
+    bigf: { nominal: 39, spredning: 1.6, alarmHoej: 45 },
+    bigh: { nominal: 8.5, spredning: 0.8, alarmHoej: 12 },
     nots: { nominal: 0.3, spredning: 0.12, alarmHoej: 1.5 },
   },
+};
+
+// ---------------------------------------------------------------------------
+// Ordren
+
+/**
+ * Hvad linjen kører lige nu, i demoen. I virkeligheden kommer det fra
+ * ordresystemet, og det findes der ingen forbindelse til endnu — så i den
+ * rigtige visning står felterne "Ikke udfyldt".
+ *
+ * Værdierne er opdigtede og hedder X…, som de opdigtede tags: et ordrenummer,
+ * der lignede et rigtigt, kunne blive slået op. Ret dem til driftens format.
+ */
+export const ORDRE = {
+  ordreNr: "X-24-0917",
+  genetik: "X-G12",
+  varietet: "X-V03",
 };
 
 // ---------------------------------------------------------------------------

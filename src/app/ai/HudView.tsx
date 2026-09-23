@@ -13,7 +13,7 @@ import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
 import {
   AgentCores, DriftPanel, FlowPanel, FokusPanel, Haendelser, KastebordPanel, KlimaPanel,
-  KvalitetPanel, Overskrift, Readout,
+  KvalitetPanel, OrdrePanel, Overskrift, Readout,
 } from "./HudPanels";
 import { Afkod } from "./Instrumenter";
 import { useTelemetri } from "./useTelemetri";
@@ -23,7 +23,7 @@ import "./hud.css";
  * Kontrolrummet.
  *
  * Hologrammet fylder hele skærmen og er scenen. Panelerne ligger i kanterne:
- * flow, drift og hallen til venstre; agenter, analyse og kasteborde til
+ * ordren, flow, drift og hallen til venstre; agenter, analyse og kasteborde til
  * højre; kæden og hændelserne i bunden. Midt i scenen står det vigtigste
  * lige nu, og nede i venstre hjørne den maskine, kameraet er på besøg hos.
  *
@@ -103,9 +103,10 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       </header>
 
       <div className="hud-left">
-        <FlowPanel model={model} billede={billede} historik={historik} sim={sim} nr={1} still={still} />
-        <DriftPanel billede={billede} historik={historik} nr={2} still={still} />
-        <KlimaPanel billede={billede} historik={historik} nr={3} still={still} />
+        <OrdrePanel ordre={model.ordre} nr={1} still={still} />
+        <FlowPanel model={model} billede={billede} historik={historik} sim={sim} nr={2} still={still} />
+        <DriftPanel billede={billede} historik={historik} nr={3} still={still} />
+        <KlimaPanel billede={billede} historik={historik} nr={4} still={still} />
       </div>
 
       <div className="hud-stage">
@@ -117,12 +118,12 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       </div>
 
       <div className="hud-right">
-        <AgentCores model={model} nr={4} still={still} ai={billede.ai} sim={billede.simuleret} />
-        <KvalitetPanel billede={billede} nr={5} still={still} />
-        <KastebordPanel billede={billede} nr={6} still={still} />
+        <AgentCores model={model} nr={5} still={still} ai={billede.ai} sim={billede.simuleret} />
+        <KvalitetPanel billede={billede} nr={6} still={still} />
+        <KastebordPanel billede={billede} nr={7} still={still} />
       </div>
 
-      <footer className="hud-chain" style={{ ["--i" as string]: 7 }}>
+      <footer className="hud-chain" style={{ ["--i" as string]: 8 }}>
         <div className="hc-head">
           <span className="hp-label">Signalkæden</span>
           <span className="hc-sub">Fra måler til AI</span>
@@ -137,7 +138,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       </footer>
 
       <div className="hud-events">
-        <Haendelser billede={billede} nr={8} still={still} />
+        <Haendelser billede={billede} nr={9} still={still} />
       </div>
 
       {boot && <Opstart model={model} liveSource={liveSource} />}

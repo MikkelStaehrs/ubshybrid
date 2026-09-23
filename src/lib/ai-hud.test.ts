@@ -205,6 +205,23 @@ describe("kompositionen har noget at vise i hver zone", () => {
   });
 });
 
+describe("ordren", () => {
+  it("står tom i den rigtige visning — der er ingen forbindelse til ordresystemet", () => {
+    assert.deepEqual(m.ordre, { ordreNr: null, genetik: null, varietet: null, opdigtet: false });
+  });
+
+  it("er opdigtet i demoen, og det kan ses", () => {
+    const f = hudModel("sliberi", { fremskriv: true })!;
+    assert.equal(f.ordre.opdigtet, true);
+    for (const v of [f.ordre.ordreNr, f.ordre.genetik, f.ordre.varietet]) {
+      // Samme skik som de opdigtede tags: X foran, så intet kan slås op.
+      assert.match(v ?? "", /^X-/, `${v} ligner en rigtig værdi`);
+    }
+    // Og demoen smitter ikke af på den rigtige model.
+    assert.equal(hudModel("sliberi")!.ordre.ordreNr, null);
+  });
+});
+
 describe("kædens samlede tone", () => {
   /** Et led med kun det, tonen afhænger af. */
   const led = (status: HudLink["status"], broken = false): HudLink => ({

@@ -211,6 +211,22 @@ kanal og registeradresse. Er der mange — som i demoen — tæller leddet dem
 efter slags med katalogets ord (`kort` i `data/ot-sensor-types.ts`):
 "Temperatur 18", "Fugt 1". Sensordata er ikke kun flow.
 
+**Hver kanal på en maskine har en grænse — eller en grund.** `alarmLav` og
+`alarmHoej` i `data/fremskrivning.ts`; mangler begge, skal `ingenGraense`
+sige hvorfor (fordelerens andel følger sporene og må stå på 0 eller 100).
+Mangler kun den ene side, er det, fordi den anden ikke er en fejl: en kold
+motor er ikke et problem. Grænsen står ved kanalens navn — "2,0–2,8",
+"max 70" — formateret af `graense()` i `src/lib/telemetri.ts`, ved siden
+af alarmreglen, så det, skærmen viser, er det, der melder. Begge dele har
+tests.
+
+**Ordren er masterdata, ikke en måling.** Ordre nr., genetik og varietet
+står øverst til venstre (`HudModel.ordre`). Der er ingen forbindelse til
+ordresystemet, så i den rigtige visning står felterne "Ikke udfyldt". I
+demoen kommer de fra `ORDRE` i `data/fremskrivning.ts`, hedder `X-…` som de
+opdigtede tags og bærer et SIM-mærke — et ordrenummer, der lignede et
+rigtigt, kunne blive slået op.
+
 **Partiklerne i maskinerne bevæger sig kun, når maskinen kører**, og med dens
 fart (`maskinFart()`): løftet op gennem elevatorerne, på langs gennem
 maskinerne. Ved vi ikke, om den kører — som i den rigtige visning i dag —
@@ -473,6 +489,9 @@ har sagt tallet.
 - **Hvor BIGF, BIGH og FV kommer fra, er ikke afklaret.** Demoen antager ét
   analyseudstyr på feltbussen pr. kastebord. Er det laboratoriets prøver, er
   det et `dataset` og ikke et signal.
+- **Ordren har ingen kilde.** Ordre nr., genetik og varietet skal komme fra
+  ordresystemet. Hvilket, hvordan og i hvilket format er ikke afklaret; det
+  ved driften.
 - **Driftsagenten kan ikke stoppe noget i dag.** Der findes ingen vej fra en
   agent tilbage til styringen. En skrivning til PLC'en er en
   sikkerhedsbeslutning — interlocks, hvem der kan tilsidesætte, hvad der

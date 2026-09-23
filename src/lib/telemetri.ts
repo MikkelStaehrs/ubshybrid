@@ -204,6 +204,24 @@ export function kortNavn(m: Pick<PlacedMachine, "kind" | "name" | "wIds">): stri
  */
 export const INDKOERING_S = 20;
 
+/** Decimaler i et tal, som det er skrevet — 2,8 har én, 70 har ingen. */
+const decimalerI = (v: number) => (String(v).split(".")[1] ?? "").length;
+
+/**
+ * Kanalens grænser, som man læser dem: "2,0–2,8", "max 70", "min 10".
+ * Samme antal decimaler i begge ender, så båndet ikke ser skævt ud. Står
+ * her ved alarmreglen, så det, skærmen viser, er det, der melder.
+ */
+export function graense(k: Pick<KanalSpec, "alarmLav" | "alarmHoej" | "decimaler">): string | null {
+  const { alarmLav: lav, alarmHoej: hoej } = k;
+  const d = Math.min(k.decimaler, Math.max(lav !== undefined ? decimalerI(lav) : 0, hoej !== undefined ? decimalerI(hoej) : 0));
+  const f = (v: number) => v.toLocaleString("da-DK", { minimumFractionDigits: d, maximumFractionDigits: d });
+  if (lav !== undefined && hoej !== undefined) return `${f(lav)}–${f(hoej)}`;
+  if (hoej !== undefined) return `max ${f(hoej)}`;
+  if (lav !== undefined) return `min ${f(lav)}`;
+  return null;
+}
+
 const erAlarm = (
   k: KanalSpec,
   v: number | null,
