@@ -7,7 +7,8 @@ import {
   flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
 import type { KanalSpec } from "../../../data/fremskrivning";
-import { graense, type MaskinLaesning, type TelemetriBillede } from "../../lib/telemetri";
+import { klokke, varighed, type Besked } from "../../lib/samspil";
+import { graense, type MaskinLaesning, type OrdreStatus, type TelemetriBillede } from "../../lib/telemetri";
 import { Afkod, Bjaelke, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
 import { TAKT_MS, type Historik } from "./useTelemetri";
 
@@ -59,33 +60,45 @@ const Afventer = ({ tekst = "Afventer signal" }: { tekst?: string }) => (
  * den rigtige visning står felterne tomme — og i demoen er de opdigtede og
  * mærket.
  */
-export function OrdrePanel({ ordre, nominal, gennemloeb, nr, still }: {
+/** Hvor ordren er: en fase, eller hvornår sidste kasse er tippet. */
+function faerdigTekst(s: OrdreStatus): string {
+  if (s.fase === "opstart") return "Opstart";
+  if (s.fase === "udloeb") return "Udløb";
+  if (s.fase === "faerdig") return s.slutT !== null ? klokke(s.slutT) : "Færdig";
+  // En prognose er et estimat, og den står stille, mens måleren er ude.
+  return s.prognoseT !== null ? `ca. ${klokke(s.prognoseT)}` : "–";
+}
+
+export function OrdrePanel({ ordre, nominal, gennemloeb, status = null, nr, still }: {
   ordre: HudOrdre;
   /** 100 %-punktet i t/hr. Uden det kan strømmen ikke blive til kasser. */
   nominal: number | null;
   gennemloeb: number | null;
+  /** Ordren i simuleringen. Når den kører, er det dens kasser, der tælles. */
+  status?: OrdreStatus | null;
   nr: number;
   still?: boolean;
 }) {
-  const koert = kasserKoert(ordre, nominal, gennemloeb);
-  const felter: { label: string; value: string | null; bred?: boolean }[] = [
+  const koert = status ? status.kasserTippet : kasserKoert(ordre, nominal, gennemloeb);
+  const felter: { label: string; value: string | null; bar?: boolean }[] = [
     { label: "Ordre nr.", value: ordre.ordreNr },
     { label: "Genetik", value: ordre.genetik },
     { label: "Varietet", value: ordre.varietet },
     { label: "Est. kg", value: ordre.estimeretKg === null ? null : ordre.estimeretKg.toLocaleString("da-DK") },
     // Kørte kasser ud af ordrens. Kendes ordren, men ikke strømmen, står
     // der en streg — ikke et nul.
-    { label: "Box", value: ordre.kasser === null ? null : `${koert ?? "–"} / ${ordre.kasser}`, bred: true },
+    { label: "Box", value: ordre.kasser === null ? null : `${koert ?? "–"} / ${ordre.kasser}`, bar: true },
+    ...(status ? [{ label: "Færdig", value: faerdigTekst(status) }] : []),
   ];
   return (
     <Panel label="Ordre" nr={nr} still={still} right={ordre.opdigtet ? <Sim /> : undefined}>
       <dl className="hp-ordre">
         {felter.map((f) => (
-          <div key={f.label} className={f.bred ? "is-bred" : undefined}>
+          <div key={f.label} className={f.bar && !status ? "is-bred" : undefined}>
             <dt>{f.label}</dt>
             <dd className={f.value ? undefined : "is-tom"}>{f.value ?? "Ikke udfyldt"}</dd>
             {/* Bjælken kun, når tallet kendes: en tom bjælke ligner et nul. */}
-            {f.bred && ordre.kasser !== null && koert !== null && <Bjaelke v={koert} max={ordre.kasser} />}
+            {f.bar && ordre.kasser !== null && koert !== null && <Bjaelke v={koert} max={ordre.kasser} />}
           </div>
         ))}
       </dl>
@@ -152,6 +165,27 @@ export function Overskrift({ model, billede, still }: {
         <p className="hb-next">
           {hvorfor && (<><span className="hb-next-label">Årsag</span><strong>{hvorfor}</strong></>)}
           {whr !== null && (<><span className="hb-next-label">W/HR</span><strong><Tal v={whr} d={2} /> {model.flow.rateUnit}</strong></>)}
+        </p>
+      </div>
+    );
+  }
+
+  // Ordrens faser: at starte, at løbe tom og at være færdig er ikke alarmer,
+  // men det er det vigtigste, der sker, mens det sker.
+  const o = billede.ordre;
+  if (o && o.fase !== "koerer") {
+    const kicker = o.fase === "opstart" ? "Opstart · bagfra" : o.fase === "udloeb" ? "Udløb · forfra" : `Ordre ${o.ordreNr} færdig`;
+    return (
+      <div className={`hud-break ${o.fase === "faerdig" ? "tone-drift" : "tone-test is-ai"}`}>
+        <p className="hb-kicker"><span className="hb-ai">AI</span>{kicker}<Sim /></p>
+        <p className="hb-where">
+          {o.fase === "faerdig"
+            ? `${o.kasserTippet} kasser · ${varighed(((o.slutT ?? billede.t) - o.startT) / 1000)}`
+            : `${billede.koerende} af ${billede.maskiner.length} kører`}
+        </p>
+        <p className="hb-next">
+          <span className="hb-next-label">Box</span>
+          <strong>{o.kasserTippet} / {o.kasser}</strong>
         </p>
       </div>
     );
@@ -316,7 +350,9 @@ export function DriftPanel({ billede, historik, nr, still }: {
   nr: number;
   still?: boolean;
 }) {
-  const kendt = billede.oppetidPct !== null;
+  // Driftssignalerne kendes, når maskinerne melder, om de kører — også før
+  // der er oppetid at regne på, som under en opstart.
+  const kendt = billede.oppetidPct !== null || billede.maskiner.some((m) => m.koerer !== null);
   // Rødt er en fejl. Står maskinerne kun på Driftsagentens beslutning, er
   // tallet rav — et styret stop må ikke se ud som noget, der er gået galt.
   const fejl = billede.maskiner.some((m) => m.koerer === false && !m.styret);
@@ -549,12 +585,12 @@ const AI_TILSTAND: Record<NonNullable<TelemetriBillede["ai"]>["tilstand"], strin
   holder: "Holder",
 };
 
-function Core({ a, ai, sim }: { a: HudAgent; ai: TelemetriBillede["ai"]; sim: boolean }) {
+function Core({ a, ai, sim, taler = false }: { a: HudAgent; ai: TelemetriBillede["ai"]; sim: boolean; taler?: boolean }) {
   const R = 13;
   const OMKREDS = 2 * Math.PI * R;
   const andel = a.total > 0 ? a.done / a.total : 0;
   return (
-    <li className={`hud-core st-${a.state}${a.idea ? " is-idea" : ""}${a.sovende ? " is-sleeping" : ""}`}>
+    <li className={`hud-core st-${a.state}${a.idea ? " is-idea" : ""}${a.sovende ? " is-sleeping" : ""}${taler ? " is-taler" : ""}`}>
       <svg viewBox="0 0 32 32" className="hc-ring" aria-hidden>
         <circle cx="16" cy="16" r={R} className="hc-track" />
         <circle cx="16" cy="16" r={R} className="hc-arc" strokeDasharray={`${andel * OMKREDS} ${OMKREDS}`} transform="rotate(-90 16 16)" />
@@ -588,15 +624,18 @@ function Core({ a, ai, sim }: { a: HudAgent; ai: TelemetriBillede["ai"]; sim: bo
   );
 }
 
-export function AgentCores({ model, nr, still, ai = null, sim = false }: {
+export function AgentCores({ model, nr, still, ai = null, sim = false, samtale = [] }: {
   model: HudModel;
   nr: number;
   still?: boolean;
   ai?: TelemetriBillede["ai"];
   sim?: boolean;
+  /** Agenterne imellem, nyeste først. Den seneste besked står under panelet. */
+  samtale?: Besked[];
 }) {
   const besluttet = model.agents.filter((a) => !a.idea);
   const ideer = model.agents.filter((a) => a.idea);
+  const senest = samtale[0] ?? null;
   return (
     <Panel
       label="Agenter"
@@ -605,12 +644,23 @@ export function AgentCores({ model, nr, still, ai = null, sim = false }: {
       className="hp-agents"
       right={<span className="hp-count fm-num">{kr(model.totalKr)} / md.</span>}
     >
-      <ul className="hud-cores">{besluttet.map((a) => <Core key={a.id} a={a} ai={ai} sim={sim} />)}</ul>
+      <ul className="hud-cores">
+        {besluttet.map((a) => <Core key={a.id} a={a} ai={ai} sim={sim} taler={senest?.fra === a.name} />)}
+      </ul>
+      {/* Den seneste besked mellem agenterne. Hele samtalen står i loggen. */}
+      {senest && (
+        <p className="hp-senest" key={senest.nr}>
+          <span className="hs-fra">{senest.fra}</span>
+          <span className="hs-pil" aria-hidden>→</span>
+          <span className="hs-til">{senest.til}</span>
+          <Sim />
+          <span className="hs-tekst">{senest.tekst}</span>
+        </p>
+      )}
+      {/* Idéerne på én linje: de er tænkt, ikke besluttet, og skal ikke tage
+          pladsen fra dem, der arbejder. */}
       {ideer.length > 0 && (
-        <>
-          <p className="hp-sub">Idéer · ikke medregnet</p>
-          <ul className="hud-cores is-ideer">{ideer.map((a) => <Core key={a.id} a={a} ai={null} sim={false} />)}</ul>
-        </>
+        <p className="hp-sub hp-ideer">Idéer · ikke medregnet<span>{ideer.map((a) => a.name).join(" · ")}</span></p>
       )}
     </Panel>
   );

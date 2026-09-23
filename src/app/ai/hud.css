@@ -108,7 +108,9 @@
 .hud-stage { grid-area: stage; }
 .hud-right { grid-area: right; }
 .hud-chain { grid-area: chain; }
-.hud-events { grid-area: events; display: flex; }
+/* Hændelserne må ikke bestemme bundens højde: en lang log ville presse
+   scenen og siderne sammen. Kæden bestemmer; loggen fylder, hvad der er. */
+.hud-events { grid-area: events; display: flex; contain: size; }
 .hud-events > .hud-panel { flex: 1; }
 
 .hud-left, .hud-right {
@@ -118,6 +120,9 @@
   overflow-y: auto;
   scrollbar-width: none;
 }
+/* Er der ikke plads, ruller kolonnen — panelerne presses ikke ind over
+   hinanden. */
+.hud-left > *, .hud-right > * { flex-shrink: 0; }
 .hud-left::-webkit-scrollbar, .hud-right::-webkit-scrollbar { display: none; }
 
 .hud-stage {
@@ -207,6 +212,33 @@
   color: var(--hud-ink);
 }
 .hud-ur i { color: var(--hud-dim); padding: 0 1px; }
+
+/* Simuleringens fart. Gangen står altid, i SIM-mærkets farve: en time på
+   skærmen er ikke en time i hallen. */
+.hud-fart { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+.hud-gang {
+  min-width: 44px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--hud-test-lys);
+}
+.hud-fartknap {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--hud-line-2);
+  background: transparent;
+  color: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hud-fartknap:hover, .hud-fartknap:focus-visible { color: var(--hud-ink); outline: none; border-color: var(--hud-muted); }
+.hud-fartknap.is-valgt { border-color: var(--hud-drift-lys); color: var(--hud-ink); }
+button.hud-switch { background: transparent; cursor: pointer; }
 
 .hud-puls {
   display: inline-flex;
@@ -586,18 +618,22 @@
 /* Agenterne. */
 .hp-agents .hp-count { color: var(--hud-muted); }
 .hud-cores { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.hp-ideer { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.hp-ideer span { color: var(--hud-dim); letter-spacing: 0.08em; text-transform: none; font-family: var(--font-ui); font-size: 10.5px; }
+/* Én linje pr. agent: navn til venstre, status til højre. Seks agenter
+   skal kunne stå, uden at kastebordene under dem skubbes ud af skærmen. */
 .hud-core {
   --c: var(--hud-dim);
   display: grid;
-  grid-template-columns: 26px 1fr;
+  grid-template-columns: 20px 1fr;
   align-items: center;
-  gap: 9px;
-  padding: 5px 0;
+  gap: 8px;
+  padding: 3px 0;
   border-bottom: 1px solid rgba(31, 45, 42, 0.6);
 }
 .hud-core.st-test { --c: var(--hud-test-lys); }
 .hud-core.st-paa-plads { --c: var(--hud-drift-lys); }
-.hc-ring { width: 26px; height: 26px; display: block; overflow: visible; }
+.hc-ring { width: 20px; height: 20px; display: block; overflow: visible; }
 .hc-track { fill: none; stroke: var(--hud-moerk); stroke-width: 2; }
 .hc-arc { fill: none; stroke: var(--c); stroke-width: 2; }
 .hc-kerne { fill: var(--c); animation: kerne 2.4s ease-in-out infinite; }
@@ -606,7 +642,72 @@
 .hud-core.is-idea .hc-track { stroke-dasharray: 3 3; }
 .hud-core.is-idea .hc-arc { stroke: var(--hud-moerk); }
 .hud-core.is-idea .hc-name { color: var(--hud-muted); }
-.hc-body { display: grid; gap: 1px; min-width: 0; }
+/* Den agent, der sagde det seneste. Farven er ringens — status — så
+   markeringen er en neutral streg, ikke en farve med en anden betydning. */
+.hud-core.is-taler { box-shadow: inset 2px 0 0 var(--hud-ink); padding-left: 4px; }
+
+/* Den seneste besked mellem agenterne, under panelet. */
+.hp-senest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin: 8px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--hud-line);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  animation: ind-venstre 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hp-senest .hs-fra { color: var(--hud-ink); cursor: default; }
+.hp-senest .hp-sim { margin-left: auto; }
+.hp-senest .hs-tekst {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* --- Loggen på skærm 2 ------------------------------------------------------ */
+.ai-hud.sim-logside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+}
+.sl-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; }
+.sl-ordre { display: inline-flex; gap: 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--hud-ink); }
+.sl-uro { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.sl-uro-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--hud-test);
+  color: var(--hud-test-lys);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sl-top > .hp-sim { margin-left: auto; }
+.sl-uro-chip.is-tavs { border-color: var(--hud-line-2); color: var(--hud-muted); }
+/* En fejl er rød; et styret stop og en ordrefase er det ikke. */
+.sl-uro-chip.is-fejl { border-color: var(--hud-brud); color: var(--hud-brud); }
+.sl-kolonner { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--pad); }
+.sl-kolonne { min-height: 0; overflow: hidden; }
+.sim-logside .hs-tekst { font-size: 14px; }
+.sim-logside .hs-grund { font-size: 12.5px; }
+.sim-logside .hl-liste li { font-size: 12px; }
+.sl-venter { align-self: center; margin-top: 20vh; gap: 12px; align-items: center; }
+@media (max-width: 900px) {
+  .ai-hud.sim-logside { position: static; overflow: visible; min-height: 100dvh; }
+  .sl-kolonner { grid-template-columns: 1fr; }
+  .sl-kolonne { max-height: 80vh; }
+}
+.hc-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 1px; min-width: 0; }
+.hc-body > .hc-meta { margin-left: auto; }
+.hc-body > .hc-ai { flex-basis: 100%; }
 .hc-name { font-size: 12px; font-weight: 600; color: var(--hud-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hc-meta { display: flex; align-items: baseline; gap: 5px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-dim); }
 .hc-state { color: var(--c); }
@@ -688,7 +789,56 @@
 }
 @keyframes log-ind { from { opacity: 0; transform: translateX(24px); } }
 .hl-head { display: flex; align-items: center; gap: 10px; }
-.hl-antal { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); }
+.hl-hoejre { margin-left: auto; display: inline-flex; gap: 6px; }
+.hl-faner { display: inline-flex; gap: 4px; }
+.hl-fane {
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--hud-line);
+  background: transparent;
+  color: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hl-fane span { color: var(--hud-dim); margin-left: 4px; }
+.hl-fane.is-valgt { border-color: var(--hud-drift-lys); color: var(--hud-ink); }
+.hl-fane:focus-visible { outline: 1px solid var(--hud-drift-lys); outline-offset: 1px; }
+.hl-log { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* Agenterne imellem. Hver besked: hvem, til hvem, hvad slags — og tallene
+   bag. Typen står som ord, ikke som farve. */
+.hl-samtale { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; align-content: start; }
+.hs-besked { padding: 7px 10px 8px; border-left: 2px solid var(--hud-line-2); background: rgba(111, 224, 194, 0.025); }
+.hs-hoved { display: flex; align-items: baseline; gap: 7px; font-family: var(--font-mono); font-size: 10px; }
+.hs-hoved time { color: var(--hud-dim); font-variant-numeric: tabular-nums; }
+.hs-fra {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--hud-ink);
+  cursor: pointer;
+}
+.hs-fra:hover, .hs-fra:focus-visible { color: var(--hud-drift-lys); outline: none; text-decoration: underline; }
+.hs-pil { color: var(--hud-dim); }
+.hs-til { color: var(--hud-muted); }
+/* Til et menneske: nogen skal gøre noget. Det skal kunne ses. */
+.hs-besked.til-menneske .hs-til { color: var(--hud-ink); font-weight: 700; }
+.hs-type {
+  margin-left: auto;
+  padding: 0 5px;
+  border: 1px solid var(--hud-line-2);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.hs-tekst { margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--hud-ink); }
+.hs-grund { margin: 2px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--hud-muted); }
+.hs-linjer { margin: 5px 0 0; padding-left: 14px; font-family: var(--font-mono); font-size: 11px; line-height: 1.55; color: var(--hud-ink); }
 .hl-filtre { display: flex; flex-wrap: wrap; gap: 6px; }
 .hl-filter {
   display: inline-flex;

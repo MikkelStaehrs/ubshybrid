@@ -71,6 +71,11 @@ const USAGE: Record<string, Usage> = {
   // Kaldes ved hændelser, ikke løbende: en ophobning, frø der bliver varmt.
   // Tyve om døgnet er et skøn — tallet er det, der styrer prisen.
   "AG-SLIB-DRIFT": { input: 5000, output: 300, perDoegn: 20 },
+  // Kun når kæden halter eller en måler falder ud. Få gange om døgnet.
+  "AG-SLIB-DATA": { input: 4000, output: 300, perDoegn: 6 },
+  // Ved hver hændelse, de andre melder, og ved ordrens start, kvarte og
+  // slut. Den læser mest — alle de andres beskeder — og skriver mest.
+  "AG-SLIB-OPERATOER": { input: 12000, output: 800, perDoegn: 30 },
 };
 
 export interface AgentCost {

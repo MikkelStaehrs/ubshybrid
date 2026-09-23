@@ -318,6 +318,66 @@ Det store tal på scenen hedder **"På plads"**, ikke "i drift": det tæller
 signaler, ikke maskiner, der kører. Står et spor på agentens beslutning,
 ville "i drift 26" ved siden af "kører 16" være en modsigelse.
 
+### Ordresimuleringen
+
+`/ai/demo` kører én ordre fra første kasse til sidste: linjen startes
+bagfra, kører, til sidste kasse er tippet, løber tom og stoppes forfra —
+og Operatøragenten skriver en rapport. Antagelserne står i `SIMULERING` og
+`ORDRE` i `data/fremskrivning.ts`.
+
+**Det er en simulering, ikke en drejebog.** Stop, varme, database-episoder
+og sensorfejl opstår af simuleringen, seedet, og agenterne reagerer på det,
+de ser i tallene. `?seed=N` giver en anden dag med de samme regler.
+
+**Tiden går hurtigt, når alt er roligt, og langsomt, når der sker noget.**
+Simulatoren melder sin `uro` — et spor, der står, en database, der halter,
+et varsel — og så længe listen ikke er tom, går tiden langsomt. Sker der
+noget midt i et hurtigt spring, stopper springet dér. Gangen står altid i
+toppen (×90, ×8), så ingen tager en time på skærmen for en time i hallen, og
+den kan sættes i hånden: pause, 1×, 10×, 90×, auto, forfra.
+
+**Arbejdsdelingen er pointen.** Hver agent ser sit og siger det til de
+andre; Operatøragenten afvejer og beslutter, og det, et menneske skal gøre,
+siges til et menneske.
+
+| Agent | Ser | Gør |
+|---|---|---|
+| Linjeagent N/S | Et stop på vej, frø der bliver varmt, FV3 | Melder, med tallene og en prognose |
+| Kædevagt | At MSSQL ikke kan følge med | Melder til Dataagenten |
+| Dataagent | Rækker mod kapacitet, målere, der falder ud | Foreslår og sætter prøveraten |
+| Driftsagent | Buffere og frøtemperatur | Stopper og starter spor efter faste regler |
+| Operatøragent | Alle de andre | Afvejer, beslutter, fortæller operatøren |
+
+Beskederne er **regler og skabeloner, ikke Claude** (`src/lib/samspil.ts`).
+Der er ikke kaldt et API fra repoet, og samtalen er mærket SIM. Hver
+beslutning og hvert forslag har en begrundelse med tallene bag; det har en
+test.
+
+- **At skrue linjen ned for databasens skyld afvises med regnestykket.**
+  Rækkerne kommer fra antallet af signaler, ikke fra tons — færre tons giver
+  nul færre rækker. Dataagenten sænker i stedet prøveraten i trin
+  (`PROEVERATE`): så få som muligt, men nok til luft under kapaciteten, og
+  aldrig på de hurtige signaler, Driftsagent styrer efter. Raten sættes op
+  igen, når databasen har kunnet følge med i et halvt minut.
+- **Et varsel gælder kun den farlige retning, og først ved fem gange det
+  normale udsving.** En kold motor efter et stop varsler ingenting, og ved
+  fire vandrede en motortemperatur derud af sig selv. En test holder, at
+  varsler kun kommer før stop, der faktisk kommer.
+- **Et spor startes bagfra og stoppes forfra.** Så fødes ingen buffer, før
+  maskinen efter den kører, og intet står fuldt til næste ordre. En maskine,
+  der er slukket efter planen, er ikke en fejl (`styret`). Begge har tests.
+- **Én FV3-prøve er ikke en trend.** To i træk giver et forslag til
+  operatøren; én giver "ingen handling".
+
+**Loggen på skærm 2** (`/ai/demo/log`) kører ingen simulering selv. Den
+lytter på kontrolrummet gennem browserens `BroadcastChannel` — samme maskine,
+ingen server — og viser agenterne imellem og hændelserne side om side. Tier
+kontrolrummet, bliver loggen stående og siger det.
+
+`frem()` tager et skridt uden at bygge et billede, til mellemskridtene, når
+tiden går hurtigt. Støjen i billedet trækkes, før billedet bygges, så et
+forløb med og uden billeder er det samme.
+
 ### Flaskehalse i kæden
 
 Status og ydelse er to forskellige akser. Status siger, om et led *findes*
@@ -510,6 +570,10 @@ har sagt tallet.
   er ikke afklaret; det ved driften. Demoen læser kasserne som dem, der
   tippes i vippestolene, og tæller dem af strømmen ind — i virkeligheden
   kunne en tæller på vippestolene gøre det bedre.
+- **Dataagent og Operatøragent er besluttet på demoens præmisser.** De står
+  som besluttede, så simuleringen kan vise dem arbejde. Prisen for dem er et
+  skøn (6 og 30 kørsler i døgnet), og i virkeligheden ville deres beskeder
+  være Claude-kald, ikke skabeloner.
 - **Driftsagenten kan ikke stoppe noget i dag.** Der findes ingen vej fra en
   agent tilbage til styringen. En skrivning til PLC'en er en
   sikkerhedsbeslutning — interlocks, hvem der kan tilsidesætte, hvad der

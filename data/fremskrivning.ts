@@ -242,6 +242,91 @@ export const ORDRE = {
 };
 
 // ---------------------------------------------------------------------------
+// Ordresimuleringen
+
+/**
+ * Én ordre fra første kasse til sidste. Tiden går hurtigt, når alt kører, og
+ * langsomt, når der sker noget — så man kan følge med i, hvad agenterne gør,
+ * uden at se tolv timers kørsel.
+ *
+ * Hændelserne er tilfældige, men seedede: det, der sker, opstår af
+ * simuleringen, og agenterne reagerer på det, de ser. Et andet seed giver en
+ * anden dag. Hyppighederne er skruet op, så en ordre har lidt af hvert.
+ */
+export const SIMULERING = {
+  /** Så mange gange hurtigere end virkeligheden, når alt kører roligt… */
+  hurtig: 90,
+  /** …og når der sker noget. */
+  langsom: 8,
+  /** Så længe efter en hændelse, tiden bliver ved med at gå langsomt. */
+  efterS: 30,
+  /** Klokken, ordren starter. */
+  startKl: 6,
+  /** Mellem to trin, når linjen startes eller stoppes i rækkefølge. */
+  trinS: 15,
+  /** Så længe sporene løber, efter sidste kasse er tippet, før de er tomme. */
+  udloebS: 300,
+  /** Middeltid mellem to maskinstop. Simuleret tid. */
+  maskinstopHverS: 2.5 * 3600,
+  maskinstopVarighedS: [90, 300] as const,
+  /**
+   * Andelen af stop, der varsles i signalerne først — vibration, der
+   * stiger, et dæk, der ryster for lidt. Det er dem, en linjeagent kan nå
+   * at se komme.
+   */
+  varselAndel: 0.6,
+  varselS: 120,
+  flaskehalsHverS: 4 * 3600,
+  flaskehalsVarighedS: 240,
+  varmeHverS: 5 * 3600,
+  varmeVarighedS: 600,
+  /**
+   * Hvor hurtigt frøet varmes op ved friktion. Langsommere end i den
+   * korte demo: minutter, ikke sekunder — så en linjeagent kan nå at se
+   * det komme og regne på, hvornår grænsen nås.
+   */
+  varmeTraeghed: 0.004,
+  sensorfejlHverS: 6 * 3600,
+  sensorfejlVarighedS: 45,
+  /** Et seed, der giver en ordre med lidt af hvert. */
+  seed: 743,
+};
+
+/**
+ * Hvor tit hvert slags signal gemmes, og hvad Dataagenten kan skrue på.
+ *
+ * Hurtige signaler — flowet og hastighederne — røres aldrig: dem styrer
+ * Driftsagenten efter. Resten kan tåle at blive gemt sjældnere en tid.
+ * Trinene tages i rækkefølge, til der er luft under databasens kapacitet.
+ */
+export const PROEVERATE = {
+  /** Prøver pr. sekund, når intet er skruet ned. */
+  normal: 4,
+  /** Hvilken gruppe hver slags måler hører til. */
+  gruppe: {
+    flow: "hurtig",
+    speed: "hurtig",
+    vibration: "middel",
+    drive: "middel",
+    temperature: "langsom",
+    humidity: "langsom",
+    "level-radar": "langsom",
+    position: "langsom",
+    analyzer: "langsom",
+    "motor-run": "di",
+  } as Record<string, "hurtig" | "middel" | "langsom" | "di">,
+  trin: [
+    // Et driftssignal skifter et par gange i timen. At gemme det fire gange
+    // i sekundet er at gemme det samme igen og igen.
+    { navn: "Driftssignaler ved ændring", gruppe: "di" as const, rate: 0 },
+    { navn: "Langsomme signaler hvert 5. s", gruppe: "langsom" as const, rate: 0.2 },
+    { navn: "Vibration og drev 1 pr. s", gruppe: "middel" as const, rate: 1 },
+  ],
+  /** Planen skal ligge under denne andel af det, databasen kan. */
+  luft: 0.8,
+};
+
+// ---------------------------------------------------------------------------
 // Kæden
 
 /**

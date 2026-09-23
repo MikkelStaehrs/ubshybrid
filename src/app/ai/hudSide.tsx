@@ -49,6 +49,8 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
   // ?ophobning=1 lader KB-3N gå i stå kort efter, siden er åbnet — så man kan
   // se Driftsagenten gribe ind, uden at vente på et tilfældigt stop.
   const ophobning = fremskriv && params.ophobning === "1";
+  // ?seed=12 giver en anden dag: andre stop, andre episoder, samme regler.
+  const seed = fremskriv && typeof params.seed === "string" && /^\d+$/.test(params.seed) ? Number(params.seed) : undefined;
 
   return (
     <HudView
@@ -60,6 +62,7 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
       fokusWid={fokusWid}
       flaskehals={flaskehals}
       ophobning={ophobning}
+      seed={seed}
     />
   );
 }

@@ -16,11 +16,15 @@
 // seedet tilfældighed. Samme seed og samme skridt giver de samme tal, og
 // det er det, der gør den testbar.
 import {
-  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, KASTEBORD, TILLOEB, VARME,
-  type KanalSpec,
+  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, KASTEBORD, PROEVERATE, SIMULERING,
+  TILLOEB, VARME, type KanalSpec,
 } from "../../data/fremskrivning";
 import { maFromPercent } from "./live-source";
 import type { Layout, PlacedMachine } from "./layout";
+import {
+  AGENT, klokke, ordreRapport, planMed, prognose, tal, vaelgPlan, varighed,
+  type Besked, type Gruppe, type Proeveplan, type SporStop,
+} from "./samspil";
 
 export type Niveau = "info" | "advarsel" | "alarm";
 
@@ -144,6 +148,42 @@ export interface TelemetriBillede {
   koerende: number;
   /** Driftsagenten. null når der ingen er — altså i den rigtige visning i dag. */
   ai: AiTilstand | null;
+  /** Agenterne imellem, nyeste først. Tom uden en ordre i simuleringen. */
+  samtale: Besked[];
+  /** Ordren, når simuleringen kører én. null ellers. */
+  ordre: OrdreStatus | null;
+  /**
+   * Det, der sker lige nu: et spor, der står, en database, der halter. Tom,
+   * når alt kører roligt — og så længe den ikke er tom, går tiden langsomt.
+   */
+  uro: Uro[];
+}
+
+/**
+ * Én ting, der sker. `fejl` skiller det, der er gået galt — en maskine, der
+ * er gået i stå, en måler, der er faldet ud — fra det, der er besluttet: et
+ * spor, agenten har stoppet, en opstart. En fejl er rød; resten er det ikke.
+ */
+export interface Uro {
+  tekst: string;
+  fejl: boolean;
+}
+
+/** Ordren i simuleringen, fra første kasse til sidste. */
+export interface OrdreStatus {
+  ordreNr: string;
+  fase: "opstart" | "koerer" | "udloeb" | "faerdig";
+  /** Det, der er løbet ind — det fysiske, ikke det målte. */
+  kgInd: number;
+  estimeretKg: number;
+  kasserTippet: number;
+  kasser: number;
+  startT: number;
+  slutT: number | null;
+  /** Hvornår sidste kasse er tippet, ved gennemløbet indtil nu. */
+  prognoseT: number | null;
+  /** Hvor mange af Dataagentens trin, der er taget. 0 er fuld prøverate. */
+  proeveTrin: number;
 }
 
 /** Den seneste prøve fra ét kastebord. */
@@ -197,6 +237,17 @@ const kastebordeI = (layout: Layout) =>
 
 /** Så mange hændelser husker loggen, man kan læse igennem. */
 export const LOG_MAKS = 500;
+
+/**
+ * Læg et billedes beskeder oven i samtalen. Samme regel som loggen: hver
+ * besked én gang, nyeste først — ordnet efter løbenummer, ikke tid.
+ */
+export function samlSamtale(samtale: Besked[], nye: Besked[], maks = LOG_MAKS): Besked[] {
+  const hoejeste = samtale[0]?.nr ?? 0;
+  const tilgang = nye.filter((b) => b.nr > hoejeste);
+  if (tilgang.length === 0) return samtale;
+  return [...tilgang, ...samtale].sort((a, b) => b.nr - a.nr).slice(0, maks);
+}
 
 const logNoegle = (h: Haendelse) => `${h.t}|${h.hvor}|${h.tekst}`;
 
@@ -302,6 +353,9 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
     stop: 0,
     koerende: 0,
     ai: null,
+    samtale: [],
+    ordre: null,
+    uro: [],
   };
 }
 
@@ -370,6 +424,21 @@ interface MaskinTilstand {
   overloebet: boolean;
   /** Friktion i en jetpealer: frøet varmes op, til dette tidspunkt. */
   varmeTil: number | null;
+  /**
+   * Slukket efter planen — før ordren er startet, efter den er slut, eller
+   * mens sporet startes bagfra. Ikke en fejl, og ikke et stop.
+   */
+  slukket: boolean;
+  /** Hvornår den startes eller stoppes efter planen. */
+  startVed: number | null;
+  stopVed: number | null;
+  /** Et stop på vej: en kanal løber ud af sit bånd, og så stopper maskinen. */
+  varsel: { kanal: string; maal: number; stopVed: number; varighedS: number } | null;
+  /** Det, varslet nåede at vise, da maskinen stoppede. Til linjeagentens diagnose. */
+  varslet: { label: string; tekst: string; normalt: string } | null;
+  /** Siden hvornår en kanal har været langt ude, og om det er meldt. */
+  afvigFra: number | null;
+  afvigMeldt: boolean;
 }
 
 /** Valg til simulatoren. Alle har en standard. */
@@ -390,6 +459,54 @@ export interface SimValg {
   planlagteStop?: { wid: string; fraS: number; varighedS: number }[];
   /** Middeltid mellem tilfældige stop. Udeladt: SIM.stopHverS. */
   stopHverS?: number;
+  /**
+   * Kør én ordre fra start til slut. Linjen startes bagfra, kører, til
+   * sidste kasse er tippet, og løber tom. Agenterne arbejder sammen og
+   * skriver til hinanden. Udeladt: simulatoren kører bare, som den altid har.
+   */
+  ordre?: OrdreValg;
+}
+
+export interface OrdreValg {
+  ordreNr: string;
+  estimeretKg: number;
+  kasser: number;
+  /** 100 %-punktet i t/hr. Uden det kan strømmen ikke blive til kilo. */
+  nominalTPrT: number;
+}
+
+/** Det, der skete i ét skridt, og som agenterne skal reagere på. */
+type Sket =
+  | { type: "maskinstop"; s: MaskinTilstand }
+  | { type: "sporStop"; lane: string; aarsag: Aarsag }
+  | { type: "sporKlar"; lane: string; hvad: string; fyld: number | null }
+  | { type: "sensorfejl" }
+  | { type: "sensorTilbage"; varighedS: number }
+  | { type: "fv3"; a: Analyse };
+
+/** Kanalerne, en linjeagent holder øje med for at se et stop komme. */
+const OVERVAAGET = new Set(["vibration", "dæk", "motortemp", "stroem", "rpm", "hastighed", "luft"]);
+
+/**
+ * Så mange gange det normale udsving, før en linjeagent melder et stop på
+ * vej. Ved fire vandrede en motortemperatur derud af sig selv i løbet af en
+ * ordre; ved fem sker det næsten aldrig.
+ */
+const VARSEL_Z = 5;
+
+/**
+ * Den kanal, der varsler et stop på en maskine, og hvor den løber hen:
+ * vibration, der stiger, et dæk, der ryster for lidt, en motor, der bliver
+ * varm, eller en strøm, der stiger. Otte gange det normale udsving: langt
+ * ud over det, en kanal vandrer af sig selv.
+ */
+function varselFor(s: MaskinTilstand): { kanal: string; maal: number } | null {
+  const k = ["vibration", "dæk", "motortemp", "stroem"]
+    .map((id) => s.kanaler.find((x) => x.spec.id === id))
+    .find(Boolean);
+  if (!k) return null;
+  const ned = k.spec.id === "dæk";
+  return { kanal: k.spec.id, maal: k.spec.nominal + (ned ? -VARSEL_Z * 1.6 : VARSEL_Z * 1.6) * k.spec.spredning };
 }
 
 interface Aarsag {
@@ -402,6 +519,13 @@ interface Aarsag {
 export interface Simulator {
   /** Ét skridt frem. `dtMs` er tiden siden sidst, `nu` er uret. */
   skridt(dtMs: number, nu: number): TelemetriBillede;
+  /**
+   * Ét skridt frem uden at bygge et billede. Til mellemskridtene, når tiden
+   * går hurtigt: kun det sidste skridt skal vises. Forløbet er det samme.
+   * Svarer true, når der sker noget — så kan den, der driver tiden, sætte
+   * farten ned, før det er overstået.
+   */
+  frem(dtMs: number, nu: number): boolean;
 }
 
 /**
@@ -439,6 +563,14 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       fyld: m.lane ? TILLOEB.normalPct : null,
       overloebet: false,
       varmeTil: null,
+      // Med en ordre står linjen, til ordren starter den.
+      slukket: !!valg.ordre,
+      startVed: null,
+      stopVed: null,
+      varsel: null,
+      varslet: null,
+      afvigFra: null,
+      afvigMeldt: false,
     }));
   const hal: KanalTilstand[] = HAL.map((spec) => ({ spec, x: spec.nominal, alarm: false }));
 
@@ -460,9 +592,56 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
 
   /** Står maskinen, fordi agenten har stoppet dens spor eller indgangen? */
   const styret = (s: MaskinTilstand) => (s.m.lane ? spor.get(s.m.lane)!.stoppet : indgangStoppet);
-  const koererNu = (s: MaskinTilstand) => s.stopTil === null && !styret(s);
+  const koererNu = (s: MaskinTilstand) => s.stopTil === null && !styret(s) && !s.slukket;
 
-  let flow = SIM.flowNominal;
+  // --- Ordresimuleringen -----------------------------------------------------
+  // Kun når der er en ordre. Uden den er simulatoren den samme som altid.
+  const O = valg.ordre ?? null;
+  // Går tiden hurtigt, kan der ske meget mellem to billeder. Så husker det flere.
+  const logMaks = O ? 200 : SIM.logLaengde;
+  let uroNu = false;
+  let fase: OrdreStatus["fase"] = "opstart";
+  let ordreStart: number | null = null;
+  let koertFra: number | null = null;
+  let kgInd = 0;
+  let kasserTippet = 0;
+  let slutT: number | null = null;
+  const milepael = new Set<number>();
+  const samtale: Besked[] = [];
+  let beskeder = 0;
+  const sig = (b: Omit<Besked, "t" | "nr">, nu: number) => {
+    beskeder++;
+    samtale.unshift({ ...b, t: nu, nr: beskeder });
+    if (samtale.length > logMaks) samtale.length = logMaks;
+  };
+  // Signalerne i hver prøvegruppe — samme signaler, som kæden tæller.
+  // Flowet er hurtigt; hver maskine har et driftssignal.
+  const antal: Record<Gruppe, number> = { hurtig: 1, middel: 0, langsom: 0, di: 0 };
+  for (const s of maskiner) {
+    for (const k of s.kanaler) antal[PROEVERATE.gruppe[k.spec.maaler] ?? "langsom"]++;
+    antal.di += s.m.wIds.length;
+  }
+  for (const k of HAL) antal[PROEVERATE.gruppe[k.maaler] ?? "langsom"]++;
+  let proeveTrin = 0;
+  let roligFra: number | null = null;
+  let overbelastFra: number | null = null;
+  let vagtMeldt: number | null = null;
+  let forslag: { t: number; plan: Proeveplan; alle: Proeveplan[]; nok: boolean } | null = null;
+  let koeMeldt = false;
+  let episodeTil: number | null = null;
+  let mssqlEpisoder = 0;
+  let maksForsinkelse = 0;
+  let sensorfejl = 0;
+  let maskinstop = 0;
+  const sporStop: SporStop[] = [];
+  /** Spor, der startes bagfra, og hvornår det begyndte. */
+  const genstarter = new Map<string, number>();
+  const fv3 = new Map<string, { sum: number; n: number }>();
+  /** En FV3-alarm, der venter på næste prøve: er det en trend eller et enkeltudfald? */
+  const fv3Tjek = new Map<string, { t: number; v: number }>();
+  const froe = new Map<string, { punkter: { t: number; x: number }[]; meldt: boolean; udeFra: number | null }>();
+
+  let flow = valg.ordre ? 0 : SIM.flowNominal;
   let gennemloeb = 0;
   let sensorfejlTil: number | null = null;
   // Bordene tager ikke prøve i samme sekund. De er forskudt, så en ny prøve
@@ -490,12 +669,12 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
 
   const skriv = (h: Haendelse) => {
     log.unshift(h);
-    if (log.length > SIM.logLaengde) log.length = SIM.logLaengde;
+    if (log.length > logMaks) log.length = logMaks;
   };
   const fmt = (v: number, k: KanalSpec) => v.toFixed(k.decimaler).replace(".", ",");
 
-  function opdater(k: KanalTilstand, maal: number, dt: number, stoej: boolean) {
-    const theta = k.spec.traeghed ?? 0.1;
+  function opdater(k: KanalTilstand, maal: number, dt: number, stoej: boolean, traeghed?: number) {
+    const theta = traeghed ?? k.spec.traeghed ?? 0.1;
     // Den eksakte løsning over et skridt, ikke en tilnærmelse: processen i
     // ro har spredningen fra specifikationen, uanset hvor langt der er mellem
     // to skridt. Med en tilnærmelse slog kanalerne større ud på en bærbar,
@@ -523,8 +702,51 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     return null;
   }
 
-  function skridt(dtMs: number, nu: number): TelemetriBillede {
+  function gaa(dtMs: number, nu: number, medBillede: boolean): TelemetriBillede | null {
     const dt = Math.min(dtMs, 2000) / 1000;
+    const sket: Sket[] = [];
+
+    // --- Ordren: start bagfra, kørsel, stop forfra -----------------------------
+    if (O) {
+      if (ordreStart === null) {
+        ordreStart = nu;
+        // Bagfra: det sidste trin først, påslaget sidst. Så er der plads i
+        // hver buffer, før der fødes.
+        const trin = [...new Set(maskiner.map((s) => s.m.step))].sort((a, b) => b - a);
+        for (const s of maskiner) s.startVed = nu + trin.indexOf(s.m.step) * SIMULERING.trinS * 1000;
+        skriv({ t: nu, hvor: "Ordre", tekst: `${O.ordreNr} startet · ${O.kasser} kasser · ${tal(O.estimeretKg)} kg`, niveau: "info" });
+        sig({
+          fra: AGENT.operatoer, til: AGENT.drift, type: "beslutning",
+          tekst: `Start ordre ${O.ordreNr}: ${O.kasser} kasser, ${tal(O.estimeretKg)} kg. Start linjen bagfra.`,
+          grund: "Kastebordene først, påslaget sidst — så er der plads i hver buffer, før der fødes.",
+        }, nu);
+      }
+      const startet: string[] = [];
+      const stoppet: string[] = [];
+      for (const s of maskiner) {
+        if (s.startVed !== null && nu >= s.startVed) {
+          s.startVed = null;
+          s.slukket = false;
+          s.startet = nu;
+          startet.push(s.kort);
+        }
+        if (s.stopVed !== null && nu >= s.stopVed) {
+          s.stopVed = null;
+          s.slukket = true;
+          stoppet.push(s.kort);
+        }
+      }
+      if (startet.length) skriv({ t: nu, hvor: AGENT.drift, tekst: `Starter ${startet.join(", ")}`, niveau: "info", ai: true });
+      if (stoppet.length) skriv({ t: nu, hvor: AGENT.drift, tekst: `Stopper ${stoppet.join(", ")}`, niveau: "info", ai: true });
+      if (fase === "opstart" && maskiner.every((s) => !s.slukket)) {
+        fase = "koerer";
+        koertFra = nu;
+        sig({
+          fra: AGENT.drift, til: AGENT.operatoer, type: "rapport",
+          tekst: `Linjen kører · ${maskiner.length} maskiner startet på ${varighed((nu - ordreStart) / 1000)}.`,
+        }, nu);
+      }
+    }
 
     // --- Stop og start ------------------------------------------------------
     if (startT === null) startT = nu;
@@ -537,15 +759,35 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       s.stoppetFra = nu;
       skriv({ t: nu, hvor: s.kort, tekst: "Stoppet", niveau: "advarsel" });
     });
-    if (r() < dt / stopHverS) {
-      const kandidater = maskiner.filter((s) => s.stopTil === null && !styret(s) && s.m.kind !== "intake");
+    // Med en ordre sker stop kun, mens den kører, og mange varsles først.
+    if ((!O || fase === "koerer") && r() < dt / (O ? SIMULERING.maskinstopHverS : stopHverS)) {
+      const kandidater = maskiner.filter((s) =>
+        s.stopTil === null && !styret(s) && !s.slukket && s.varsel === null && s.m.kind !== "intake");
       const s = kandidater[Math.floor(r() * kandidater.length)];
       if (s) {
-        const [lo, hi] = SIM.stopVarighedS;
-        s.stopTil = nu + (lo + r() * (hi - lo)) * 1000;
-        s.stoppetFra = nu;
-        skriv({ t: nu, hvor: s.kort, tekst: "Stoppet", niveau: "advarsel" });
+        const [lo, hi] = O ? SIMULERING.maskinstopVarighedS : SIM.stopVarighedS;
+        const varighedS = lo + r() * (hi - lo);
+        const kanal = O ? varselFor(s) : null;
+        if (kanal && r() < SIMULERING.varselAndel) {
+          s.varsel = { ...kanal, stopVed: nu + SIMULERING.varselS * 1000, varighedS };
+        } else {
+          s.stopTil = nu + varighedS * 1000;
+          s.stoppetFra = nu;
+          skriv({ t: nu, hvor: s.kort, tekst: "Stoppet", niveau: "advarsel" });
+          if (O) sket.push({ type: "maskinstop", s });
+        }
       }
+    }
+    // Et varslet stop kommer, når varslet er løbet ud.
+    for (const s of maskiner) {
+      if (!s.varsel || nu < s.varsel.stopVed) continue;
+      const k = s.kanaler.find((x) => x.spec.id === s.varsel!.kanal)!;
+      s.varslet = { label: k.spec.label, tekst: `${fmt(k.x, k.spec)} ${k.spec.unit}`, normalt: `${fmt(k.spec.nominal, k.spec)} ${k.spec.unit}` };
+      s.stopTil = nu + s.varsel.varighedS * 1000;
+      s.stoppetFra = nu;
+      s.varsel = null;
+      skriv({ t: nu, hvor: s.kort, tekst: "Stoppet", niveau: "advarsel" });
+      sket.push({ type: "maskinstop", s });
     }
     for (const s of maskiner) {
       if (s.stopTil !== null && nu >= s.stopTil) {
@@ -564,8 +806,17 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     }
 
     // --- Friktion i jetpealerne --------------------------------------------
-    if (naesteVarme === null) naesteVarme = nu + VARME.foersteS * 1000;
-    if (nu >= naesteVarme) {
+    if (O) {
+      if (fase === "koerer" && r() < dt / SIMULERING.varmeHverS) {
+        const jet = maskiner.filter((s) => /jet\s?pe[ae]ler/i.test(s.m.name) && s.varmeTil === null && koererNu(s));
+        const s = jet[Math.floor(r() * jet.length)];
+        if (s) {
+          s.varmeTil = nu + SIMULERING.varmeVarighedS * 1000;
+          skriv({ t: nu, hvor: s.kort, tekst: "Friktion stiger", niveau: "advarsel" });
+        }
+      }
+    } else if (naesteVarme === null) naesteVarme = nu + VARME.foersteS * 1000;
+    if (!O && nu >= naesteVarme!) {
       const jet = maskiner.filter((s) => /jet\s?pe[ae]ler/i.test(s.m.name) && s.varmeTil === null && koererNu(s));
       const s = jet[Math.floor(r() * jet.length)];
       if (s) {
@@ -581,8 +832,11 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     for (const s of maskiner) {
       const koerer = koererNu(s);
       const indkoerer = s.startet !== null && nu - s.startet < INDKOERING_S * 1000;
-      s.totalMs += dtMs;
-      if (koerer) s.koertMs += dtMs;
+      // Med en ordre er opstart og udløb ikke oppetid eller nedetid.
+      if (!O || fase === "koerer") {
+        s.totalMs += dtMs;
+        if (koerer) s.koertMs += dtMs;
+      }
       // (koerer er koererNu: et spor, agenten har stoppet, kører ikke.)
       for (const k of s.kanaler) {
         // Står maskinen, søger kanalen mod sin hvileværdi. Motortemperaturen
@@ -591,11 +845,17 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
         let maal = k.spec.nominal;
         // Friktion: frøet varmes op, så længe jetpealeren kører med den.
         if (k.spec.id === "froetemp" && s.varmeTil !== null) maal = VARME.maalC;
-        // Fordeleren sender alt til det spor, der kører.
+        // Et stop på vej: kanalen løber ud af sit bånd.
+        if (s.varsel && k.spec.id === s.varsel.kanal) maal = s.varsel.maal;
+        // Fordeleren sender alt til det spor, der kører — og intet til et spor,
+        // der er ved at blive startet bagfra.
         if (k.spec.id === "andelN") {
-          maal = spor.get("N")?.stoppet ? 0 : spor.get("S")?.stoppet ? 100 : k.spec.nominal;
+          const lukket = (l: string) => spor.get(l)?.stoppet || iSpor.get(l)?.[0]?.slukket;
+          maal = lukket("N") ? 0 : lukket("S") ? 100 : k.spec.nominal;
         }
-        if (koerer) opdater(k, maal, dt, true);
+        // Med en ordre varmes frøet op over minutter, ikke sekunder.
+        const langsomVarme = O && k.spec.id === "froetemp" && s.varmeTil !== null ? SIMULERING.varmeTraeghed : undefined;
+        if (koerer) opdater(k, maal, dt, true, langsomVarme);
         else if (hvile !== undefined) opdater(k, hvile, dt, false);
         const alarm = erAlarm(k.spec, k.x, koerer, indkoerer);
         if (alarm && !k.alarm) {
@@ -613,7 +873,11 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
 
     // --- Flowet ved indgangen -----------------------------------------------
     // Står påslaget eller elevator 743, løber der ingenting ind.
-    const indgang = maskiner.filter((s) => /påslag/i.test(s.m.name) || s.m.wIds.includes("743"));
+    // Med en ordre er hele fællesstrækket med: står en maskine før fordeleren,
+    // kommer der intet igennem.
+    const indgang = O
+      ? maskiner.filter((s) => !s.m.lane)
+      : maskiner.filter((s) => /påslag/i.test(s.m.name) || s.m.wIds.includes("743"));
     const indgangStaar = indgang.some((s) => !koererNu(s));
     // Står et spor, kan fordeleren kun sende til det andet — og et spor kan
     // tage halvdelen. Et stop koster gennemløb, og det skal kunne ses.
@@ -621,7 +885,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     // Måleren sidder ved indgangen. Den måler, hvad der kommer ind — også det,
     // der ender på gulvet ved et overløb. W/HR er kun lig med gennemløbet,
     // når intet går tabt undervejs, og det er netop det, agenten sørger for.
-    const aabne = lanes.filter((l) => !spor.get(l)!.stoppet).length;
+    const aabne = lanes.filter((l) => !spor.get(l)!.stoppet && !iSpor.get(l)![0].slukket).length;
     const maal = indgangStaar ? 0 : SIM.flowNominal * (aabne / Math.max(1, lanes.length));
     const theta = indgangStaar ? 0.6 : 0.15;
     // Samme eksakte skridt som kanalerne, så flowet heller ikke slår større
@@ -639,7 +903,9 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       liste.forEach((s, i) => {
         if (s.fyld === null) return;
         const foer = i === 0 ? fordeler : liste[i - 1];
-        const fodres = !spor.get(lane)!.stoppet && !!foer && koererNu(foer) && flow > 1;
+        // En maskine, der er slukket efter planen, fødes ikke: planen starter
+        // den, før der sendes noget til den.
+        const fodres = !spor.get(lane)!.stoppet && !!foer && koererNu(foer) && flow > 1 && !s.slukket;
         if (koererNu(s)) s.fyld = Math.max(TILLOEB.normalPct, s.fyld - TILLOEB.toemPrS * dt);
         else if (fodres) s.fyld = Math.min(100, s.fyld + TILLOEB.fyldPrS * (flow / SIM.flowNominal) * dt);
         if (s.fyld >= 100 && !s.overloebet) {
@@ -661,17 +927,62 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       });
     }
 
-    if (sensorfejlTil === null && r() < dt / SIM.sensorfejlHverS) {
-      sensorfejlTil = nu + SIM.sensorfejlVarighedS * 1000;
+    if (sensorfejlTil === null && (!O || fase !== "faerdig") && r() < dt / (O ? SIMULERING.sensorfejlHverS : SIM.sensorfejlHverS)) {
+      sensorfejlTil = nu + (O ? SIMULERING.sensorfejlVarighedS : SIM.sensorfejlVarighedS) * 1000;
       skriv({ t: nu, hvor: "FT-743", tekst: "Sensorfejl · uden for 4–20 mA", niveau: "alarm" });
+      if (O) sket.push({ type: "sensorfejl" });
     }
     if (sensorfejlTil !== null && nu >= sensorfejlTil) {
       sensorfejlTil = null;
       skriv({ t: nu, hvor: "FT-743", tekst: "Signal tilbage", niveau: "info" });
+      if (O) sket.push({ type: "sensorTilbage", varighedS: (O ? SIMULERING.sensorfejlVarighedS : 0) });
     }
     const fejl = sensorfejlTil !== null;
     // Kun det, måleren så. Et hul i målingen er et hul i summen.
     if (!fejl) gennemloeb += flow * dt;
+
+    // --- Ordren: kasserne tippes, til der ikke er flere --------------------------
+    // Kiloene er det, der fysisk løber ind — ikke det, måleren så. En kasse
+    // tippes, også mens måleren er ude.
+    if (O && (fase === "koerer" || fase === "udloeb")) {
+      kgInd = Math.min(O.estimeretKg, kgInd + (flow / 100) * O.nominalTPrT * (1000 / 3600) * dt);
+    }
+    if (O && fase === "koerer") {
+      const kgPrKasse = O.estimeretKg / O.kasser;
+      while (kasserTippet < O.kasser && kgInd >= (kasserTippet + 1) * kgPrKasse - 1e-6) {
+        kasserTippet++;
+        skriv({ t: nu, hvor: "Vippestole", tekst: `Kasse ${kasserTippet}/${O.kasser} tippet`, niveau: "info" });
+        const kvart = Math.floor((kasserTippet / O.kasser) * 4);
+        if (kvart >= 1 && kvart <= 3 && !milepael.has(kvart)) {
+          milepael.add(kvart);
+          const p = koertFra !== null ? prognose({ kgInd, estimeretKg: O.estimeretKg, koertFra, nu }) : null;
+          sig({
+            fra: AGENT.operatoer, til: "Operatør", type: "rapport",
+            tekst: `${kasserTippet} af ${O.kasser} kasser · ${tal(kgInd)} kg.`,
+            grund: p !== null ? `Ved gennemløbet indtil nu er sidste kasse tippet ca. kl. ${klokke(p)}.` : undefined,
+          }, nu);
+        }
+      }
+      if (kasserTippet >= O.kasser) {
+        fase = "udloeb";
+        // Forfra: indgangen nu, sporene, når de er tomme. Det, der er tomt,
+        // stoppes først — intet står fuldt til næste ordre.
+        const indTrin = [...new Set(maskiner.filter((s) => !s.m.lane).map((s) => s.m.step))].sort((a, b) => a - b);
+        const sporTrin = [...new Set(maskiner.filter((s) => s.m.lane).map((s) => s.m.step))].sort((a, b) => a - b);
+        for (const s of maskiner) {
+          s.startVed = null;
+          s.stopVed = s.m.lane
+            ? nu + (SIMULERING.udloebS + sporTrin.indexOf(s.m.step) * SIMULERING.trinS) * 1000
+            : nu + indTrin.indexOf(s.m.step) * SIMULERING.trinS * 1000;
+        }
+        skriv({ t: nu, hvor: "Vippestole", tekst: "Sidste kasse tippet", niveau: "info" });
+        sig({
+          fra: AGENT.operatoer, til: AGENT.drift, type: "beslutning",
+          tekst: "Sidste kasse er tippet. Stop linjen forfra: indgangen nu, sporene når de er tomme.",
+          grund: `Sporene løber ${varighed(SIMULERING.udloebS)} endnu. Det, der er tomt, stoppes først.`,
+        }, nu);
+      }
+    }
 
     // --- Analysen: en ny prøve ad gangen, ikke en glidende kurve -----------
     // Et bord, der står, sender intet frø forbi analysen. Så står den seneste
@@ -691,8 +1002,18 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       const sum = raa.reduce((x, y) => x + y, 0);
       const andele = raa.map((p) => (p / sum) * 100);
       const alarm = andele[3] > ANALYSE.alarmFV3;
-      if (alarm && !a.alarm) skriv({ t: nu, hvor: a.kort, tekst: `FV3 ${andele[3].toFixed(1).replace(".", ",")} %`, niveau: "alarm" });
-      return { ...a, andele, alarm, proeveT: nu };
+      const ny = { ...a, andele, alarm, proeveT: nu };
+      if (alarm && !a.alarm) {
+        skriv({ t: nu, hvor: a.kort, tekst: `FV3 ${andele[3].toFixed(1).replace(".", ",")} %`, niveau: "alarm" });
+        if (O) sket.push({ type: "fv3", a: ny });
+      }
+      if (O) {
+        const f = fv3.get(a.kort) ?? { sum: 0, n: 0 };
+        f.sum += andele[3];
+        f.n++;
+        fv3.set(a.kort, f);
+      }
+      return ny;
     });
 
     // --- Kæden --------------------------------------------------------------
@@ -703,14 +1024,24 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     // det, agenterne beder om. Samme målere, som fremskrivningen sætter i
     // OT-laget; her tælles tallene, de sender, ikke kasserne.
     const signaler = maskiner.reduce((n, s) => n + s.kanaler.length + s.m.wIds.length, 0) + hal.length + 1;
-    const raekkerPrS = signaler * KAEDE.proeverPrS;
+    // Med en ordre kan Dataagenten have sænket prøveraten på nogle signaler.
+    const raekkerPrS = O ? planMed(antal, proeveTrin).raekkerPrS : signaler * KAEDE.proeverPrS;
     const forespoergsler = Math.ceil((signaler * KAEDE.registreProSignal) / KAEDE.registreProForespoergsel);
     const pollMs = forespoergsler * KAEDE.msProForespoergsel + Math.round(Math.abs(gauss(r)) * 2);
 
     // Episoden: databasen skriver langsommere en periode.
     if (foersteT === null) foersteT = nu;
     const siden = (nu - foersteT) / 1000 - FLASKEHALS.foersteS;
-    const episode = tvungenFlaskehals || (siden >= 0 && siden % FLASKEHALS.hverS < FLASKEHALS.varighedS);
+    // Med en ordre kommer episoderne tilfældigt, i simuleret tid.
+    if (O) {
+      if (episodeTil === null && fase !== "faerdig" && r() < dt / SIMULERING.flaskehalsHverS) {
+        episodeTil = nu + SIMULERING.flaskehalsVarighedS * 1000;
+        mssqlEpisoder++;
+      }
+      if (episodeTil !== null && nu >= episodeTil) episodeTil = null;
+    }
+    const episode = tvungenFlaskehals
+      || (O ? episodeTil !== null : siden >= 0 && siden % FLASKEHALS.hverS < FLASKEHALS.varighedS);
     const dbKapacitet = KAEDE.dbKapacitet * (episode ? FLASKEHALS.kapacitetAndel : 1);
 
     if (episode && !iEpisode) {
@@ -736,6 +1067,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     }
     // Hvor langt bagud: den ældste række i køen, ved den fart databasen skriver.
     const forsinkelseS = koe > 0.5 ? koe / dbKapacitet : 0;
+    maksForsinkelse = Math.max(maksForsinkelse, forsinkelseS);
 
     // Kædevagten: kan jeg stole på data lige nu? Ikke hvis de er forsinkede.
     if (forsinkelseS > FLASKEHALS.forsinkelseAlarmS && !alarmeret) {
@@ -822,6 +1154,10 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
             st.siden = nu;
             beslutninger++;
             skriv({ t: nu, hvor: "Driftsagent", tekst: `Stopper spor ${lane} · ${aarsag.tekst}`, niveau: "advarsel", ai: true });
+            if (O) {
+              sporStop.push({ lane, fra: nu, til: null, aarsag: aarsag.tekst });
+              sket.push({ type: "sporStop", lane, aarsag });
+            }
           } else {
             const a = st.aarsag!;
             const s = maskiner.find((x) => x.m.id === a.maskine)!;
@@ -835,8 +1171,27 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
             st.aarsag = null;
             st.siden = null;
             beslutninger++;
-            // Sporet starter forfra og skal have sin indkøringstid.
-            for (const x of liste) x.startet = nu;
+            if (O) {
+              // Bagfra: det sidste trin først. Sporets første maskine — den,
+              // fordeleren fodrer — starter sidst, så ingen buffer fyldes,
+              // før maskinen efter den kører.
+              const trin = [...new Set(liste.map((x) => x.m.step))].sort((a, b) => b - a);
+              for (const x of liste) {
+                x.slukket = true;
+                x.startVed = nu + trin.indexOf(x.m.step) * (SIMULERING.trinS / 3) * 1000;
+              }
+              genstarter.set(lane, nu);
+              const aaben = sporStop.find((p) => p.lane === lane && p.til === null);
+              if (aaben) aaben.til = nu;
+              sket.push({
+                type: "sporKlar", lane,
+                hvad: a.type === "ophobning" ? `${s.kort} kører igen` : `Frøet er kølet til ${fmtTal(temp!, 1)} °C`,
+                fyld: s.fyld,
+              });
+            } else {
+              // Sporet starter forfra og skal have sin indkøringstid.
+              for (const x of liste) x.startet = nu;
+            }
             skriv({
               t: nu, hvor: "Driftsagent",
               tekst: `Starter spor ${lane} · ${a.type === "ophobning" ? `${s.kort} kører igen` : `frø ${fmtTal(temp!, 1)} °C`}`,
@@ -866,6 +1221,284 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     const tid = maskiner.reduce((n, s) => n + s.totalMs, 0);
     const koert = maskiner.reduce((n, s) => n + s.koertMs, 0);
 
+    // --- Agenterne imellem ------------------------------------------------------
+    // Hver besked er udledt af tallene i dette skridt. Det er regler og
+    // skabeloner; det, der skal ses, er arbejdsdelingen og tallene bag.
+    if (O && ai) {
+      const andet = (l: string) => lanes.find((x) => x !== l) ?? l;
+      for (const e of sket) {
+        if (e.type === "maskinstop") {
+          const s = e.s;
+          maskinstop++;
+          const hvem = s.m.lane ? AGENT.linje(s.m.lane) : AGENT.drift;
+          const v = s.varslet;
+          s.varslet = null;
+          const diagnose = v
+            ? `Varslet: ${v.label.toLowerCase()} ${v.tekst} før stoppet, normalt ${v.normalt}.`
+            : "Intet varsel i signalerne før stoppet — sandsynligvis elektrisk.";
+          if (s.m.lane && s.fyld !== null) {
+            sig({
+              fra: hvem, til: AGENT.operatoer, type: "iagttagelse",
+              tekst: `${s.kort} står. Bufferen foran er ${tal(s.fyld)} % og fyldes.`,
+              grund: `${diagnose} Fuld om ca. ${tal((100 - s.fyld) / TILLOEB.fyldPrS)} s, hvis sporet kører videre.`,
+            }, nu);
+          } else {
+            sig({ fra: hvem, til: AGENT.operatoer, type: "iagttagelse", tekst: `${s.kort} står — der kommer intet materiale ind.`, grund: diagnose }, nu);
+            sig({
+              fra: AGENT.operatoer, til: "Operatør", type: "rapport",
+              tekst: `Indgangen står: ${s.kort}. Sporene kører videre tomme.`,
+              grund: "Der er intet at stoppe for — et spor uden materiale fylder ingen buffer.",
+            }, nu);
+          }
+        } else if (e.type === "sporStop") {
+          const graense = e.aarsag.type === "ophobning" ? `${DRIFTSAGENT.bufferStopPct} %` : `${DRIFTSAGENT.froeStopC} °C`;
+          sig({ fra: AGENT.drift, til: AGENT.operatoer, type: "handling", tekst: `Stopper spor ${e.lane}.`, grund: `${e.aarsag.tekst} — grænsen er ${graense}.` }, nu);
+          sig({
+            fra: AGENT.operatoer, til: "Operatør", type: "rapport",
+            tekst: `Spor ${e.lane} er stoppet: ${e.aarsag.tekst}. Spor ${andet(e.lane)} tager alt.`,
+            grund: `Gennemløbet falder til ca. ${tal(O.nominalTPrT * (SIM.flowNominal / 100) / 2, 2)} t/hr — ikke til nul. Sporet startes igen, når årsagen er væk.`,
+          }, nu);
+        } else if (e.type === "sporKlar") {
+          sig({
+            fra: AGENT.operatoer, til: AGENT.drift, type: "beslutning",
+            tekst: `Genstart spor ${e.lane} bagfra.`,
+            grund: `${e.hvad}. ${e.fyld !== null && e.fyld > TILLOEB.normalPct + 5
+              ? `Bufferen foran er ${tal(e.fyld)} % — bagfra er den tømt, før der fødes igen.`
+              : "Bagfra fyldes ingen buffer, før maskinen efter den kører."}`,
+          }, nu);
+        } else if (e.type === "sensorfejl") {
+          sensorfejl++;
+          sig({ fra: AGENT.data, til: "Alle", type: "iagttagelse", tekst: "FT-743 er uden for 4–20 mA. Markeret som fejl.", grund: "Summen springer hullet over frem for at gætte på det." }, nu);
+          sig({
+            fra: AGENT.operatoer, til: "Operatør", type: "rapport", tekst: "Flowmåleren er ude. Linjen kører.",
+            grund: `${koerende} af ${maskiner.length} maskiner melder, at de kører. Prognosen venter på måleren.`,
+          }, nu);
+        } else if (e.type === "sensorTilbage") {
+          sig({ fra: AGENT.data, til: "Alle", type: "iagttagelse", tekst: `FT-743 er tilbage efter ${varighed(e.varighedS)}.`, grund: `${varighed(e.varighedS)} mangler i summen — de er ikke fyldt ud.` }, nu);
+        } else if (e.type === "fv3") {
+          const bord = maskiner.find((x) => x.m.id === e.a.id)!;
+          const v = (id: string) => bord.kanaler.find((k) => k.spec.id === id)?.x;
+          sig({
+            fra: AGENT.linje(e.a.lane ?? "N"), til: AGENT.operatoer, type: "iagttagelse",
+            tekst: `FV3 ${tal(e.a.andele![3], 1)} % på ${e.a.kort} — normalt ${tal(analyseFor(bord.m)[3], 1)} %.`,
+            grund: `BIGF ${tal(v("bigf") ?? 0, 1)} %, BIGH ${tal(v("bigh") ?? 0, 1)} %. Én prøve er ikke en trend — næste kommer om ${SIM.analyseHverS} s.`,
+          }, nu);
+          fv3Tjek.set(e.a.id, { t: e.a.proeveT!, v: e.a.andele![3] });
+        }
+      }
+
+      // FV3: to prøver i træk er en trend, én er et udfald.
+      for (const a of analyse) {
+        const tjek = fv3Tjek.get(a.id);
+        if (!tjek || a.proeveT === null || a.proeveT <= tjek.t || !a.andele) continue;
+        fv3Tjek.delete(a.id);
+        if (a.andele[3] > ANALYSE.alarmFV3) {
+          sig({
+            fra: AGENT.operatoer, til: "Operatør", type: "forslag",
+            tekst: `Tjek luften på Alfa ${a.lane} og dækket på ${a.kort}.`,
+            grund: `To prøver i træk over ${ANALYSE.alarmFV3} % FV3: ${tal(tjek.v, 1)} og ${tal(a.andele[3], 1)} %. Det er det, bordet skal rense ud.`,
+          }, nu);
+        } else {
+          sig({
+            fra: AGENT.operatoer, til: AGENT.linje(a.lane ?? "N"), type: "beslutning", tekst: "Ingen handling.",
+            grund: `Næste prøve: FV3 ${tal(a.andele[3], 1)} %. Det var et enkeltudfald.`,
+          }, nu);
+        }
+      }
+
+      // Et spor, der er startet bagfra, kører, når dets sidste maskine gør.
+      for (const [lane, fra] of genstarter) {
+        const liste = iSpor.get(lane)!;
+        if (liste.some((x) => x.slukket)) continue;
+        genstarter.delete(lane);
+        const stop = [...sporStop].reverse().find((p) => p.lane === lane);
+        sig({ fra: AGENT.drift, til: AGENT.operatoer, type: "rapport", tekst: `Spor ${lane} kører · ${liste.length} maskiner på ${varighed((nu - fra) / 1000)}.` }, nu);
+        sig({
+          fra: AGENT.operatoer, til: "Operatør", type: "rapport", tekst: `Spor ${lane} kører igen.`,
+          grund: stop ? `Stod ${varighed(((stop.til ?? nu) - stop.fra) / 1000)}: ${stop.aarsag}.` : undefined,
+        }, nu);
+      }
+
+      // En linjeagent ser et stop komme: en kanal, der løber langt ud af sit bånd.
+      for (const s of maskiner) {
+        const indkoerer = s.startet !== null && nu - s.startet < INDKOERING_S * 1000;
+        if (!koererNu(s) || indkoerer) { s.afvigFra = null; continue; }
+        // Kun i den retning, der er farlig: en motor, der er kold efter et
+        // stop, varsler ingenting. Retningen er kanalens grænser.
+        const ude = s.kanaler
+          .filter((k) => OVERVAAGET.has(k.spec.id) && k.spec.spredning > 0)
+          .map((k) => {
+            const z = (k.x - k.spec.nominal) / k.spec.spredning;
+            const op = k.spec.alarmHoej !== undefined;
+            const ned = k.spec.alarmLav !== undefined;
+            return { k, z: (op && z > 0) || (ned && z < 0) ? z : 0 };
+          })
+          .sort((a, b) => Math.abs(b.z) - Math.abs(a.z))[0];
+        if (!ude || Math.abs(ude.z) < VARSEL_Z) {
+          if (!ude || Math.abs(ude.z) < 2) s.afvigMeldt = false;
+          s.afvigFra = null;
+          continue;
+        }
+        s.afvigFra ??= nu;
+        if (s.afvigMeldt || nu - s.afvigFra < 5000) continue;
+        s.afvigMeldt = true;
+        const hvem = s.m.lane ? AGENT.linje(s.m.lane) : AGENT.drift;
+        const { k, z } = ude;
+        sig({
+          fra: hvem, til: AGENT.operatoer, type: "iagttagelse",
+          tekst: `${s.kort}: ${k.spec.label.toLowerCase()} ${fmt(k.x, k.spec)} ${k.spec.unit}, normalt ${fmt(k.spec.nominal, k.spec)}.`,
+          grund: `${tal(Math.abs(z), 1)} gange det normale udsving og på vej væk. Det plejer at komme før et stop.`,
+        }, nu);
+        sig({
+          fra: AGENT.operatoer, til: "Operatør", type: "forslag", tekst: `Se på ${s.kort} nu, før den stopper.`,
+          grund: s.m.lane
+            ? `Står den, stopper Driftsagent spor ${s.m.lane}, og spor ${andet(s.m.lane)} tager over.`
+            : "Står den, kommer der intet materiale ind på linjen.",
+        }, nu);
+      }
+
+      // Friktion: en linjeagent ser frøet blive varmt og regner på, hvornår.
+      // Den melder først, når temperaturen har været tydeligt ude i et stykke
+      // tid — frøets temperatur vandrer af sig selv, og et alarmsystem, der
+      // melder hver gang, lærer folk at se bort fra det.
+      const froeGraense = (k: KanalTilstand) => k.spec.nominal + 4 * k.spec.spredning;
+      for (const s of maskiner) {
+        const k = s.kanaler.find((x) => x.spec.id === "froetemp");
+        if (!k) continue;
+        const f = froe.get(s.m.id) ?? { punkter: [], meldt: false, udeFra: null as number | null };
+        f.punkter.push({ t: nu, x: k.x });
+        while (f.punkter.length > 1 && nu - f.punkter[0].t > 60_000) f.punkter.shift();
+        const foerst = f.punkter[0];
+        const rate = nu > foerst.t ? (k.x - foerst.x) / ((nu - foerst.t) / 60_000) : 0;
+        f.udeFra = koererNu(s) && k.x >= froeGraense(k) ? f.udeFra ?? nu : null;
+        if (!f.meldt && f.udeFra !== null && nu - f.udeFra >= 20_000 && rate > 0.1) {
+          f.meldt = true;
+          const min = (DRIFTSAGENT.froeStopC - k.x) / rate;
+          sig({
+            fra: AGENT.linje(s.m.lane ?? "N"), til: AGENT.operatoer, type: "iagttagelse",
+            tekst: `Frøet i ${s.kort} er ${fmtTal(k.x, 1)} °C og stiger ${tal(rate, 1)} °C/min.`,
+            grund: `Rammer ${DRIFTSAGENT.froeStopC} °C om ca. ${varighed(Math.max(0, min * 60))}. Så stopper Driftsagent sporet.`,
+          }, nu);
+          sig({
+            fra: AGENT.operatoer, til: "Operatør", type: "forslag", tekst: `Friktion i ${s.kort}: tjek slibestenen, når sporet står.`,
+            grund: `Spireevnen tager skade over ${DRIFTSAGENT.froeStopC} °C. Stoppet klarer Driftsagent; årsagen skal et menneske se på.`,
+          }, nu);
+        }
+        if (f.meldt && k.x < DRIFTSAGENT.froeStartC - 1) f.meldt = false;
+        froe.set(s.m.id, f);
+      }
+
+      // Kæden: Kædevagten ser det, Dataagenten foreslår, Operatøragenten
+      // afvejer og beslutter.
+      const over = raekkerPrS > dbKapacitet;
+      overbelastFra = over ? overbelastFra ?? nu : null;
+      if (vagtMeldt === null && overbelastFra !== null && nu - overbelastFra >= 2000) {
+        vagtMeldt = nu;
+        const vokser = raekkerPrS - dbKapacitet;
+        sig({
+          fra: AGENT.vagt, til: AGENT.data, type: "iagttagelse",
+          tekst: `MSSQL skriver ${tal(dbKapacitet)} rækker/s. Vi sender ${tal(raekkerPrS)}.`,
+          grund: `Køen vokser ${tal(vokser)} rækker/s. Om et minut er data ${tal((vokser * 60) / dbKapacitet)} s bagud, og så holder Driftsagent.`,
+        }, nu);
+      }
+      if (vagtMeldt !== null && forslag === null && proeveTrin === 0 && nu - vagtMeldt >= 3000) {
+        forslag = { t: nu, ...vaelgPlan(antal, dbKapacitet) };
+        const trin = forslag.alle.map((p, i) => `${i + 1} trin ${tal(p.raekkerPrS)}`).join(", ");
+        sig({
+          fra: AGENT.data, til: AGENT.operatoer, type: "forslag",
+          tekst: `Sænk prøveraten: ${PROEVERATE.trin.slice(0, forslag.plan.trin).map((t) => t.navn.toLowerCase()).join(", ")}.`,
+          grund: `Rækker/s ved ${trin} — MSSQL kan ${tal(dbKapacitet)}. ${forslag.nok
+            ? `${forslag.plan.trin} trin giver luft.`
+            : "Selv alle trin er ikke nok; køen vil stadig vokse."} Flow og hastigheder røres ikke.`,
+        }, nu);
+      }
+      if (forslag !== null && proeveTrin === 0 && nu - forslag.t >= 2000) {
+        const foer = raekkerPrS;
+        // Prisen regnes af linjens normale gennemløb, ikke af øjeblikkets —
+        // under en opstart løber der endnu intet, og så ville den se gratis ud.
+        const tab = O.nominalTPrT * (SIM.flowNominal / 100) * 0.4;
+        sig({
+          fra: AGENT.operatoer, til: AGENT.data, type: "beslutning", tekst: "Godkendt.",
+          grund: `Overvejet og afvist: at skrue linjen ned. Rækkerne kommer fra ${signaler} signaler, ikke fra tons — 40 % mindre fødning ville koste ${tal(tab, 2)} t/hr og give 0 færre rækker.`,
+        }, nu);
+        proeveTrin = forslag.plan.trin;
+        beslutninger++;
+        sig({
+          fra: AGENT.data, til: "Alle", type: "handling",
+          tekst: `Prøverate sænket · ${tal(foer)} → ${tal(forslag.plan.raekkerPrS)} rækker/s.`,
+          grund: "Flow og hastigheder gemmes stadig fire gange i sekundet — dem styrer Driftsagent efter.",
+        }, nu);
+        skriv({ t: nu, hvor: AGENT.data, tekst: `Prøverate sænket · ${tal(forslag.plan.raekkerPrS)} rækker/s`, niveau: "advarsel", ai: true });
+      }
+      if (proeveTrin > 0 && koe <= 0.5 && !koeMeldt) {
+        koeMeldt = true;
+        sig({ fra: AGENT.vagt, til: AGENT.data, type: "iagttagelse", tekst: "Køen er skrevet. Data er i tide igen." }, nu);
+      }
+      // Tilbage til fuld rate, når databasen kan igen og har kunnet et stykke tid.
+      if (proeveTrin > 0) {
+        roligFra = !episode && koe <= 0.5 ? roligFra ?? nu : null;
+        if (roligFra !== null && nu - roligFra >= 30_000) {
+          const fuld = planMed(antal, 0).raekkerPrS;
+          proeveTrin = 0;
+          beslutninger++;
+          sig({
+            fra: AGENT.data, til: AGENT.operatoer, type: "handling",
+            tekst: `MSSQL skriver ${tal(KAEDE.dbKapacitet)} rækker/s igen. Prøverate tilbage på ${PROEVERATE.normal} pr. s.`,
+            grund: `Med fuld rate sendes ${tal(fuld)} rækker/s — ${tal((fuld / KAEDE.dbKapacitet) * 100)} % af det, den kan.`,
+          }, nu);
+          skriv({ t: nu, hvor: AGENT.data, tekst: "Prøverate tilbage på normal", niveau: "info", ai: true });
+          vagtMeldt = null;
+          forslag = null;
+          koeMeldt = false;
+          roligFra = null;
+        }
+      } else if (vagtMeldt !== null && forslag === null && !over && koe <= 0.5) {
+        // Gik det over, før Dataagenten nåede at foreslå noget, er der intet at gøre.
+        vagtMeldt = null;
+      }
+    }
+
+    // --- Ordren slutter, når alt er stoppet efter planen --------------------------
+    if (O && fase === "udloeb" && maskiner.every((s) => s.slukket)) {
+      fase = "faerdig";
+      slutT = nu;
+      skriv({ t: nu, hvor: "Ordre", tekst: `${O.ordreNr} færdig · ${varighed((nu - ordreStart!) / 1000)}`, niveau: "info" });
+      sig({
+        fra: AGENT.operatoer, til: "Operatør", type: "rapport", tekst: `Ordre ${O.ordreNr} er færdig.`,
+        linjer: ordreRapport({
+          ordreNr: O.ordreNr, kg: kgInd, kasser: kasserTippet, startT: ordreStart!, slutT: nu,
+          oppetidPct: tid > 0 ? (koert / tid) * 100 : null,
+          sporStop, maskinstop, mssqlEpisoder, maksForsinkelseS: maksForsinkelse, tabt: Math.round(tabt), sensorfejl,
+          fv3: [...fv3].map(([kort, f]) => ({ kort, snit: f.sum / Math.max(1, f.n) })),
+          beslutninger, beskeder: beskeder + 1,
+        }),
+      }, nu);
+    }
+
+    // Det, der sker lige nu. Så længe listen ikke er tom, går tiden langsomt.
+    const uro: Uro[] = [];
+    if (O) {
+      const u = (tekst: string, fejl = false) => uro.push({ tekst, fejl });
+      if (fase === "opstart") u("Opstart");
+      if (fase === "udloeb") u("Udløb");
+      for (const l of lanes) if (spor.get(l)!.stoppet) u(`Spor ${l} står`);
+      for (const [l] of genstarter) u(`Spor ${l} starter`);
+      for (const s of maskiner) if (s.stopTil !== null) u(`${s.kort} står`, true);
+      for (const s of maskiner) if (s.afvigMeldt) u(`Varsel ${s.kort}`);
+      for (const [id, f] of froe) if (f.meldt) u(`Friktion ${maskiner.find((x) => x.m.id === id)!.kort}`);
+      if (episode || koe > 0.5) u("MSSQL bagud");
+      if (proeveTrin > 0) u("Prøverate sænket");
+      if (sensorfejlTil !== null) u("FT-743 ude", true);
+      if (fv3Tjek.size > 0) u("FV3 tjekkes");
+    }
+
+    // Støjen i billedet trækkes her, i samme rækkefølge som altid, så et
+    // skridt uden billede giver præcis det samme forløb som et med.
+    const maStoej = fejl ? r() : 0;
+    const msStoej = r();
+    uroNu = uro.length > 0;
+    if (!medBillede) return null;
+
     return {
       t: nu,
       simuleret: true,
@@ -880,8 +1513,8 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
           lane: s.m.lane,
           koerer,
           // En maskine, der selv er gået i stå, er en fejl — også når dens
-          // spor står. Kun de andre står på agentens beslutning.
-          styret: s.stopTil === null && styret(s),
+          // spor står. Kun de andre står på agentens beslutning eller plan.
+          styret: s.stopTil === null && (styret(s) || s.slukket),
           fyld: s.fyld === null ? null : Math.round(s.fyld),
           kanaler,
           alarm: kanaler.some((k) => k.alarm),
@@ -891,7 +1524,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       flowPct: fejl ? null : flow,
       gennemloeb,
       // Ved sensorfejl er det rå signal uden for sløjfen — det er fejlen.
-      flowMa: fejl ? 3.2 + r() * 0.2 : maFromPercent(flow),
+      flowMa: fejl ? 3.2 + maStoej * 0.2 : maFromPercent(flow),
       analyse,
       kaede: {
         signaler,
@@ -907,7 +1540,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
         modtaget,
         skrevetIalt,
         skrevet: Math.floor(skrevetStart + skrevetIalt),
-        senesteMs: Math.round(forsinkelseS * 1000 + r() * 250),
+        senesteMs: Math.round(forsinkelseS * 1000 + msStoej * 250),
         flaskehals,
         aarsag: episode ? FLASKEHALS.aarsag : null,
         led,
@@ -930,8 +1563,29 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
             beslutninger,
           }
         : null,
+      samtale: [...samtale],
+      ordre: O
+        ? {
+            ordreNr: O.ordreNr,
+            fase,
+            kgInd,
+            estimeretKg: O.estimeretKg,
+            kasserTippet,
+            kasser: O.kasser,
+            startT: ordreStart ?? nu,
+            slutT,
+            prognoseT: fase === "koerer" && koertFra !== null && !fejl
+              ? prognose({ kgInd, estimeretKg: O.estimeretKg, koertFra, nu })
+              : null,
+            proeveTrin,
+          }
+        : null,
+      uro,
     };
   }
 
-  return { skridt };
+  return {
+    skridt: (dtMs, nu) => gaa(dtMs, nu, true)!,
+    frem: (dtMs, nu) => { gaa(dtMs, nu, false); return uroNu; },
+  };
 }

@@ -133,6 +133,67 @@ const sliberi: Agent[] = [
     beslutning: "besluttet",
   },
 
+  {
+    id: "AG-SLIB-DATA",
+    name: "Dataagent",
+    role: "data",
+    til: "Systemansvarlig",
+    svarerPaa: "Kommer data frem i tide — og hvis ikke, hvad skruer vi på?",
+    // Kædevagten opdager, at data halter. Dataagenten gør noget ved det:
+    // sænker prøveraten på de signaler, der kan tåle det, og sætter den op
+    // igen, når databasen kan følge med. Den rører aldrig de hurtige
+    // signaler — dem styrer Driftsagenten efter.
+    job: "Holder data flydende: prøverate, prioritet og huller, når kæden ikke kan følge med.",
+    scope: { kind: "chain" },
+    inputs: [
+      { chainStep: "kobler", required: true, need: "IO-kobleren skal svare på Modbus" },
+      { chainStep: "edge", required: true, need: "Edge-collectoren skal køre og poll'e" },
+      { chainStep: "mssql", required: true, need: "Databasen skal tage imod rækker" },
+    ],
+    // Regnestykket er regler. Claude vejer planen og skriver, hvorfor.
+    engine: "claude",
+    cadence: "Ved hændelser",
+    beslutning: "besluttet",
+  },
+
+  {
+    id: "AG-SLIB-OPERATOER",
+    name: "Operatøragent",
+    role: "koordinering",
+    til: "Operatør",
+    svarerPaa: "Hvad er det bedste for ordren lige nu?",
+    // Den overordnede. De andre agenter ser hver sit: et spor, kæden, data,
+    // stop og start. Operatøragenten afvejer dem mod hinanden — tons mod
+    // datakvalitet, et hurtigt stop mod en god genstart — beslutter, og
+    // fortæller operatøren, hvad der sker og hvorfor.
+    //
+    // Den er ikke Driftsagenten. Det, der skal stoppe et spor inden for to
+    // sekunder, skal være enkelt og forudsigeligt; det, der skal afveje og
+    // tale med mennesker, skal være klogt. Som en sikring og en vagthavende.
+    job: "Koordinerer agenterne, træffer afvejningerne og holder operatøren orienteret om ordren.",
+    scope: { kind: "line" },
+    inputs: [
+      {
+        type: "motor-run",
+        required: true,
+        need: "Driftssignal (DI) pr. maskine på linjen",
+      },
+      {
+        chainStep: "mssql",
+        required: true,
+        need: "Databasen skal tage imod rækker, uden at halte",
+      },
+      {
+        inlet: "materiale",
+        required: false,
+        need: "Materialestrøm ved linjens indgang",
+      },
+    ],
+    engine: "claude",
+    cadence: "Ved hændelser",
+    beslutning: "besluttet",
+  },
+
   // --- Idéer -------------------------------------------------------------
   // Tænkt, men ikke besluttet. De tæller ikke med i optællinger og får ingen
   // zone på gulvet, før nogen siger ja til dem.

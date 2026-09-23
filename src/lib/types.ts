@@ -447,7 +447,7 @@ export interface LineOps {
  * ind i driften. Det skel skal kunne ses, for det er ikke det samme at sende
  * en rapport som at stoppe en linje.
  */
-export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt" | "styring";
+export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt" | "styring" | "data" | "koordinering";
 
 /**
  * Hvor langt nogen har taget stilling til agenten.

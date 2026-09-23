@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SIMULERING } from "../../../data/fremskrivning";
 import { tallyMedTelemetri, type HudModel } from "../../lib/ai-hud";
 import { SITE } from "../../lib/context";
 import { rateFrom } from "../../lib/flow";
 import { layoutLine } from "../../lib/layout";
 import type { LiveSourceKind } from "../../lib/live-source";
 import type { OtLayout } from "../../lib/ot";
-import type { TelemetriBillede } from "../../lib/telemetri";
+import type { OrdreValg, TelemetriBillede } from "../../lib/telemetri";
 import type { LineData } from "../../lib/types";
 import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
@@ -17,7 +18,8 @@ import {
 } from "./HudPanels";
 import { Afkod } from "./Instrumenter";
 import { LogVindue } from "./LogVindue";
-import { useTelemetri } from "./useTelemetri";
+import type { Hastighed } from "./simKanal";
+import { useTelemetri, type Styring } from "./useTelemetri";
 import "./hud.css";
 
 /**
@@ -34,7 +36,7 @@ import "./hud.css";
  *   - Grænseflade: opstarten og kameraets tur. De viser ingen data og
  *     lader ikke som om. `prefers-reduced-motion` slukker begge.
  */
-export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals, ophobning }: {
+export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals, ophobning, seed }: {
   model: HudModel;
   line: LineData;
   ot: OtLayout | null;
@@ -46,13 +48,22 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   flaskehals?: boolean;
   /** Lad KB-3N gå i stå kort efter start, så Driftsagenten kan ses gribe ind. */
   ophobning?: boolean;
+  /** En anden dag: et andet seed giver andre hændelser. */
+  seed?: number;
 }) {
   useFrameProbe(measure);
   const still = useReducedMotion();
   const layout = useMemo(() => layoutLine(line), [line]);
   const flowSignal = model.links.find((l) => l.instrument.signalId)?.instrument.signalId;
-  const { billede, historik, log } = useTelemetri({
-    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning,
+  // I fremskrivningen køres ordren fra start til slut — når der er en ordre
+  // og et 100 %-punkt at regne kilo med. Ellers kører simulatoren bare.
+  const ordre = useMemo<OrdreValg | null>(() => {
+    const o = model.ordre;
+    if (!model.fremskrevet || !o.ordreNr || !o.estimeretKg || !o.kasser || !model.flow.nominal) return null;
+    return { ordreNr: o.ordreNr, estimeretKg: o.estimeretKg, kasser: o.kasser, nominalTPrT: model.flow.nominal };
+  }, [model]);
+  const { billede, historik, log, samtale, styring } = useTelemetri({
+    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning, ordre, seed,
   });
   const nu = useUr();
   const boot = useOpstart(still);
@@ -62,13 +73,18 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   // Skanningen løber, når Kædevagten kører: de første tolv sekunder af hvert
   // kvarter, samme kadence som agenten har i agents.ts. Kun i fremskrivningen
   // — i virkeligheden kører vagten ikke endnu.
-  const vagt = model.fremskrevet && nu % 900_000 < 12_000;
+  const vagt = model.fremskrevet && (styring ? billede.t : nu) % 900_000 < 12_000;
   // Er tallene simulerede — enten af fremskrivningen eller af LiveSource —
   // skal hvert instrument, der viser dem, sige det.
   const sim = billede.simuleret || liveSource === "mock";
   const iFokus = fokus ? billede.maskiner.find((m) => m.id === fokus) ?? null : null;
   const [logAaben, setLogAaben] = useState(false);
   const lukLog = useCallback(() => setLogAaben(false), []);
+  // Loggen i sit eget vindue, til en anden skærm. Den lytter på simuleringen
+  // her; den kører ingen selv.
+  const aabnSkaerm2 = useCallback(() => {
+    window.open("/ai/demo/log", "ubs-simlog", "popup,width=1400,height=900");
+  }, []);
 
   return (
     <main
@@ -98,15 +114,17 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         <span className="hud-sep" aria-hidden />
         <span className="hud-line-name">{model.lineName}</span>
         <span className="hud-sep" aria-hidden />
-        <Ur nu={nu} />
+        {styring ? <Ur nu={billede.t} /> : <Ur nu={nu} />}
         <Puls billede={billede} sim={sim} />
+        {styring && <Fart styring={styring} />}
         <h1><Afkod tekst={model.fremskrevet ? "AI-overblik · fremskrevet" : "AI-overblik"} forsinkelse={150} still={still} /></h1>
         {!model.fremskrevet && <Link href="/ai/demo" className="hud-switch">Med signaler inde</Link>}
+        {styring && <button type="button" className="hud-switch" onClick={aabnSkaerm2}>Log · skærm 2</button>}
         <Link href="/ai?visning=dokument" className="hud-switch">Dokumentvisning</Link>
       </header>
 
       <div className="hud-left">
-        <OrdrePanel ordre={model.ordre} nominal={model.flow.nominal} gennemloeb={billede.gennemloeb} nr={1} still={still} />
+        <OrdrePanel ordre={model.ordre} nominal={model.flow.nominal} gennemloeb={billede.gennemloeb} status={billede.ordre} nr={1} still={still} />
         <FlowPanel model={model} billede={billede} historik={historik} sim={sim} nr={2} still={still} />
         <DriftPanel billede={billede} historik={historik} nr={3} still={still} />
         <KlimaPanel billede={billede} historik={historik} nr={4} still={still} />
@@ -121,7 +139,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       </div>
 
       <div className="hud-right">
-        <AgentCores model={model} nr={5} still={still} ai={billede.ai} sim={billede.simuleret} />
+        <AgentCores model={model} nr={5} still={still} ai={billede.ai} sim={billede.simuleret} samtale={samtale} />
         <KvalitetPanel billede={billede} nr={6} still={still} />
         <KastebordPanel billede={billede} nr={7} still={still} />
       </div>
@@ -144,7 +162,15 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         <Haendelser billede={billede} nr={9} still={still} onAaben={() => setLogAaben(true)} />
       </div>
 
-      {logAaben && <LogVindue log={log} sim={billede.simuleret} onLuk={lukLog} />}
+      {logAaben && (
+        <LogVindue
+          log={log}
+          samtale={styring ? samtale : null}
+          sim={billede.simuleret}
+          onLuk={lukLog}
+          onSkaerm2={styring ? aabnSkaerm2 : undefined}
+        />
+      )}
 
       {boot && <Opstart model={model} liveSource={liveSource} />}
     </main>
@@ -170,6 +196,39 @@ function Ur({ nu }: { nu: number }) {
   return (
     <span className="hud-ur fm-num">
       {p(t.getHours())}<i>:</i>{p(t.getMinutes())}<i>:</i>{p(t.getSeconds())}
+    </span>
+  );
+}
+
+/** Farterne, simuleringen kan køre med. "Auto" går langsomt, når der sker noget. */
+const FARTER: { h: Hastighed; label: string }[] = [
+  { h: "pause", label: "Pause" },
+  { h: 1, label: "1×" },
+  { h: 10, label: "10×" },
+  { h: SIMULERING.hurtig, label: `${SIMULERING.hurtig}×` },
+  { h: "auto", label: "Auto" },
+];
+
+/**
+ * Hvor hurtigt tiden går. Tallet står der altid, så ingen tager en time på
+ * skærmen for en time i hallen.
+ */
+function Fart({ styring }: { styring: Styring }) {
+  return (
+    <span className="hud-fart" role="group" aria-label="Simuleringens fart">
+      <span className="hud-gang fm-num">{styring.gang === 0 ? "Pause" : `×${styring.gang}`}</span>
+      {FARTER.map((f) => (
+        <button
+          key={String(f.h)}
+          type="button"
+          className={`hud-fartknap${styring.valgt === f.h ? " is-valgt" : ""}`}
+          aria-pressed={styring.valgt === f.h}
+          onClick={() => styring.saet(f.h)}
+        >
+          {f.label}
+        </button>
+      ))}
+      <button type="button" className="hud-fartknap" onClick={styring.genstart}>Forfra</button>
     </span>
   );
 }
