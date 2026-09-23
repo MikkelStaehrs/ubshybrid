@@ -12,7 +12,7 @@ import { machineState } from "./hologram";
 import { layoutLine } from "./layout";
 import { LINES } from "./lines";
 import {
-  isDone, layoutOt, otLayerFor, pathState,
+  channelReport, isDone, layoutOt, otLayerFor, pathState, registerMap,
   type OtLayout,
 } from "./ot";
 import type { AgentEngine, OtStatus } from "./types";
@@ -60,6 +60,28 @@ export function hudAgentState(status: AgentState["status"]): HudState {
  */
 export type LinkTone = "drift" | "test" | "brud" | "moerk";
 
+/**
+ * Aflæsningerne på ét led.
+ *
+ * Et led er et instrument, ikke en kasse med et ord. Alt her findes i
+ * forvejen i OT-laget — kanal, registeradresse, kanalpladser, hvad leddet
+ * venter på. Der regnes ikke noget nyt ud, og der opfindes ingenting: har
+ * et led ingen tal, står listen tom.
+ */
+export interface LinkInstrument {
+  /** Korte par i mono: "KANAL · AI1", "REGISTER · 30001–30002". */
+  readings: { label: string; value: string }[];
+  /**
+   * Kanalpladserne på IO-kortet. `used` er de optagede. Tom, når der ikke
+   * er et kort at tælle pladser på endnu.
+   */
+  slots?: { name: string; used: boolean }[];
+  /** Det ene, leddet venter på. Kun sat når leddet ikke leverer. */
+  waits?: string;
+  /** Sensorens tag, så fladen kan slå en aflæsning op. Kun på måleren. */
+  signalId?: string;
+}
+
 export interface HudLink {
   id: string;
   label: string;
@@ -74,6 +96,8 @@ export interface HudLink {
   broken: boolean;
   /** Det ene, leddet afventer. Kun på bruddet. Et navn, ikke en sætning. */
   next?: string;
+  /** Leddets egne tal. */
+  instrument: LinkInstrument;
 }
 
 export interface HudAgent {
@@ -162,6 +186,60 @@ function nextStepAt(ot: OtLayout, stepId: string): string | undefined {
  * farven: ét led i test gør hele kæden til test. Grøn er forbeholdt en kæde,
  * hvor hvert eneste led er i drift.
  */
+/**
+ * Leddets egne tal, hentet hvor de allerede står.
+ *
+ * Måleren kender sit tag, sin model, sin kanal og sin registeradresse.
+ * IO-kortet kender sine pladser. De øvrige led kender kun det, de venter
+ * på — og det er også en aflæsning værd at vise.
+ */
+function instrumentFor(
+  stepId: string,
+  ot: OtLayout,
+  blockedBy: string[],
+): LinkInstrument {
+  const sensor = ot.sensors[0];
+  const cabinet = ot.cabinets[0];
+  const waits = blockedBy[0];
+
+  if (stepId === "sensor" && sensor) {
+    const report = cabinet ? channelReport(cabinet, ot.sensors, 1) : null;
+    const reg = report ? registerMap(report, [sensor])[0] : undefined;
+    const readings = [
+      { label: "Måler", value: sensor.model },
+      { label: "Signal", value: sensor.signal },
+    ];
+    const kanal = report?.channel.get(sensor.id);
+    if (kanal) readings.push({ label: "Kanal", value: kanal });
+    if (reg) readings.push({ label: "Register", value: reg.address });
+    return { readings, signalId: sensor.id, waits };
+  }
+
+  if (stepId === "io" && cabinet) {
+    const report = channelReport(cabinet, ot.sensors, 1);
+    // Pladserne tegnes som de er: optagede først, resten tomme. Tallene
+    // kommer fra kanalregnskabet, ikke fra en optælling her.
+    const slots = report.uses.flatMap((u) =>
+      Array.from({ length: u.total }, (_, i) => ({
+        name: `${u.kind.toUpperCase()}${i + 1}`,
+        used: i < u.used,
+      })),
+    );
+    const brugt = report.uses.reduce((n, u) => n + u.used, 0);
+    const ialt = report.uses.reduce((n, u) => n + u.total, 0);
+    return {
+      readings: [
+        { label: "Skab", value: cabinet.id },
+        { label: "Pladser", value: `${brugt} / ${ialt}` },
+      ],
+      slots,
+      waits,
+    };
+  }
+
+  return { readings: [], waits };
+}
+
 export function chainToneOf(links: HudLink[]): LinkTone {
   if (links.length === 0) return "moerk";
   if (links.some((l) => l.broken)) return "brud";
@@ -204,6 +282,11 @@ export function hudModel(lineId: string): HudModel | null {
         delivers,
         broken,
         next: broken ? nextStepAt(ot, s.id) : undefined,
+        instrument: instrumentFor(
+          s.id,
+          ot,
+          delivers ? [] : s.blockedBy.map((n) => n.name),
+        ),
       });
     }
   }

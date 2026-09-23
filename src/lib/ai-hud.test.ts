@@ -165,7 +165,7 @@ describe("kædens samlede tone", () => {
   const led = (status: HudLink["status"], broken = false): HudLink => ({
     id: status, label: status, status,
     state: "afventer", statusLabel: "AFVENTER", tone: "moerk",
-    delivers: !broken, broken,
+    delivers: !broken, broken, instrument: { readings: [] },
   });
 
   it("er bruddets, når kæden er brudt", () => {
@@ -197,5 +197,64 @@ describe("intet grønt før noget er i drift", () => {
     assert.ok(!m.links.some((l) => l.tone === "drift"));
     assert.ok(!m.agents.some((a) => a.state === "paa-plads"));
     assert.notEqual(m.chainTone, "drift");
+  });
+});
+
+describe("kæden som instrumenter", () => {
+  const led = (id: string) => {
+    const l = m.links.find((x) => x.id === id);
+    assert.ok(l, `leddet ${id} findes ikke`);
+    return l;
+  };
+
+  it("måleren viser sine egne tal, ikke bare et ord", () => {
+    const i = led("sensor").instrument;
+    const par = new Map(i.readings.map((r) => [r.label, r.value]));
+    assert.equal(par.get("Kanal"), "AI1");
+    assert.equal(par.get("Register"), "30001–30002");
+    assert.match(par.get("Måler") ?? "", /FS 550/);
+    // Fladen skal kunne slå en aflæsning op på taget.
+    assert.equal(i.signalId, "FT-743");
+  });
+
+  it("IO-kortet viser kanalpladser, og præcis én er optaget", () => {
+    const i = led("io").instrument;
+    assert.ok(i.slots && i.slots.length > 0, "der skal være pladser at vise");
+    const optaget = i.slots!.filter((s) => s.used);
+    assert.equal(optaget.length, 1, "kun flowsignalet fylder en plads i dag");
+    assert.equal(optaget[0].name, "AI1");
+    // Pladserne er talt af kanalregnskabet, ikke skrevet i hånden.
+    const par = new Map(i.readings.map((r) => [r.label, r.value]));
+    assert.equal(par.get("Pladser"), `${optaget.length} / ${i.slots!.length}`);
+  });
+
+  it("hvert led, der ikke leverer, siger hvad det venter på", () => {
+    for (const l of m.links) {
+      if (l.delivers) continue;
+      // IO-kortet venter på skabet selv og bærer det som `next`.
+      const venter = l.next ?? l.instrument.waits;
+      assert.ok(venter && venter.length > 0, `${l.id} venter på noget unavngivet`);
+    }
+  });
+
+  it("et led, der leverer, venter ikke på noget", () => {
+    for (const l of m.links) {
+      if (!l.delivers) continue;
+      assert.equal(l.instrument.waits, undefined, `${l.id} leverer og venter samtidig`);
+    }
+  });
+
+  it("kun måleren bærer en aflæsning", () => {
+    const med = m.links.filter((l) => l.instrument.signalId);
+    assert.equal(med.length, 1);
+    assert.equal(med[0].id, "sensor");
+  });
+
+  it("der er præcis ét sted, en puls kan blive standset", () => {
+    // Ringen ved bruddet kræver, at leddet før leverer. Ellers ville den
+    // slå ud uden at noget var nået frem.
+    const i = m.links.findIndex((l) => l.broken);
+    assert.ok(i > 0, "bruddet ligger ikke som første led i dag");
+    assert.equal(m.links[i - 1].delivers, true);
   });
 });

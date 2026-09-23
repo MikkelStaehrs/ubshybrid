@@ -37,5 +37,10 @@ export default async function AiPage({
   // ?maal=1 tænder frametids-måling under udvikling. I produktion er den
   // slået fra uanset hvad — se useFrameProbe i HudView.
   const measure = params.maal === "1" && process.env.NODE_ENV !== "production";
-  return <HudView model={model} line={line} ot={ot} measure={measure} />;
+  // Samme variabel som kortet læser. Måleren aflæses på HUD'en, så man kan
+  // se, at den svarer — og at intet af det når frem til en database endnu.
+  const liveSource = process.env.LIVE_SOURCE === "api" ? "api" : "mock";
+  return (
+    <HudView model={model} line={line} ot={ot} liveSource={liveSource} measure={measure} />
+  );
 }

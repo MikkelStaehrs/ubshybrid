@@ -1,10 +1,14 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { HudModel } from "../../lib/ai-hud";
 import { SITE } from "../../lib/context";
+import { nominalFor, rateFrom } from "../../lib/flow";
+import type { LiveSourceKind } from "../../lib/live-source";
+import { lineOpsFor } from "../../lib/agents";
 import type { OtLayout } from "../../lib/ot";
 import type { LineData } from "../../lib/types";
+import { useLiveSignals } from "../../lib/useLiveSignals";
 import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
 import { AgentCores, BreakStage, CostPanel, Readout, RunLog } from "./HudPanels";
@@ -22,14 +26,16 @@ import "./hud.css";
  * pathState(), signalDelivery() og agentstatus. Der er ingen tilstand her
  * inde og intet, der bevæger sig uden at svare til noget virkeligt.
  */
-export function HudView({ model, line, ot, measure }: {
+export function HudView({ model, line, ot, liveSource, measure }: {
   model: HudModel;
   line: LineData;
   ot: OtLayout | null;
+  liveSource: LiveSourceKind;
   measure?: boolean;
 }) {
   useFrameProbe(measure);
   const still = useReducedMotion();
+  const reading = useSensorReading(model, liveSource);
 
   return (
     <main className="ai-hud">
@@ -67,10 +73,38 @@ export function HudView({ model, line, ot, measure }: {
             {model.reach.delivers} / {model.reach.total}
           </span>
         </div>
-        <ChainCircuit model={model} />
+        <ChainCircuit model={model} reading={reading} />
       </footer>
     </main>
   );
+}
+
+/**
+ * Måleraflæsningen til kædens første instrument.
+ *
+ * Kun flowsignalet hentes — det er det eneste, der har en kilde i dag.
+ * Værdien er procent af nominel kapacitet; takten kommer kun med, hvis
+ * 100 %-punktet er aftalt. Er det ikke, står der procent alene frem for
+ * et tal i tons, ingen har sagt god for.
+ *
+ * Aflæsningen siger noget om måleren, ikke om kæden. Fladen mærker den SIM.
+ */
+function useSensorReading(model: HudModel, kind: LiveSourceKind): string | undefined {
+  const signalId = model.links.find((l) => l.instrument.signalId)?.instrument.signalId;
+  const ids = useMemo(() => (signalId ? [signalId] : []), [signalId]);
+  const live = useLiveSignals(kind, ids, ids.length > 0);
+  if (!signalId) return undefined;
+
+  const v = live.values.get(signalId);
+  if (!v || v.value === null || !Number.isFinite(v.value)) return "—";
+
+  const ops = lineOpsFor(model.lineId);
+  const pct = v.value;
+  const rate = rateFrom(pct, nominalFor(ops, signalId));
+  const tal = (n: number) => n.toFixed(1).replace(".", ",");
+  return rate === null
+    ? `${tal(pct)} %`
+    : `${tal(pct)} % · ${tal(rate)} ${ops!.rateUnit}`;
 }
 
 /** Beder brugeren om ro, står hologrammet stille — bane og strøm slukkes. */

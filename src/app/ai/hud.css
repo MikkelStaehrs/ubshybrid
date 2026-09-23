@@ -490,38 +490,111 @@
 .cc-node.tone-moerk .cc-box { stroke-dasharray: 4 4; }
 .cc-node.is-broken .cc-box { stroke-width: 2.5; }
 
+/* Overskrift og status i instrumentets hoved. */
 .cc-label {
   fill: var(--hud-ink);
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-anchor: middle;
   text-transform: uppercase;
 }
 .cc-node.tone-moerk .cc-label { fill: var(--hud-muted); }
 .cc-status {
   fill: var(--t);
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-anchor: middle;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-anchor: end;
   text-transform: uppercase;
 }
 .cc-node.tone-moerk .cc-status { fill: var(--hud-muted); }
+.cc-rule { stroke: var(--hud-line); stroke-width: 1; }
 
+/* Aflæsningerne: etiket til venstre, tal til højre, som på et instrument. */
+.cc-rd-label {
+  fill: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cc-rd-value {
+  fill: var(--hud-ink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-anchor: end;
+}
+.cc-node.tone-moerk .cc-rd-value { fill: var(--hud-muted); }
+
+/* Måleraflæsningen. Den er stor, fordi den er det eneste tal på skærmen,
+   der kommer fra en måler — og mærket, fordi den er simuleret. */
+.cc-live-value {
+  fill: var(--t-lys);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.cc-sim {
+  fill: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  text-anchor: end;
+}
+
+/* Kanalpladser. En fyldt plads er optaget, en tom er ledig — stiplet,
+   som alt andet der ikke findes endnu. */
+.cc-slot { fill: none; stroke: var(--hud-moerk); stroke-width: 1; }
+.cc-slot.is-used { fill: var(--t); stroke: var(--t); }
+
+.cc-waits {
+  fill: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+.cc-node.is-broken .cc-waits { fill: var(--hud-brud); }
+
+/* --- Banen og pulsen ----------------------------------------------------- */
 .cc-track { stroke: var(--hud-moerk); stroke-width: 2; }
 .cc-seg.is-live .cc-track { stroke: var(--t); opacity: 0.4; }
-/* Pulsen løber kun på led, der leverer. Den findes ikke på de andre. */
-.cc-pulse {
-  stroke: var(--t-lys);
-  stroke-width: 3;
-  stroke-linecap: round;
+/* Efter bruddet: vejen kan ses, men den er ikke tændt. */
+.cc-seg.is-ghost .cc-track { stroke-dasharray: 3 7; opacity: 0.5; }
+
+/* Pulsen løber kun på led, der leverer. Den findes ikke på de andre.
+   Hoved med hale, skubbet langs banen — ingen filtre, kun transform. */
+.cc-spark {
+  will-change: transform;
   animation: cc-run 2.2s linear infinite;
 }
 @keyframes cc-run {
-  from { stroke-dashoffset: 100; }
-  to { stroke-dashoffset: 0; }
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--len)); }
+}
+.cc-head { fill: var(--t-lys); }
+.cc-tail {
+  stroke: var(--t-lys);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.32;
+}
+
+/* Ringen ved bruddet. Den deler takt med pulsen, så den slår ud præcis
+   når noget ankommer — én ring pr. blokeret puls, ikke en pynteeffekt. */
+.cc-ring {
+  fill: none;
+  stroke: var(--hud-brud);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: cc-blocked 2.2s ease-out infinite;
+}
+@keyframes cc-blocked {
+  0% { transform: scale(0.35); opacity: 0.85; }
+  40% { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
 }
 
 /* --- Stilstand ----------------------------------------------------------- */
@@ -534,7 +607,10 @@
     animation: none !important;
     transition: none !important;
   }
-  .cc-pulse { stroke-dasharray: none; opacity: 0.9; }
+  /* Pulsen bliver stående ved bruddet i stedet for at løbe: den siger
+     stadig, at noget når frem hertil og ikke længere. */
+  .cc-spark { transform: translateX(var(--len)); }
+  .cc-ring { opacity: 0.55; }
   .cc-glow.is-pulse { opacity: 0.36; }
   .hb-dot { opacity: 1; }
   /* Hologrammet står stille af sig selv — Hologram.tsx slukker banen. */
