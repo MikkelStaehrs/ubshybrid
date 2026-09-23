@@ -108,6 +108,8 @@ Kortet må aldrig vise noget, der ser ud som en måling uden at være det.
   begrundelse frem for et tomt felt med et gæt i.
 - Adresser og tal, der er foreslået og ikke aftalt, skrives som forslag
   (registerkortet, stopgrænsen på 120 s, grænserne for lavt og højt flow).
+- **Fremskrivningen er den ene undtagelse** — og den er mærket hele vejen.
+  Se nedenfor.
 
 ## Status udledes
 
@@ -184,6 +186,33 @@ En test scanner modellens synlige strenge for dem.
 **Ingen forklarende sætninger.** Labels er på højst fire ord, og brudpanelet
 er to linjer: hvor kæden stopper, og hvad den afventer. Skal noget uddybes,
 hører det til i dokumentvisningen. Også det er en test.
+
+### Fremskrivningen
+
+`/ai?visning=fremtid` viser anlægget, som det ville se ud med signalerne
+inde. Det er den eneste flade i repoet, hvor tallene ikke kommer fra
+anlægget, og reglerne om den er derfor snævre.
+
+**Den rører kun udgangstilstanden.** `src/lib/fremskrivning.ts` ændrer tre
+ting: de signaler, agenterne beder om, findes; alle signaler er i drift; og
+skabet og kæden står. Derefter regner `pathState()`, `signalDelivery()` og
+agentstatus som altid — de ved ikke, at de er i en fremskrivning, og de får
+ingen særbehandling. Går en regel i stykker, går den i stykker begge steder.
+
+**Intet tal opfindes.** De ekstra signaler gribes ikke ud af luften: de
+kommer fra agenternes egne `type`-inputs, så fremskrivningen viser det
+anlæg, de besluttede agenter allerede har bedt om. Et `signalId` peger på en
+bestemt måler og kan ikke opfindes. En idé bliver ikke slået til.
+
+**Opdigtede tags kan kendes.** De hedder `X…` og har modellen "Ikke valgt" —
+de må ikke kunne forveksles med et tag, nogen har tildelt.
+
+**Den må ikke smitte.** Fremskrivningen kopierer og muterer aldrig de delte
+dataarrays. Tre tests slår det fast; bryder man dem, ser anlægget bagefter
+bedre ud, end det er.
+
+Mærkatet øverst kan ikke klikkes væk og ligger over topbåndet, så det følger
+med på et skærmbillede, nogen sender videre.
 
 **Alt der bevæger sig, viser en tilstand.** En puls løber kun på led, der
 leverer, og stopper ved bruddet. Ingen tilfældig flimren, ingen tal der

@@ -5,9 +5,10 @@
 // bevæger sig på skærmen, skal kunne peges tilbage på en tilstand her — og
 // den kommer fra pathState(), signalDelivery() og agentstatus, ikke fra
 // noget, komponenten fandt på.
-import { agentStates, decidedAgents, describeScope, type AgentState } from "./agents";
+import { agentState, agentsFor, decidedAgents, describeScope, type AgentState } from "./agents";
 import { costOf, totalPerMaaned, SMÅBELØB_UNDER } from "./agent-cost";
 import { firstRunBlocker, pathToProduction, runsFor, type AgentRun } from "./agent-runs";
+import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
 import { machineState } from "./hologram";
 import { layoutLine } from "./layout";
 import { LINES } from "./lines";
@@ -154,6 +155,13 @@ export interface HudModel {
    * eksempel, der kunne forveksles med en kørsel, der havde fundet sted.
    */
   runs: AgentRun[];
+  /**
+   * Er det her en fremskrivning frem for anlægget, som det står?
+   *
+   * Modellen bærer det selv, så fladen ikke kan komme til at vise opdigtede
+   * tal uden mærkatet. Se src/lib/fremskrivning.ts.
+   */
+  fremskrevet: boolean;
 }
 
 /**
@@ -253,13 +261,22 @@ function toneOf(status: OtStatus, delivers: boolean, broken: boolean): LinkTone 
   return status === "active" ? "drift" : "test";
 }
 
-export function hudModel(lineId: string): HudModel | null {
+export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudModel | null {
   const data = LINES[lineId];
   if (!data) return null;
+  const fremskrevet = opts?.fremskriv === true;
   const layout = layoutLine(data);
-  const otData = otLayerFor(lineId);
-  const ot = otData ? layoutOt(otData, layout, lineId) : null;
-  const states = agentStates(lineId, layout, ot);
+  const raa = otLayerFor(lineId);
+  const agenter = fremskrevet ? fremskrivAgenter(agentsFor(lineId)) : agentsFor(lineId);
+
+  // Fremskrivningen rører kun udgangstilstanden. Alt herefter er de samme
+  // funktioner som altid — de ved ikke, at de er i en fremskrivning.
+  const otData = raa && fremskrevet ? fremskrivLayer(raa, layout, agenter) : raa;
+  let ot = otData ? layoutOt(otData, layout, lineId) : null;
+  if (ot && fremskrevet) {
+    ot = { ...ot, infrastructure: ot.infrastructure.map((n) => ({ ...n, status: "active" })) };
+  }
+  const states = agenter.map((a) => agentState(a, layout, ot));
 
   const links: HudLink[] = [];
   if (ot && ot.cabinets[0]) {
@@ -342,5 +359,6 @@ export function hudModel(lineId: string): HudModel | null {
     totalKr: totalPerMaaned(states.map((st) => st.agent)),
     smaabeloeb: totalPerMaaned(states.map((st) => st.agent)) < SMÅBELØB_UNDER,
     runs: runsFor(),
+    fremskrevet,
   };
 }

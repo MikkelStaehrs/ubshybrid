@@ -38,15 +38,29 @@ export function HudView({ model, line, ot, liveSource, measure }: {
   const reading = useSensorReading(model, liveSource);
 
   return (
-    <main className="ai-hud">
+    <main className={`ai-hud${model.fremskrevet ? " is-fremskrevet" : ""}`}>
       {/* Scenen. Ligger bag alt andet og fylder hele skærmen. */}
       <Hologram data={line} ot={ot} still={still} />
+
+      {/* Mærkatet ligger øverst og bliver stående. En fremskrivning må
+          aldrig kunne forveksles med en aflæsning — heller ikke på et
+          skærmbillede, nogen sender videre uden resten af siden. */}
+      {model.fremskrevet && (
+        <div className="hud-opdigtet" role="status">
+          <span className="ho-mark">Fremskrivning</span>
+          <span className="ho-text">Ingen af tallene er målt</span>
+          <Link href="/ai" className="ho-back">Vis anlægget som det står</Link>
+        </div>
+      )}
 
       <header className="hud-top">
         <span className="hud-eyebrow">{SITE}</span>
         <span className="hud-sep" aria-hidden />
         <span className="hud-line-name">{model.lineName}</span>
-        <h1>AI-overblik</h1>
+        <h1>{model.fremskrevet ? "AI-overblik · fremskrevet" : "AI-overblik"}</h1>
+        {!model.fremskrevet && (
+          <Link href="/ai?visning=fremtid" className="hud-switch">Med signaler inde</Link>
+        )}
         <Link href="/ai?visning=dokument" className="hud-switch">Dokumentvisning</Link>
       </header>
 
