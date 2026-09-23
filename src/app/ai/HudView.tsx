@@ -33,7 +33,7 @@ import "./hud.css";
  *   - Grænseflade: opstarten og kameraets tur. De viser ingen data og
  *     lader ikke som om. `prefers-reduced-motion` slukker begge.
  */
-export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals }: {
+export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals, ophobning }: {
   model: HudModel;
   line: LineData;
   ot: OtLayout | null;
@@ -43,13 +43,15 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   fokusWid?: string;
   /** Hold en flaskehals i kæden fremme. */
   flaskehals?: boolean;
+  /** Lad KB-3N gå i stå kort efter start, så Driftsagenten kan ses gribe ind. */
+  ophobning?: boolean;
 }) {
   useFrameProbe(measure);
   const still = useReducedMotion();
   const layout = useMemo(() => layoutLine(line), [line]);
   const flowSignal = model.links.find((l) => l.instrument.signalId)?.instrument.signalId;
   const { billede, historik } = useTelemetri({
-    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals,
+    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning,
   });
   const nu = useUr();
   const boot = useOpstart(still);
@@ -110,12 +112,12 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         <Overskrift model={model} billede={billede} still={still} />
         <div className="hud-stage-bund">
           <FokusPanel m={iFokus} historik={historik} sim={billede.simuleret} />
-          <Readout tally={tallyMedTelemetri(model, billede)} />
+          <Readout tally={tallyMedTelemetri(model, billede)} sim={billede.simuleret} />
         </div>
       </div>
 
       <div className="hud-right">
-        <AgentCores model={model} nr={4} still={still} />
+        <AgentCores model={model} nr={4} still={still} ai={billede.ai} sim={billede.simuleret} />
         <KvalitetPanel billede={billede} nr={5} still={still} />
         <KastebordPanel billede={billede} nr={6} still={still} />
       </div>
@@ -246,7 +248,7 @@ function useTur(billede: TelemetriBillede, still: boolean): [string | null, () =
       trin++;
       const nu = Date.now();
       // Noget galt, vi ikke har set på det sidste halve minut, går forrest.
-      const galt = kandidater.find((m) => (m.alarm || m.koerer === false) && nu - (besoegt.current.get(m.id) ?? 0) > 30_000);
+      const galt = kandidater.find((m) => (m.alarm || (m.koerer === false && !m.styret)) && nu - (besoegt.current.get(m.id) ?? 0) > 30_000);
       if (galt) {
         besoegt.current.set(galt.id, nu);
         setFokus(galt.id);

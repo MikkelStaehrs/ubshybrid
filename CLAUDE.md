@@ -221,6 +221,36 @@ I den rigtige visning er der ingen simulator. Maskinerne har ingen tal, og
 panelerne siger "Afventer signal". Kun flowet kommer ind, fra den samme
 LiveSource som kortet.
 
+### Driftsagenten
+
+Den eneste agent, der griber ind i stedet for at skrive (`role: "styring"`).
+I demoen stopper den et spor, før en ophobning foran en stoppet maskine
+løber over, eller før frøet i en jetpealer tager skade, og den starter
+sporet igen, når årsagen er væk. Står begge spor, stopper den indgangen.
+Grænserne står i `DRIFTSAGENT` i `data/fremskrivning.ts`.
+
+- **Den handler ikke på én prøve.** Et fund skal holde i `overvejS`.
+- **Den handler ikke på data, den ikke kan stole på.** Er data mere end
+  `FLASKEHALS.forsinkelseAlarmS` bagud, holder den sine beslutninger og siger
+  det. Den stopper ikke linjen for en langsom database: anlægget kører fint,
+  det er dens eget syn, der er forsinket. Prisen — at en buffer kan løbe
+  over, mens den holder — er testet og skal kunne ses.
+- **Hver beslutning har en begrundelse** og et AI-mærke i loggen.
+- **Et styret stop er rav, en fejl er rød.** Maskiner, agenten har stoppet,
+  er ikke fejl (`styret: true`) og tælles ikke som stop. Kun årsagen er rød.
+- **Et stop koster gennemløb.** Står et spor, sender fordeleren alt til det
+  andet, og W/HR falder til det halve.
+- **Et overløb har en pris i modellen** (`TILLOEB.rengoeringS`). Uden den
+  ville en simulation uden agent se bedre ud end en med.
+
+`?ophobning=1` lader KB-3N gå i stå kort efter, siden er åbnet, så agenten
+kan ses gribe ind. Testene bruger `planlagteStop` til det samme — en test
+skal bestemme, hvad der sker, ikke håbe på det.
+
+Det store tal på scenen hedder **"På plads"**, ikke "i drift": det tæller
+signaler, ikke maskiner, der kører. Står et spor på agentens beslutning,
+ville "i drift 26" ved siden af "kører 16" være en modsigelse.
+
 ### Flaskehalse i kæden
 
 Status og ydelse er to forskellige akser. Status siger, om et led *findes*
@@ -256,6 +286,13 @@ Teknisk sandt, og vildledende.
 
 **Opdigtede tags kan kendes.** De hedder `X…` og har modellen "Ikke valgt" —
 de må ikke kunne forveksles med et tag, nogen har tildelt.
+
+**Den forudsætter det, planen kræver — og siger det.** Beder de besluttede
+agenter om flere signaler, end skabet har kanaler til, lægger fremskrivningen
+de IO-kort til, der skal til. De hedder `X-IO-…`, har modellen "Ikke valgt"
+og står som "Forudsat" på IO-kortets instrument. Uden dem ville signaler stå
+som "på plads", der aldrig kunne læses. IO-kortet viser analoge og digitale
+kanaler hver for sig: lagt sammen skjulte de et underskud.
 
 **Den må ikke smitte.** Fremskrivningen kopierer og muterer aldrig de delte
 dataarrays. Tre tests slår det fast; bryder man dem, ser anlægget bagefter
@@ -391,6 +428,19 @@ har sagt tallet.
   summer til 100 %; BIGF/BIGH/NOTS som andele af den tunge side. Begge dele,
   og alle driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
   driften, før nogen tager tallene for pålydende.
+- **Driftsagenten kan ikke stoppe noget i dag.** Der findes ingen vej fra en
+  agent tilbage til styringen. En skrivning til PLC'en er en
+  sikkerhedsbeslutning — interlocks, hvem der kan tilsidesætte, hvad der
+  sker ved et netværksudfald — og skal tages for sig, før agenten slås til.
+  I demoen er dens beslutninger regler, så de kan testes; i virkeligheden er
+  den `engine: "claude"`, og prisen bygger på et skøn på 20 beslutninger i
+  døgnet.
+- **Kanalerne rækker ikke til planen.** De besluttede agenter beder om 29
+  digitale signaler; skabet har 16. Demoen forudsætter et DI-kort mere. Det
+  skal med i styklisten, før driftssignalerne rulles ud.
+- **`signalDelivery()` kender ikke kanaler.** Et signal uden ledig kanal
+  tæller i dag som leverende. Det betyder intet med ét signal, men skal
+  rettes, før skabet fyldes.
 - **Kædens kapaciteter er skøn.** Kobleren, edge-maskinen og databasen er ikke
   valgt. Med de nuværende tal i `KAEDE` er databasen loftet ved omkring 225
   signaler — tjek det, når udstyret vælges, for det er dér, anlægget ville

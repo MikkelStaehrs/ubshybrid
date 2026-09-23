@@ -13,8 +13,42 @@
 // drøm, men det anlæg, de besluttede agenter allerede har bedt om.
 import { machinesInScope } from "./agents";
 import type { Layout } from "./layout";
-import { sensorType } from "./ot";
-import type { Agent, OtLayer, OtSensor, OtSignal } from "./types";
+import { channelReport, sensorType } from "./ot";
+import type { Agent, OtCabinet, OtHardware, OtLayer, OtSensor, OtSignal } from "./types";
+
+/** Kanaler pr. IO-kort, som de kort, styklisten allerede har. */
+const PR_KORT = { ai: 8, di: 16 } as const;
+
+/**
+ * De IO-kort, de fremskrevne signaler kræver ud over skabets egne.
+ *
+ * Fremskrivningen antager, at alt besluttet står — og beder de besluttede
+ * agenter om flere signaler, end skabet har kanaler til, må den også antage
+ * de kort, der skal til. Ellers ville den vise signaler som "på plads", der
+ * aldrig kunne læses. Kortene hedder X…, som de opdigtede tags, og står med
+ * modellen "Ikke valgt": de er en forudsætning, ikke et indkøb.
+ */
+function ekstraKort(cabinet: OtCabinet, sensorer: OtSensor[]): OtHardware[] {
+  const rapport = channelReport(cabinet, sensorer, 1);
+  const kort: OtHardware[] = [];
+  for (const brug of rapport.uses) {
+    const kind = brug.kind as "ai" | "di";
+    const mangler = brug.needed - brug.total;
+    if (mangler <= 0) continue;
+    const antal = Math.ceil(mangler / PR_KORT[kind]);
+    kort.push({
+      id: `X-IO-${kind.toUpperCase()}`,
+      category: "io",
+      name: `${kind.toUpperCase()}-kort (forudsat)`,
+      model: "Ikke valgt",
+      qty: antal,
+      status: "active",
+      note: `Forudsat af fremskrivningen: ${mangler} ${kind.toUpperCase()}-signaler mere, end skabet har kanaler til.`,
+      provides: { [kind]: PR_KORT[kind] },
+    });
+  }
+  return kort;
+}
 
 /** Katalogets signalart til den, OT-laget regner kanaler efter. */
 function signalOf(kind: string | undefined): OtSignal {
@@ -80,22 +114,30 @@ function ekstraSensorer(layer: OtLayer, layout: Layout, agents: Agent[]): OtSens
 /**
  * OT-laget som det ville være, hvis alt besluttet stod og virkede.
  *
- * Tre greb, og ikke flere:
+ * Fire greb, og ikke flere:
  *   1. De signaler, agenterne beder om, findes.
  *   2. Alle signaler er i drift frem for i test eller på tegnebrættet.
  *   3. Skabet står, og kæden ud af hallen er rejst.
+ *   4. Skabet har de IO-kort, signalerne kræver — mærket som forudsat.
  *
  * Alt andet — kanaler, registre, kabellængder, hvem der leverer, hvad en
  * agent kan — udledes bagefter af de samme funktioner som altid.
  */
 export function fremskrivLayer(layer: OtLayer, layout: Layout, agents: Agent[]): OtLayer {
+  const sensors = [
+    ...layer.sensors.map((s) => ({ ...s, status: "active" as const })),
+    ...ekstraSensorer(layer, layout, agents),
+  ];
   return {
     ...layer,
-    cabinets: layer.cabinets.map((c) => ({ ...c, status: "active" as const })),
-    sensors: [
-      ...layer.sensors.map((s) => ({ ...s, status: "active" as const })),
-      ...ekstraSensorer(layer, layout, agents),
-    ],
+    // Skabet står, og det har de kort, signalerne kræver. De forudsatte kort
+    // kommer oven i styklisten — den rigtige stykliste røres ikke.
+    cabinets: layer.cabinets.map((c) => ({
+      ...c,
+      status: "active" as const,
+      hardware: [...c.hardware, ...ekstraKort(c, sensors)],
+    })),
+    sensors,
   };
 }
 

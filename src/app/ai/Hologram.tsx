@@ -50,12 +50,16 @@ const MAX_MASKINER = 32;
 
 /**
  * Maskinens tilstand, som shaderne kender den.
- *   0 ukendt · 1 test · 2 kører · 3 står · 4 alarm
+ *   0 ukendt · 1 test · 2 kører · 3 står · 4 alarm · 5 stoppet af agenten
+ *
+ * Et styret stop er rav, ikke rødt: maskinen står på en beslutning, ikke på
+ * en fejl. Kun den maskine, der var årsagen, er rød.
  */
-type Kode = 0 | 1 | 2 | 3 | 4;
+type Kode = 0 | 1 | 2 | 3 | 4 | 5;
 
 const PALET = /* glsl */ `
   vec3 farve(float s) {
+    if (s > 4.5) return vec3(1.00, 0.66, 0.22);  // stoppet af agenten
     if (s > 3.5) return vec3(1.00, 0.30, 0.24);  // alarm
     if (s > 2.5) return vec3(0.95, 0.36, 0.28);  // står
     if (s > 1.5) return vec3(0.78, 0.95, 0.90);  // kører: kølig hvid
@@ -87,7 +91,9 @@ const CLOUD_VERT = /* glsl */ `
 
     // Kører den, ånder den. Står den, står den stille. Alarmen banker.
     if (s > 1.5 && s < 2.5) lys *= 0.82 + 0.18 * sin(uTime * 1.3 + aMaskine * 1.7);
-    if (s > 3.5) lys *= 0.55 + 0.45 * (0.5 + 0.5 * sin(uTime * 6.0));
+    if (s > 3.5 && s < 4.5) lys *= 0.55 + 0.45 * (0.5 + 0.5 * sin(uTime * 6.0));
+    // Står den på en beslutning, er den dæmpet og stille — ingen ånde, ingen alarm.
+    if (s > 4.5) lys *= 0.7;
     if (aMaskine < 0.0) lys *= 0.9;
 
     gl_PointSize = uSize * (0.75 + 0.25 * aBright) / max(dist, 0.1);
@@ -167,7 +173,7 @@ const LINE_VERT = /* glsl */ `
     float s = uState[int(aMaskine)];
     vCol = farve(s);
     // Det, vi intet ved om, er kun en antydning. Alarmen banker.
-    vAlpha = s < 0.5 ? 0.16 : s > 3.5 ? 0.5 + 0.5 * sin(uTime * 6.0) : 0.55;
+    vAlpha = s < 0.5 ? 0.16 : s > 4.5 ? 0.45 : s > 3.5 ? 0.5 + 0.5 * sin(uTime * 6.0) : 0.55;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -249,6 +255,7 @@ const RING_FARVE: Record<Kode, Color> = {
   2: new Color(0.35, 1.25, 1.0),
   3: new Color(1.5, 0.45, 0.35),
   4: new Color(1.8, 0.4, 0.3),
+  5: new Color(1.4, 0.9, 0.25),
 };
 
 function Fodspor({ layout, ids, state, still }: {
@@ -514,19 +521,20 @@ function Maerkat({ m, pos, fokus, scene, sim }: {
     tag.current.style.opacity = inde ? "1" : "0";
   });
   const hoved = m.kanaler.find((k) => k.value !== null);
-  const tilstand = m.alarm ? "alarm" : m.koerer === false ? "staar" : m.koerer ? "koerer" : "ukendt";
+  const tilstand = m.alarm ? "alarm" : m.styret ? "styret" : m.koerer === false ? "staar" : m.koerer ? "koerer" : "ukendt";
   // Maskinen i fokus får ikke flere rækker her — dens tal står i fokuspanelet,
   // og et stort mærkat midt i scenen ville støde ind i overskriften.
   const vis = hoved ? [hoved] : [];
   return (
     <group position={pos} ref={gruppe}>
-      <Line points={[[0, -2.6, 0], [0, -0.3, 0]]} color={tilstand === "koerer" ? "#5fc4a9" : tilstand === "ukendt" ? "#2b3936" : "#e0705f"} lineWidth={1} transparent opacity={0.7} />
+      <Line points={[[0, -2.6, 0], [0, -0.3, 0]]} color={tilstand === "koerer" ? "#5fc4a9" : tilstand === "ukendt" ? "#2b3936" : tilstand === "styret" ? "#ffc766" : "#e0705f"} lineWidth={1} transparent opacity={0.7} />
       <Html center zIndexRange={[30, 0]} className="h3-wrap">
         <div ref={tag} className={`h3-tag t-${tilstand}${fokus ? " is-fokus" : ""}`}>
           <div className="h3-head">
             <span className="h3-dot" />
             <span className="h3-navn">{m.kort}</span>
-            {m.koerer === false && <span className="h3-stop">Stop</span>}
+            {m.koerer === false && !m.styret && <span className="h3-stop">Stop</span>}
+            {m.styret && <span className="h3-styret">AI-stop</span>}
             {sim && <span className="h3-sim">Sim</span>}
           </div>
           {vis.map((k) => (
@@ -545,6 +553,9 @@ function Maerkat({ m, pos, fokus, scene, sim }: {
 function vaelgMaerkater(billede: TelemetriBillede, fokus: string | null): MaskinLaesning[] {
   return billede.maskiner.filter((m) => {
     if (!m.kanaler.some((k) => k.value !== null)) return false;
+    // Et spor, agenten har stoppet, får ikke et mærkat pr. maskine — kun
+    // årsagen, og den står ikke som styret.
+    if (m.styret) return m.id === fokus;
     if (m.id === fokus || m.alarm || m.koerer === false) return true;
     // Det, driften kigger efter først: slibningen og kastebordene.
     return /jet|kb[-\s]|påslag/i.test(m.navn);
@@ -662,7 +673,7 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
     const arr = new Float32Array(MAX_MASKINER);
     cloud.machines.forEach((m, i) => {
       const t = tele.get(m.id);
-      if (billede.simuleret && t) arr[i] = t.alarm ? 4 : t.koerer ? 2 : 3;
+      if (billede.simuleret && t) arr[i] = t.alarm ? 4 : t.koerer ? 2 : t.styret ? 5 : 3;
       else arr[i] = m.state === "paa-plads" ? 2 : m.state === "test" ? 1 : 0;
     });
     return arr;
@@ -692,7 +703,15 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
   // under opstarten, hvor panelerne glider ind.
   const scene = useRef<DOMRect | null>(null);
   useEffect(() => {
-    const maal = () => { scene.current = document.querySelector(".hud-stage")?.getBoundingClientRect() ?? null; };
+    // Bunden af scenen er optaget af fokuspanelet og det store tal. Et
+    // mærkat dernede ville ligge oven i dem, så scenen slutter over dem.
+    const maal = () => {
+      const stage = document.querySelector(".hud-stage")?.getBoundingClientRect();
+      const bund = document.querySelector(".hud-stage-bund")?.getBoundingClientRect();
+      scene.current = stage
+        ? new DOMRect(stage.left, stage.top, stage.width, (bund ? bund.top : stage.bottom) - stage.top)
+        : null;
+    };
     maal();
     const id = setInterval(maal, 1000);
     addEventListener("resize", maal);

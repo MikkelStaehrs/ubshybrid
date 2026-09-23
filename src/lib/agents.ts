@@ -62,6 +62,7 @@ export const AGENT_ROLE_LABEL: Record<AgentRole, string> = {
   linjeagent: "Linjeagent",
   tvaergaaende: "Tværgående",
   vagt: "Vagt",
+  styring: "Styring",
 };
 
 /**

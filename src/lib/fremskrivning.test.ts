@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import sliberi from "../../data/lines/sliberi.json";
-import { agentsFor } from "./agents";
+import { agentsFor, machinesInScope } from "./agents";
 import { hudModel } from "./ai-hud";
 import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
 import { layoutLine } from "./layout";
-import { otLayerFor } from "./ot";
+import { channelReport, otLayerFor } from "./ot";
 import type { LineData } from "./types";
 
 const layout = layoutLine(sliberi as LineData);
@@ -100,29 +100,64 @@ describe("fremskrivningen udleder resten som altid", () => {
     }
   });
 
-  it("kun de maskiner, en agent dækker, bliver målt", () => {
-    // Den interessante oplysning i fremskrivningen: sporagenterne ejer ikke
-    // det fælles indløb, så det står stadig umålt, selv når alt besluttet
-    // virker. Tallet er udledt, ikke valgt.
-    assert.equal(fremskrevet.tally.total, 26);
+  it("præcis de maskiner, en besluttet agent dækker, bliver målt", () => {
+    // Tallet er udledt, ikke valgt. Sporagenterne ejer ikke det fælles
+    // indløb — men Driftsagenten dækker hele linjen, så med den besluttet
+    // er indløbet ikke længere umålt. Slås den tilbage til idé, står
+    // indløbet igen som afventende, og testen følger med.
+    const daekket = new Set<string>();
+    for (const a of agenter.filter((x) => x.beslutning !== "ide")) {
+      if (!a.inputs.some((i) => i.type)) continue;
+      for (const m of machinesInScope(a, layout)) daekket.add(m.id);
+    }
+    // Maskiner med en rigtig sensor er målt i forvejen.
+    for (const m of layout.machines) {
+      if (raa.sensors.some((s) => m.wIds.includes(s.machineId))) daekket.add(m.id);
+    }
+    const maalte = Object.entries(fremskrevet.maskinTilstand).filter(([, s]) => s === "paa-plads").map(([id]) => id);
+    assert.deepEqual(new Set(maalte), new Set([...daekket].filter((id) => id in fremskrevet.maskinTilstand)));
     assert.ok(fremskrevet.tally.drift > som_det_staar.tally.drift);
-    assert.ok(
-      fremskrevet.tally.afventer > 0,
-      "havde alt lyst op, ville fremskrivningen love for meget",
-    );
-    assert.equal(
-      fremskrevet.tally.drift + fremskrevet.tally.test + fremskrevet.tally.afventer,
-      26,
-    );
+    assert.equal(fremskrevet.tally.drift + fremskrevet.tally.test + fremskrevet.tally.afventer, fremskrevet.tally.total);
   });
 
   it("kanalpladserne tælles af det samme regnskab", () => {
     const io = fremskrevet.links.find((l) => l.id === "io")!.instrument;
     const optaget = io.slots!.filter((s) => s.used).length;
     const par = new Map(io.readings.map((r) => [r.label, r.value]));
-    assert.equal(par.get("Pladser"), `${optaget} / ${io.slots!.length}`);
+    const brugt = ["AI", "DI"].reduce((n, k) => n + Number((par.get(k) ?? "0 / 0").split(" / ")[0]), 0);
+    assert.equal(brugt, optaget);
     // Flere signaler fylder flere pladser. Ellers var regnskabet ikke koblet på.
     const nu = som_det_staar.links.find((l) => l.id === "io")!.instrument;
     assert.ok(optaget > nu.slots!.filter((s) => s.used).length);
+  });
+
+  it("hvert fremskrevet signal får en kanal — på kort, fremskrivningen forudsætter", () => {
+    // Beder agenterne om flere signaler, end skabet har kanaler til, skal
+    // fremskrivningen antage de kort, der skal til. Ellers stod der signaler
+    // som "på plads", der aldrig kunne læses.
+    const lag = fremskrivLayer(raa, layout, fremskrivAgenter(agenter));
+    const rapport = channelReport(lag.cabinets[0], lag.sensors, 1);
+    for (const u of rapport.uses) {
+      assert.ok(u.needed <= u.total, `${u.kind}: ${u.needed} signaler, ${u.total} kanaler`);
+    }
+    assert.ok([...rapport.channel.values()].every((c) => c !== null), "et signal fik ingen kanal");
+  });
+
+  it("forudsætter ikke flere kort end nødvendigt, og siger, at de er forudsat", () => {
+    const lag = fremskrivLayer(raa, layout, fremskrivAgenter(agenter));
+    const forudsat = lag.cabinets[0].hardware.filter((h) => h.id.startsWith("X-"));
+    const uden = channelReport({ ...lag.cabinets[0], hardware: raa.cabinets[0].hardware }, lag.sensors, 1);
+    for (const h of forudsat) {
+      assert.equal(h.model, "Ikke valgt");
+      const kind = h.provides!.ai ? "ai" : "di";
+      const u = uden.uses.find((x) => x.kind === kind)!;
+      const pr = h.provides![kind]!;
+      assert.equal(h.qty, Math.ceil((u.needed - u.total) / pr), `${h.id}: ${h.qty} kort`);
+    }
+    // Den rigtige stykliste er urørt.
+    assert.ok(!raa.cabinets[0].hardware.some((h) => h.id.startsWith("X-")));
+    // Og instrumentet siger det.
+    const par = new Map(fremskrevet.links.find((l) => l.id === "io")!.instrument.readings.map((r) => [r.label, r.value]));
+    if (forudsat.length > 0) assert.ok(par.has("Forudsat"), "de forudsatte kort står ikke på instrumentet");
   });
 });

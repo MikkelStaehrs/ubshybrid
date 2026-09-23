@@ -435,7 +435,12 @@ export interface LineOps {
 // de signaler agenten har brug for, rent faktisk findes.
 // ---------------------------------------------------------------------------
 
-export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt";
+/**
+ * Hvad agenten er til. De fleste læser og skriver en rapport; styring griber
+ * ind i driften. Det skel skal kunne ses, for det er ikke det samme at sende
+ * en rapport som at stoppe en linje.
+ */
+export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt" | "styring";
 
 /**
  * Hvor langt nogen har taget stilling til agenten.

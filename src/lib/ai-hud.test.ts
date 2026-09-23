@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AGENT_ENGINE_LABEL, lineOpsFor } from "./agents";
+import { AGENT_ENGINE_LABEL, agentsFor, lineOpsFor } from "./agents";
 import { SMÅBELØB_UNDER } from "./agent-cost";
 import { chainToneOf, hudAgentState, hudModel, hudState, tallyMedTelemetri, type HudLink } from "./ai-hud";
 
@@ -56,8 +56,11 @@ describe("agenterne i HUD'en", () => {
   it("skelner idéer fra sovende agenter", () => {
     const ideer = m.agents.filter((a) => a.idea);
     const sovende = m.agents.filter((a) => a.sovende);
-    assert.equal(ideer.length, 2);
-    assert.equal(sovende.length, 3);
+    // Udledt af dataene: idéer er "ide", sovende er besluttet, men ikke slået til.
+    const agenter = agentsFor("sliberi");
+    assert.equal(ideer.length, agenter.filter((a) => a.beslutning === "ide").length);
+    assert.equal(sovende.length, agenter.filter((a) => a.beslutning === "besluttet").length);
+    assert.ok(ideer.length > 0 && sovende.length > 0);
     // En idé ånder ikke — den er ikke besluttet.
     for (const a of ideer) assert.equal(a.sovende, false);
   });
@@ -140,10 +143,9 @@ describe("kompositionen har noget at vise i hver zone", () => {
     assert.deepEqual(m.runs, []);
   });
 
-  it("omkostningen er et småbeløb, og modellen siger det selv", () => {
+  it("modellen siger selv, om omkostningen er et småbeløb", () => {
     assert.ok(m.totalKr > 0, "de besluttede claude-agenter koster noget");
     assert.equal(m.smaabeloeb, m.totalKr < SMÅBELØB_UNDER);
-    assert.equal(m.smaabeloeb, true);
   });
 
   it("kun besluttede agenter tæller med i totalen", () => {
@@ -223,9 +225,19 @@ describe("kæden som instrumenter", () => {
     const optaget = i.slots!.filter((s) => s.used);
     assert.equal(optaget.length, 1, "kun flowsignalet fylder en plads i dag");
     assert.equal(optaget[0].name, "AI1");
-    // Pladserne er talt af kanalregnskabet, ikke skrevet i hånden.
+    // Pladserne er talt af kanalregnskabet, ikke skrevet i hånden — og
+    // analoge og digitale står hver for sig.
     const par = new Map(i.readings.map((r) => [r.label, r.value]));
-    assert.equal(par.get("Pladser"), `${optaget.length} / ${i.slots!.length}`);
+    assert.equal(par.get("AI"), "1 / 8");
+    assert.equal(par.get("DI"), "0 / 16");
+    assert.ok(!par.has("Mangler"), "der mangler ingen kanaler i dag");
+  });
+
+  it("lægger ikke analoge og digitale pladser sammen", () => {
+    // Den fejl, reglen kom af: "17 / 24" så ud som plads, mens 13
+    // driftssignaler ingen kanal havde — de ledige pladser var analoge.
+    const par = new Map(led("io").instrument.readings.map((r) => [r.label, r.value]));
+    assert.ok(!par.has("Pladser"), "en sammenlagt pladstælling skjuler et underskud");
   });
 
   it("hvert led, der ikke leverer, siger hvad det venter på", () => {

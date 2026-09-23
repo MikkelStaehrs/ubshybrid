@@ -68,6 +68,9 @@ const USAGE: Record<string, Usage> = {
   "AG-SLIB-S": { input: 8000, output: 800, perDoegn: 1 },
   "AG-SLIB-SKIFT": { input: 6000, output: 600, perDoegn: SKIFT_PR_DOEGN },
   "AG-SLIB-VEDL": { input: 15000, output: 1200, perDoegn: 1 / 7 },
+  // Kaldes ved hændelser, ikke løbende: en ophobning, frø der bliver varmt.
+  // Tyve om døgnet er et skøn — tallet er det, der styrer prisen.
+  "AG-SLIB-DRIFT": { input: 5000, output: 300, perDoegn: 20 },
 };
 
 export interface AgentCost {

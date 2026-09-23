@@ -193,8 +193,12 @@ export const KAEDE = {
  * genopbygges, eller en backup, der tager diskens tid.
  */
 export const FLASKEHALS = {
-  /** Første episode så lang tid efter start. */
-  foersteS: 90,
+  /**
+   * Første episode så lang tid efter start. Simulatoren forvarmes et minut,
+   * så det er halvandet minut efter, siden er åbnet — efter ophobnings-
+   * scenariet (?ophobning=1), så de to kan ses hver for sig.
+   */
+  foersteS: 150,
   /** Derefter én episode så ofte. */
   hverS: 180,
   varighedS: 55,
@@ -217,4 +221,47 @@ export const FLASKEHALS = {
  */
 export const FLOW_NOMINAL: Record<string, number> = {
   "FT-743": 1.0,
+};
+
+// ---------------------------------------------------------------------------
+// Driftsagenten
+
+/**
+ * Hvornår Driftsagenten stopper og starter et spor. Skøn — de skal forbi
+ * driften, før nogen lader en agent stoppe noget som helst.
+ */
+export const DRIFTSAGENT = {
+  /** Stop sporet, når bufferen foran en stoppet maskine er så fuld. */
+  bufferStopPct: 55,
+  /** Frøtemperaturen, hvor spireevnen er i fare. Samme som alarmgrænsen. */
+  froeStopC: 38,
+  /** Start igen, når frøet er kølet så langt ned. */
+  froeStartC: 34,
+  /** Et fund skal holde så længe, før agenten handler — ikke på én prøve. */
+  overvejS: 2,
+  /** Mindste tid, et spor står, før agenten starter det igen. */
+  mindsteStopS: 20,
+};
+
+/** Bufferen foran hver maskine i sporene. */
+export const TILLOEB = {
+  /**
+   * Et overløb er ikke bare en linje i loggen: frø på gulvet, og sporet står,
+   * mens nogen fejer op. Uden den pris ville en simulation uden agent se
+   * bedre ud end en med.
+   */
+  rengoeringS: 240,
+  normalPct: 25,
+  /** Så hurtigt fyldes den, når maskinen står og stadig fødes. */
+  fyldPrS: 1.3,
+  /** Så hurtigt tømmes den ned mod normal, når maskinen kører igen. */
+  toemPrS: 3,
+};
+
+/** Friktion i jetpealerne: frøet bliver varmere, til nogen retter årsagen. */
+export const VARME = {
+  foersteS: 150,
+  hverS: 480,
+  varighedS: 75,
+  maalC: 42,
 };

@@ -53,8 +53,10 @@ export function useTelemetri(opts: {
   flowSignal: string | undefined;
   /** Hold flaskehalsen i kæden fremme. Kun i fremskrivningen. */
   flaskehals?: boolean;
+  /** Lad KB-3N gå i stå kort efter start. Kun i fremskrivningen. */
+  ophobning?: boolean;
 }): Telemetri {
-  const { layout, fremskrevet, liveSource, flowSignal, flaskehals = false } = opts;
+  const { layout, fremskrevet, liveSource, flowSignal, flaskehals = false, ophobning = false } = opts;
 
   // --- Anlægget som det står --------------------------------------------------
   const ids = useMemo(() => (flowSignal && !fremskrevet ? [flowSignal] : []), [flowSignal, fremskrevet]);
@@ -66,7 +68,13 @@ export function useTelemetri(opts: {
 
   useEffect(() => {
     if (!fremskrevet) return;
-    const s = simulator(layout, undefined, undefined, flaskehals);
+    // Simulatoren forvarmes et minut. Et planlagt stop regnes fra dens start,
+    // så fem sekunder efter forvarmningen er fem sekunder efter, siden åbnede.
+    const forvarm = (HISTORIK * TAKT_MS) / 1000;
+    const s = simulator(layout, {
+      tvungenFlaskehals: flaskehals,
+      planlagteStop: ophobning ? [{ wid: "636", fraS: forvarm + 5, varighedS: 150 }] : [],
+    });
     const h: Historik = new Map();
     // Forvarm et minut, så kurverne har noget at vise fra første billede.
     const nu = Date.now();
@@ -87,7 +95,7 @@ export function useTelemetri(opts: {
       setSim(nyt);
     }, TAKT_MS);
     return () => clearInterval(id);
-  }, [fremskrevet, layout, flaskehals]);
+  }, [fremskrevet, layout, flaskehals, ophobning]);
 
   if (fremskrevet && sim) return { billede: sim, historik: historik.current };
 

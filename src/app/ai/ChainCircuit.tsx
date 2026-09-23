@@ -106,7 +106,7 @@ function layoutNodes(model: HudModel, kaede: KaedeTal | null): Node[] {
       return {
         label: link.label,
         link,
-        readings: [...link.instrument.readings, ...ekstra],
+        readings: [...link.instrument.readings, ...ekstra] as Node["readings"],
         sim: ekstra.length > 0,
         ydelse: led && kaede
           ? {
@@ -218,7 +218,8 @@ function Slots({ x, y, slots }: {
   y: number;
   slots: { name: string; used: boolean }[];
 }) {
-  const PER_ROW = 12;
+  // Mange pladser får flere på en række, så gitteret bliver i kassen.
+  const PER_ROW = slots.length > 24 ? 16 : 12;
   const PITCH = (NODE * 2 - PAD * 2) / PER_ROW;
   return (
     <g className="cc-slots">
@@ -227,8 +228,8 @@ function Slots({ x, y, slots }: {
           key={s.name}
           x={x - NODE + PAD + (i % PER_ROW) * PITCH}
           y={y + Math.floor(i / PER_ROW) * PITCH}
-          width={PITCH - 4}
-          height={PITCH - 4}
+          width={PITCH - (PER_ROW > 12 ? 3 : 4)}
+          height={PITCH - (PER_ROW > 12 ? 3 : 4)}
           className={s.used ? "cc-slot is-used" : "cc-slot"}
         >
           <title>{`${s.name}: ${s.used ? "optaget" : "ledig"}`}</title>

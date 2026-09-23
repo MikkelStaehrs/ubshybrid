@@ -15,7 +15,10 @@
 // Simulatoren er ren: ingen React, ingen Date.now() inde i regnestykket,
 // seedet tilfældighed. Samme seed og samme skridt giver de samme tal, og
 // det er det, der gør den testbar.
-import { AFVIGELSER, ANALYSE, FLASKEHALS, HAL, KAEDE, KANALER, type KanalSpec } from "../../data/fremskrivning";
+import {
+  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, TILLOEB, VARME,
+  type KanalSpec,
+} from "../../data/fremskrivning";
 import { maFromPercent } from "./live-source";
 import type { Layout, PlacedMachine } from "./layout";
 
@@ -28,6 +31,8 @@ export interface Haendelse {
   hvor: string | null;
   tekst: string;
   niveau: Niveau;
+  /** Driftsagenten traf beslutningen. Fladen mærker den som AI. */
+  ai?: boolean;
 }
 
 export interface KanalLaesning {
@@ -46,8 +51,27 @@ export interface MaskinLaesning {
   lane: string | null;
   /** null: vi ved ikke, om den kører. Det er sandheden for hele anlægget i dag. */
   koerer: boolean | null;
+  /**
+   * Står maskinen, fordi Driftsagenten har stoppet dens spor — og ikke
+   * fordi den selv er gået i stå? Et styret stop er en beslutning, ikke en
+   * fejl, og det skal kunne ses.
+   */
+  styret: boolean;
+  /** Bufferen foran maskinen i procent. null uden for sporene og uden signal. */
+  fyld: number | null;
   kanaler: KanalLaesning[];
   alarm: boolean;
+}
+
+/** Hvad Driftsagenten gør lige nu. */
+export interface AiTilstand {
+  /** Overvåger, handler (et spor står på dens beslutning), eller holder (kan ikke se). */
+  tilstand: "overvaager" | "handler" | "holder";
+  spor: { lane: string; stoppet: boolean; aarsag: string | null; siden: number | null }[];
+  indgangStoppet: boolean;
+  /** Den seneste beslutning, den traf. */
+  seneste: Haendelse | null;
+  beslutninger: number;
 }
 
 export type KaedeLedId = "kobler" | "edge" | "mssql";
@@ -110,6 +134,8 @@ export interface TelemetriBillede {
   /** Stop, der har varet længere end stopgrænsen. */
   stop: number;
   koerende: number;
+  /** Driftsagenten. null når der ingen er — altså i den rigtige visning i dag. */
+  ai: AiTilstand | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +198,8 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
       kort: kortNavn(m),
       lane: m.lane,
       koerer: null,
+      styret: false,
+      fyld: null,
       kanaler: kanalerFor(m).map((spec) => ({ spec, value: null, alarm: false })),
       alarm: false,
     }));
@@ -188,6 +216,7 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
     oppetidPct: null,
     stop: 0,
     koerende: 0,
+    ai: null,
   };
 }
 
@@ -212,14 +241,20 @@ function gauss(r: () => number): number {
 }
 
 const klem = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const fmtTal = (v: number, d: number) => v.toFixed(d).replace(".", ",");
 
 /**
  * Hvor ofte der sker noget. Skruet op, så der sker noget på en skærm, man
  * kigger på i fem minutter — tallene siger ingenting om anlægget.
  */
 export const SIM = {
-  /** Middeltid mellem to stop et sted på linjen. */
-  stopHverS: 75,
+  /**
+   * Middeltid mellem to stop et sted på linjen. Hvert stop i et spor bliver
+   * til en beslutning for Driftsagenten, så tallet afgør, hvor tit den
+   * griber ind. Fem minutter giver en linje, der mest kører ved sit normale
+   * gennemløb, med en indgriben med jævne mellemrum.
+   */
+  stopHverS: 300,
   stopVarighedS: [25, 170] as const,
   /** Middeltid mellem to udfald på flowmåleren. */
   sensorfejlHverS: 420,
@@ -245,6 +280,38 @@ interface MaskinTilstand {
   startet: number | null;
   koertMs: number;
   totalMs: number;
+  /** Bufferen foran maskinen, 0–100. null uden for sporene. */
+  fyld: number | null;
+  overloebet: boolean;
+  /** Friktion i en jetpealer: frøet varmes op, til dette tidspunkt. */
+  varmeTil: number | null;
+}
+
+/** Valg til simulatoren. Alle har en standard. */
+export interface SimValg {
+  seed?: number;
+  stopEfterS?: number;
+  /** Hold flaskehalsen i kæden fremme hele tiden — til at vise den i et møde. */
+  tvungenFlaskehals?: boolean;
+  /**
+   * Driftsagenten styrer. Kan slås fra, så en test kan vise, hvad der sker
+   * uden den: bufferne løber over.
+   */
+  ai?: boolean;
+  /**
+   * Stop, der sker på et bestemt tidspunkt. En test skal kunne bestemme,
+   * hvad der sker — ikke håbe på, at det tilfældigvis gør.
+   */
+  planlagteStop?: { wid: string; fraS: number; varighedS: number }[];
+  /** Middeltid mellem tilfældige stop. Udeladt: SIM.stopHverS. */
+  stopHverS?: number;
+}
+
+interface Aarsag {
+  type: "ophobning" | "varme";
+  /** Maskinen, der er årsagen. */
+  maskine: string;
+  tekst: string;
 }
 
 export interface Simulator {
@@ -260,13 +327,13 @@ export interface Simulator {
  * stedet for at flimre. Når maskinen står, søger den mod sin hvileværdi —
  * hastigheden mod nul, motortemperaturen langsomt mod hallens.
  */
-export function simulator(
-  layout: Layout,
-  seed = 743,
-  stopEfterS = SIM.stopEfterS,
-  /** Hold flaskehalsen fremme hele tiden — til at vise den i et møde. */
-  tvungenFlaskehals = false,
-): Simulator {
+export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
+  const {
+    seed = 743, stopEfterS = SIM.stopEfterS, tvungenFlaskehals = false, ai = true,
+    planlagteStop = [], stopHverS = SIM.stopHverS,
+  } = valg;
+  let startT: number | null = null;
+  const udfoert = new Set<number>();
   const r = rng(seed);
   const maskiner: MaskinTilstand[] = layout.machines
     .filter((m) => m.kind !== "person")
@@ -284,8 +351,31 @@ export function simulator(
       startet: null,
       koertMs: 0,
       totalMs: 0,
+      fyld: m.lane ? TILLOEB.normalPct : null,
+      overloebet: false,
+      varmeTil: null,
     }));
   const hal: KanalTilstand[] = HAL.map((spec) => ({ spec, x: spec.nominal, alarm: false }));
+
+  // Sporene, og hvem der fodrer hvem i dem.
+  const lanes = [...new Set(maskiner.map((s) => s.m.lane).filter((l): l is string => !!l))].sort();
+  const iSpor = new Map(lanes.map((l) => [
+    l, maskiner.filter((s) => s.m.lane === l).sort((a, b) => a.m.step - b.m.step),
+  ]));
+  const fordeler = maskiner.find((s) => s.m.kind === "distributor");
+
+  // Driftsagentens tilstand.
+  const spor = new Map(lanes.map((l) => [l, { stoppet: false, aarsag: null as Aarsag | null, siden: null as number | null }]));
+  let indgangStoppet = false;
+  let holder = false;
+  let beslutninger = 0;
+  /** Hvor længe et fund har holdt. Agenten handler ikke på én prøve. */
+  const overvejer = new Map<string, number>();
+  let naesteVarme: number | null = null;
+
+  /** Står maskinen, fordi agenten har stoppet dens spor eller indgangen? */
+  const styret = (s: MaskinTilstand) => (s.m.lane ? spor.get(s.m.lane)!.stoppet : indgangStoppet);
+  const koererNu = (s: MaskinTilstand) => s.stopTil === null && !styret(s);
 
   let flow = SIM.flowNominal;
   let sensorfejlTil: number | null = null;
@@ -319,12 +409,40 @@ export function simulator(
     k.x = klem(k.x, k.spec.min, k.spec.max);
   }
 
+  /**
+   * Findes der en grund til at stoppe sporet? Den første, agenten ser, i
+   * sporets rækkefølge: en ophobning foran en stoppet maskine, eller frø, der
+   * er blevet for varmt i en jetpealer.
+   */
+  function aarsagI(liste: MaskinTilstand[]): Aarsag | null {
+    for (const s of liste) {
+      if (s.stopTil !== null && s.fyld !== null && s.fyld >= DRIFTSAGENT.bufferStopPct) {
+        return { type: "ophobning", maskine: s.m.id, tekst: `${s.kort} står · buffer ${Math.round(s.fyld)} %` };
+      }
+      const temp = s.kanaler.find((k) => k.spec.id === "froetemp");
+      if (temp && koererNu(s) && temp.x >= DRIFTSAGENT.froeStopC) {
+        return { type: "varme", maskine: s.m.id, tekst: `Frø ${fmtTal(temp.x, 1)} °C på ${s.kort}` };
+      }
+    }
+    return null;
+  }
+
   function skridt(dtMs: number, nu: number): TelemetriBillede {
     const dt = Math.min(dtMs, 2000) / 1000;
 
     // --- Stop og start ------------------------------------------------------
-    if (r() < dt / SIM.stopHverS) {
-      const kandidater = maskiner.filter((s) => s.stopTil === null && s.m.kind !== "intake");
+    if (startT === null) startT = nu;
+    planlagteStop.forEach((p, i) => {
+      if (udfoert.has(i) || nu - startT! < p.fraS * 1000) return;
+      const s = maskiner.find((x) => x.m.wIds.includes(p.wid));
+      if (!s) return;
+      udfoert.add(i);
+      s.stopTil = nu + p.varighedS * 1000;
+      s.stoppetFra = nu;
+      skriv({ t: nu, hvor: s.kort, tekst: "Stoppet", niveau: "advarsel" });
+    });
+    if (r() < dt / stopHverS) {
+      const kandidater = maskiner.filter((s) => s.stopTil === null && !styret(s) && s.m.kind !== "intake");
       const s = kandidater[Math.floor(r() * kandidater.length)];
       if (s) {
         const [lo, hi] = SIM.stopVarighedS;
@@ -349,18 +467,39 @@ export function simulator(
       }
     }
 
+    // --- Friktion i jetpealerne --------------------------------------------
+    if (naesteVarme === null) naesteVarme = nu + VARME.foersteS * 1000;
+    if (nu >= naesteVarme) {
+      const jet = maskiner.filter((s) => /jet\s?pe[ae]ler/i.test(s.m.name) && s.varmeTil === null && koererNu(s));
+      const s = jet[Math.floor(r() * jet.length)];
+      if (s) {
+        s.varmeTil = nu + VARME.varighedS * 1000;
+        skriv({ t: nu, hvor: s.kort, tekst: "Friktion stiger", niveau: "advarsel" });
+      }
+      naesteVarme = nu + VARME.hverS * (0.6 + r() * 0.8) * 1000;
+    }
+    for (const s of maskiner) if (s.varmeTil !== null && nu >= s.varmeTil) s.varmeTil = null;
+
     // --- Kanalerne ----------------------------------------------------------
     const hallensTemp = hal[0].x;
     for (const s of maskiner) {
-      const koerer = s.stopTil === null;
+      const koerer = koererNu(s);
       const indkoerer = s.startet !== null && nu - s.startet < INDKOERING_S * 1000;
       s.totalMs += dtMs;
       if (koerer) s.koertMs += dtMs;
+      // (koerer er koererNu: et spor, agenten har stoppet, kører ikke.)
       for (const k of s.kanaler) {
         // Står maskinen, søger kanalen mod sin hvileværdi. Motortemperaturen
         // falder mod hallens, ikke mod et fast tal.
         const hvile = k.spec.id === "motortemp" || k.spec.id === "froetemp" ? hallensTemp + 3 : k.spec.hvile;
-        if (koerer) opdater(k, k.spec.nominal, dt, true);
+        let maal = k.spec.nominal;
+        // Friktion: frøet varmes op, så længe jetpealeren kører med den.
+        if (k.spec.id === "froetemp" && s.varmeTil !== null) maal = VARME.maalC;
+        // Fordeleren sender alt til det spor, der kører.
+        if (k.spec.id === "andelN") {
+          maal = spor.get("N")?.stoppet ? 0 : spor.get("S")?.stoppet ? 100 : k.spec.nominal;
+        }
+        if (koerer) opdater(k, maal, dt, true);
         else if (hvile !== undefined) opdater(k, hvile, dt, false);
         const alarm = erAlarm(k.spec, k.x, koerer, indkoerer);
         if (alarm && !k.alarm) {
@@ -379,11 +518,49 @@ export function simulator(
     // --- Flowet ved indgangen -----------------------------------------------
     // Står påslaget eller elevator 743, løber der ingenting ind.
     const indgang = maskiner.filter((s) => /påslag/i.test(s.m.name) || s.m.wIds.includes("743"));
-    const indgangStaar = indgang.some((s) => s.stopTil !== null);
-    const maal = indgangStaar ? 0 : SIM.flowNominal;
+    const indgangStaar = indgang.some((s) => !koererNu(s));
+    // Står et spor, kan fordeleren kun sende til det andet — og et spor kan
+    // tage halvdelen. Et stop koster gennemløb, og det skal kunne ses.
+    //
+    // Måleren sidder ved indgangen. Den måler, hvad der kommer ind — også det,
+    // der ender på gulvet ved et overløb. W/HR er kun lig med gennemløbet,
+    // når intet går tabt undervejs, og det er netop det, agenten sørger for.
+    const aabne = lanes.filter((l) => !spor.get(l)!.stoppet).length;
+    const maal = indgangStaar ? 0 : SIM.flowNominal * (aabne / Math.max(1, lanes.length));
     const theta = indgangStaar ? 0.6 : 0.15;
     flow += theta * (maal - flow) * dt + (indgangStaar ? 0 : SIM.flowSpredning * Math.sqrt(2 * theta) * Math.sqrt(dt) * gauss(r));
     flow = klem(flow, 0, 150);
+
+    // --- Bufferne foran maskinerne i sporene --------------------------------
+    // Står en maskine, mens maskinen før den stadig fodrer, fylder bufferen.
+    // Når den er fuld, løber den over. Det er det, Driftsagenten skal nå
+    // at forhindre.
+    for (const lane of lanes) {
+      const liste = iSpor.get(lane)!;
+      liste.forEach((s, i) => {
+        if (s.fyld === null) return;
+        const foer = i === 0 ? fordeler : liste[i - 1];
+        const fodres = !spor.get(lane)!.stoppet && !!foer && koererNu(foer) && flow > 1;
+        if (koererNu(s)) s.fyld = Math.max(TILLOEB.normalPct, s.fyld - TILLOEB.toemPrS * dt);
+        else if (fodres) s.fyld = Math.min(100, s.fyld + TILLOEB.fyldPrS * (flow / SIM.flowNominal) * dt);
+        if (s.fyld >= 100 && !s.overloebet) {
+          s.overloebet = true;
+          skriv({ t: nu, hvor: s.kort, tekst: "Overløb · bufferen er fuld", niveau: "alarm" });
+          // Sporet står, mens der bliver fejet op. Det er prisen for et
+          // overløb, og den er større end prisen for at stoppe i tide.
+          const til = nu + TILLOEB.rengoeringS * 1000;
+          for (const x of liste) {
+            if (x.stopTil === null || x.stopTil < til) {
+              if (x.stopTil === null) x.stoppetFra = nu;
+              x.stopTil = til;
+            }
+          }
+          skriv({ t: nu, hvor: `Spor ${lane}`, tekst: `Rengøring · ${Math.round(TILLOEB.rengoeringS / 60)} min`, niveau: "alarm" });
+          s.fyld = TILLOEB.normalPct;
+        }
+        if (s.fyld < 90) s.overloebet = false;
+      });
+    }
 
     if (sensorfejlTil === null && r() < dt / SIM.sensorfejlHverS) {
       sensorfejlTil = nu + SIM.sensorfejlVarighedS * 1000;
@@ -497,7 +674,81 @@ export function simulator(
     const flaskehals = overbelastet?.id ?? (koe > 0.5 ? "mssql" : null);
 
 
-    const koerende = maskiner.filter((s) => s.stopTil === null).length;
+    // --- Driftsagenten -----------------------------------------------------
+    // Den ser på det samme som skærmen og beslutter, om et spor skal stoppes.
+    // Den handler ikke på én prøve, og den handler ikke på data, den ikke
+    // kan stole på: halter kæden, holder den sine beslutninger, til den kan
+    // se igen. Den stopper ikke linjen for en langsom database — anlægget
+    // kører fint; det er dens eget syn, der er forsinket.
+    if (ai) {
+      const blind = forsinkelseS > FLASKEHALS.forsinkelseAlarmS;
+      if (blind && !holder) {
+        holder = true;
+        skriv({ t: nu, hvor: "Driftsagent", tekst: `Holder · data ${Math.round(forsinkelseS)} s bagud`, niveau: "advarsel", ai: true });
+      }
+      if (!blind && holder) {
+        holder = false;
+        skriv({ t: nu, hvor: "Driftsagent", tekst: "Ser igen", niveau: "info", ai: true });
+      }
+
+      if (!holder) {
+        for (const lane of lanes) {
+          const st = spor.get(lane)!;
+          const liste = iSpor.get(lane)!;
+          if (!st.stoppet) {
+            const aarsag = aarsagI(liste);
+            const noegle = `stop:${lane}`;
+            if (!aarsag) { overvejer.delete(noegle); continue; }
+            const fra = overvejer.get(noegle) ?? nu;
+            overvejer.set(noegle, fra);
+            if (nu - fra < DRIFTSAGENT.overvejS * 1000) continue;
+            overvejer.delete(noegle);
+            st.stoppet = true;
+            st.aarsag = aarsag;
+            st.siden = nu;
+            beslutninger++;
+            skriv({ t: nu, hvor: "Driftsagent", tekst: `Stopper spor ${lane} · ${aarsag.tekst}`, niveau: "advarsel", ai: true });
+          } else {
+            const a = st.aarsag!;
+            const s = maskiner.find((x) => x.m.id === a.maskine)!;
+            const temp = s.kanaler.find((k) => k.spec.id === "froetemp")?.x;
+            const klar = a.type === "ophobning"
+              ? s.stopTil === null
+              : s.varmeTil === null && temp !== undefined && temp <= DRIFTSAGENT.froeStartC;
+            const laenge = nu - (st.siden ?? nu) >= DRIFTSAGENT.mindsteStopS * 1000;
+            if (!klar || !laenge) continue;
+            st.stoppet = false;
+            st.aarsag = null;
+            st.siden = null;
+            beslutninger++;
+            // Sporet starter forfra og skal have sin indkøringstid.
+            for (const x of liste) x.startet = nu;
+            skriv({
+              t: nu, hvor: "Driftsagent",
+              tekst: `Starter spor ${lane} · ${a.type === "ophobning" ? `${s.kort} kører igen` : `frø ${fmtTal(temp!, 1)} °C`}`,
+              niveau: "info", ai: true,
+            });
+          }
+        }
+
+        // Står begge spor, er der ingen steder at sende materialet hen.
+        const alleStaar = lanes.length > 0 && lanes.every((l) => spor.get(l)!.stoppet);
+        if (alleStaar && !indgangStoppet) {
+          indgangStoppet = true;
+          beslutninger++;
+          skriv({ t: nu, hvor: "Driftsagent", tekst: "Stopper indgangen · begge spor står", niveau: "advarsel", ai: true });
+        }
+        if (!alleStaar && indgangStoppet) {
+          indgangStoppet = false;
+          beslutninger++;
+          for (const x of maskiner) if (!x.m.lane) x.startet = nu;
+          const aabne = lanes.filter((l) => !spor.get(l)!.stoppet).map((l) => `spor ${l}`).join(" og ");
+          skriv({ t: nu, hvor: "Driftsagent", tekst: `Starter indgangen · ${aabne} kører`, niveau: "info", ai: true });
+        }
+      }
+    }
+
+    const koerende = maskiner.filter(koererNu).length;
     const tid = maskiner.reduce((n, s) => n + s.totalMs, 0);
     const koert = maskiner.reduce((n, s) => n + s.koertMs, 0);
 
@@ -505,7 +756,7 @@ export function simulator(
       t: nu,
       simuleret: true,
       maskiner: maskiner.map((s) => {
-        const koerer = s.stopTil === null;
+        const koerer = koererNu(s);
         const kanaler = s.kanaler.map((k) => ({ spec: k.spec, value: k.x, alarm: k.alarm }));
         return {
           id: s.m.id,
@@ -514,6 +765,10 @@ export function simulator(
           kort: s.kort,
           lane: s.m.lane,
           koerer,
+          // En maskine, der selv er gået i stå, er en fejl — også når dens
+          // spor står. Kun de andre står på agentens beslutning.
+          styret: s.stopTil === null && styret(s),
+          fyld: s.fyld === null ? null : Math.round(s.fyld),
           kanaler,
           alarm: kanaler.some((k) => k.alarm),
         };
@@ -546,6 +801,20 @@ export function simulator(
       oppetidPct: tid > 0 ? (koert / tid) * 100 : null,
       stop,
       koerende,
+      ai: ai
+        ? {
+            tilstand: holder
+              ? "holder"
+              : indgangStoppet || lanes.some((l) => spor.get(l)!.stoppet) ? "handler" : "overvaager",
+            spor: lanes.map((l) => {
+              const st = spor.get(l)!;
+              return { lane: l, stoppet: st.stoppet, aarsag: st.aarsag?.tekst ?? null, siden: st.siden };
+            }),
+            indgangStoppet,
+            seneste: log.find((h) => h.ai) ?? null,
+            beslutninger,
+          }
+        : null,
     };
   }
 

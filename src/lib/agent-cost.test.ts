@@ -45,6 +45,14 @@ describe("omkostningsestimat", () => {
     const total = totalPerMaaned(agents);
     const alleInkl = agents.reduce((sum, a) => sum + costOf(a).perMaaned, 0);
     assert.ok(total < alleInkl, "idéer slap med i totalen");
-    assert.equal(total.toFixed(1), "13.8");
+    const besluttede = agents.filter((a) => a.beslutning !== "ide").reduce((sum, a) => sum + costOf(a).perMaaned, 0);
+    assert.ok(Math.abs(total - besluttede) < 1e-9, `${total} mod ${besluttede}`);
+  });
+
+  it("regner prisen efter formlen", () => {
+    // Et værn om selve regnestykket, på en agent hvis forbrug ligger fast:
+    // 8.000 ind og 800 ud om dagen i en måned, til 3 og 15 dollar pr. million.
+    const n = agents.find((a) => a.id === "AG-SLIB-N")!;
+    assert.equal(costOf(n).perMaaned.toFixed(1), "6.9");
   });
 });

@@ -1,5 +1,5 @@
 "use client";
-import { ANALYSE } from "../../../data/fremskrivning";
+import { ANALYSE, FLASKEHALS } from "../../../data/fremskrivning";
 import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
 import type { HudAgent, HudLink, HudModel, LinkTone } from "../../lib/ai-hud";
@@ -68,8 +68,11 @@ export function Overskrift({ model, billede, still }: {
 }) {
   if (model.broken) return <Brud link={model.broken} tone={model.chainTone} still={still} />;
 
+  // Data-forsinkelsen tager overskriften, når den betyder noget: når
+  // Driftsagenten ikke længere kan stole på det, den ser. Under det viser
+  // kæden den selv.
   const k = billede.kaede;
-  if (k?.flaskehals && k.forsinkelseS >= 5) {
+  if (k?.flaskehals && k.forsinkelseS > FLASKEHALS.forsinkelseAlarmS) {
     return (
       <div className="hud-break tone-brud">
         <p className="hb-kicker"><span className="hb-dot" aria-hidden />Flaskehals · {k.flaskehals.toUpperCase()}{billede.simuleret && <Sim />}</p>
@@ -88,9 +91,32 @@ export function Overskrift({ model, billede, still }: {
     );
   }
 
-  const alarm = billede.haendelser.find((h) => h.niveau === "alarm" && billede.t - h.t < 20_000);
   const whr = rateFrom(billede.flowPct, model.flow.nominal);
-  const staar = billede.maskiner.filter((m) => m.koerer === false);
+
+  // Driftsagenten har stoppet noget. Så længe det står på dens beslutning,
+  // er det det vigtigste: hvad den gjorde, hvorfor, og hvad det koster.
+  const ai = billede.ai;
+  const aiStop = ai?.spor.filter((x) => x.stoppet) ?? [];
+  if (ai && (aiStop.length > 0 || ai.indgangStoppet)) {
+    const hvad = ai.indgangStoppet ? "Indgangen stoppet" : `Spor ${aiStop.map((x) => x.lane).join(" og ")} stoppet`;
+    const hvorfor = aiStop[0]?.aarsag;
+    return (
+      <div className="hud-break tone-test is-ai">
+        <p className="hb-kicker">
+          <span className="hb-ai">AI</span>Driftsagent{billede.simuleret && <Sim />}
+        </p>
+        <p className="hb-where">{hvad}</p>
+        <p className="hb-next">
+          {hvorfor && (<><span className="hb-next-label">Årsag</span><strong>{hvorfor}</strong></>)}
+          {whr !== null && (<><span className="hb-next-label">W/HR</span><strong><Tal v={whr} d={2} /> {model.flow.rateUnit}</strong></>)}
+        </p>
+      </div>
+    );
+  }
+
+  const alarm = billede.haendelser.find((h) => h.niveau === "alarm" && billede.t - h.t < 20_000);
+  // Maskiner, agenten har stoppet, er ikke fejl og hører ikke til her.
+  const staar = billede.maskiner.filter((m) => m.koerer === false && !m.styret);
 
   if (alarm) {
     return (
@@ -148,12 +174,20 @@ function Brud({ link, tone, still }: { link: HudLink; tone: LinkTone; still?: bo
   );
 }
 
-/** Det store udlæste tal. Farven tændes kun, når der er noget at farve. */
-export function Readout({ tally }: { tally: HudModel["tally"] }) {
+/**
+ * Det store udlæste tal: hvor mange maskiner har deres signaler på plads.
+ *
+ * Etiketten er HUD-ordet, ikke "i drift". Om en maskine *kører*, står i
+ * driftspanelet — og står et spor på Driftsagentens beslutning, ville "i
+ * drift 26" ved siden af "kører 16" være en modsigelse. Farven tændes kun,
+ * når der er noget at farve.
+ */
+export function Readout({ tally, sim = false }: { tally: HudModel["tally"]; sim?: boolean }) {
   return (
     <div className="hud-readout">
+      {sim && <Sim />}
       <span className={`ro-group${tally.drift > 0 ? " is-drift" : ""}`}>
-        <span className="ro-label">I drift</span>
+        <span className="ro-label">På plads</span>
         <Tal v={tally.drift} d={0} className="ro-value" />
         <span className="ro-of">/ {tally.total}</span>
       </span>
@@ -240,6 +274,11 @@ export function DriftPanel({ billede, historik, nr, still }: {
   still?: boolean;
 }) {
   const kendt = billede.oppetidPct !== null;
+  // Rødt er en fejl. Står maskinerne kun på Driftsagentens beslutning, er
+  // tallet rav — et styret stop må ikke se ud som noget, der er gået galt.
+  const fejl = billede.maskiner.some((m) => m.koerer === false && !m.styret);
+  const styrede = billede.maskiner.some((m) => m.styret);
+  const koererTone = fejl ? " is-brud" : styrede ? " is-styret" : "";
   return (
     <Panel label="Drift" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
       {!kendt ? (
@@ -253,7 +292,7 @@ export function DriftPanel({ billede, historik, nr, still }: {
             </div>
             <div className="hp-stort">
               <span className="hp-stort-label">Kører</span>
-              <span className={`hp-stort-tal${billede.koerende < billede.maskiner.length ? " is-brud" : ""}`}>
+              <span className={`hp-stort-tal${koererTone}`}>
                 <Tal v={billede.koerende} d={0} /><i>/ {billede.maskiner.length}</i>
               </span>
             </div>
@@ -333,7 +372,7 @@ export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBille
             {["BIGF", "BIGH", "NOTS"].map((k) => <span key={k}>{k}</span>)}
           </div>
           {kb.map((m) => (
-            <div key={m.id} className={`hp-kb-rk${m.koerer === false ? " is-stop" : ""}`}>
+            <div key={m.id} className={`hp-kb-rk${m.styret ? " is-styret" : m.koerer === false ? " is-stop" : ""}`}>
               <span className="hp-kb-navn">{m.kort}</span>
               {["bigf", "bigh", "nots"].map((id) => {
                 const k = m.kanaler.find((x) => x.spec.id === id);
@@ -358,7 +397,7 @@ export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBille
 
 export function FokusPanel({ m, historik, sim }: { m: MaskinLaesning | null; historik: Historik; sim: boolean }) {
   if (!m) return null;
-  const tilstand = m.alarm ? "alarm" : m.koerer === false ? "staar" : m.koerer ? "koerer" : "ukendt";
+  const tilstand = m.alarm ? "alarm" : m.styret ? "styret" : m.koerer === false ? "staar" : m.koerer ? "koerer" : "ukendt";
   return (
     <section className={`hud-fokus t-${tilstand}`} key={m.id}>
       <header className="hf-head">
@@ -366,7 +405,7 @@ export function FokusPanel({ m, historik, sim }: { m: MaskinLaesning | null; his
         <span className="hf-id">W-{m.wIds.join(" · W-")}{m.lane ? ` · Spor ${m.lane}` : ""}</span>
         {sim && <Sim />}
         <span className="hf-tilstand">
-          {tilstand === "alarm" ? "Alarm" : tilstand === "staar" ? "Stoppet" : tilstand === "koerer" ? "Kører" : "Afventer"}
+          {tilstand === "alarm" ? "Alarm" : tilstand === "styret" ? "Stoppet af AI" : tilstand === "staar" ? "Stoppet" : tilstand === "koerer" ? "Kører" : "Afventer"}
         </span>
       </header>
       {m.kanaler.every((k) => k.value === null) ? <Afventer /> : (
@@ -406,7 +445,7 @@ export function Haendelser({ billede, nr, still }: { billede: TelemetriBillede; 
           {billede.haendelser.slice(0, 14).map((h) => (
             <li key={`${h.t}-${h.hvor}-${h.tekst}`} className={`n-${h.niveau}`}>
               <time>{klok(h.t)}</time>
-              <span className="hh-hvor">{h.hvor}</span>
+              <span className="hh-hvor">{h.ai && <span className="hh-ai">AI</span>}{h.hvor}</span>
               <span className="hh-tekst">{h.tekst}</span>
             </li>
           ))}
@@ -419,7 +458,13 @@ export function Haendelser({ billede, nr, still }: { billede: TelemetriBillede; 
 // ---------------------------------------------------------------------------
 // Agenterne
 
-function Core({ a }: { a: HudAgent }) {
+const AI_TILSTAND: Record<NonNullable<TelemetriBillede["ai"]>["tilstand"], string> = {
+  overvaager: "Overvåger",
+  handler: "Handler",
+  holder: "Holder",
+};
+
+function Core({ a, ai, sim }: { a: HudAgent; ai: TelemetriBillede["ai"]; sim: boolean }) {
   const R = 13;
   const OMKREDS = 2 * Math.PI * R;
   const andel = a.total > 0 ? a.done / a.total : 0;
@@ -444,12 +489,27 @@ function Core({ a }: { a: HudAgent }) {
           <span className="hc-sep" aria-hidden>·</span>
           <span className="hc-engine">{AGENT_ENGINE_LABEL[a.engine]}</span>
         </span>
+        {/* Den agent, der styrer, siger hvad den gør lige nu. */}
+        {a.styring && ai && (
+          <span className={`hc-ai t-${ai.tilstand}`}>
+            <span className="hh-ai">AI</span>
+            {AI_TILSTAND[ai.tilstand]}
+            {ai.tilstand === "handler" && ai.seneste && ` · ${ai.seneste.tekst.split(" · ")[0]}`}
+            {sim && <Sim />}
+          </span>
+        )}
       </div>
     </li>
   );
 }
 
-export function AgentCores({ model, nr, still }: { model: HudModel; nr: number; still?: boolean }) {
+export function AgentCores({ model, nr, still, ai = null, sim = false }: {
+  model: HudModel;
+  nr: number;
+  still?: boolean;
+  ai?: TelemetriBillede["ai"];
+  sim?: boolean;
+}) {
   const besluttet = model.agents.filter((a) => !a.idea);
   const ideer = model.agents.filter((a) => a.idea);
   return (
@@ -460,11 +520,11 @@ export function AgentCores({ model, nr, still }: { model: HudModel; nr: number; 
       className="hp-agents"
       right={<span className="hp-count fm-num">{kr(model.totalKr)} / md.</span>}
     >
-      <ul className="hud-cores">{besluttet.map((a) => <Core key={a.id} a={a} />)}</ul>
+      <ul className="hud-cores">{besluttet.map((a) => <Core key={a.id} a={a} ai={ai} sim={sim} />)}</ul>
       {ideer.length > 0 && (
         <>
           <p className="hp-sub">Idéer · ikke medregnet</p>
-          <ul className="hud-cores is-ideer">{ideer.map((a) => <Core key={a.id} a={a} />)}</ul>
+          <ul className="hud-cores is-ideer">{ideer.map((a) => <Core key={a.id} a={a} ai={null} sim={false} />)}</ul>
         </>
       )}
     </Panel>

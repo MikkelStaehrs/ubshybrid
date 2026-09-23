@@ -12,7 +12,7 @@ const DT = 250;
 
 /** Kør simulatoren `n` skridt og saml alle billeder. */
 function koer(n: number, seed = 743): TelemetriBillede[] {
-  const sim = simulator(layout, seed);
+  const sim = simulator(layout, { seed });
   const ud: TelemetriBillede[] = [];
   for (let i = 0; i < n; i++) ud.push(sim.skridt(DT, T0 + i * DT));
   return ud;
@@ -105,11 +105,13 @@ describe("maskinerne opfører sig fysisk", () => {
   it("står indgangen, løber der ingenting ind", () => {
     // Påslaget og elevator 743 fodrer måleren. Stopper en af dem, skal
     // flowet falde — ellers måler vi noget, der ikke kan være der.
-    const indgang = forloeb.filter((b) =>
-      b.maskiner.some((m) => (m.wIds.includes("743") || /påslag/i.test(m.navn)) && m.koerer === false));
-    assert.ok(indgang.length > 0, "indgangen stoppede ikke i forløbet");
-    const efter = indgang.slice(40);
-    assert.ok(efter.some((b) => b.flowPct !== null && b.flowPct < 10), "flowet faldt ikke");
+    const sim = simulator(layout, { planlagteStop: [{ wid: "743", fraS: 30, varighedS: 60 }], stopHverS: 1e9 });
+    const b: TelemetriBillede[] = [];
+    for (let n = 0; n < 4 * 80; n++) b.push(sim.skridt(DT, T0 + n * DT));
+    const foer = b[4 * 25];
+    const under = b[4 * 50];
+    assert.ok(foer.flowPct! > 60, `flowet var ${foer.flowPct} før stoppet`);
+    assert.ok(under.flowPct !== null && under.flowPct < 10, `flowet var ${under.flowPct} under stoppet`);
   });
 });
 
@@ -296,7 +298,7 @@ describe("flaskehalsen i demoen", () => {
 });
 
 describe("en flaskehals, der ikke går over", () => {
-  const sim = simulator(layout, 743, undefined, true);
+  const sim = simulator(layout, { tvungenFlaskehals: true });
   const tvunget: TelemetriBillede[] = [];
   for (let n = 0; n < 4 * 60 * 15; n++) tvunget.push(sim.skridt(DT, T0 + n * DT));
 
@@ -319,5 +321,106 @@ describe("en flaskehals, der ikke går over", () => {
   it("holder regnskabet også, når data tabes", () => {
     const k = tvunget[tvunget.length - 1].kaede!;
     assert.ok(Math.abs(k.modtaget - k.skrevetIalt - k.koe - k.tabt) < 1.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Driftsagenten
+
+/** Kør en simulation og saml hver hændelse én gang, på det skridt den opstod. */
+function koerMed(valg: Parameters<typeof simulator>[1], sekunder: number) {
+  const sim = simulator(layout, valg);
+  const billeder: TelemetriBillede[] = [];
+  for (let n = 0; n < 4 * sekunder; n++) billeder.push(sim.skridt(DT, T0 + n * DT));
+  const haendelser = billeder.flatMap((b) => b.haendelser.filter((h) => h.t === b.t));
+  return { billeder, haendelser: haendelser.sort((a, b) => a.t - b.t) };
+}
+
+// KB-3N går i stå efter et minut og står i to et halvt. Bufferen foran den
+// fyldes af Carter N — og løber over efter omkring et minut, hvis ingen gør
+// noget. Tilfældige stop er slået fra, så intet andet forstyrrer.
+const STOP_KB3N = { wid: "636", fraS: 60, varighedS: 150 };
+const scenarie = { planlagteStop: [STOP_KB3N], stopHverS: 1e9 };
+const sek = (t: number) => (t - T0) / 1000;
+
+describe("Driftsagenten", () => {
+  const med = koerMed({ ...scenarie }, 300);
+  const uden = koerMed({ ...scenarie, ai: false }, 300);
+  const stopN = med.haendelser.find((h) => h.ai && h.tekst.startsWith("Stopper spor N"));
+  const startN = med.haendelser.find((h) => h.ai && h.tekst.startsWith("Starter spor N"));
+
+  it("uden den løber bufferen foran den stoppede maskine over", () => {
+    assert.ok(uden.haendelser.some((h) => /Overløb/.test(h.tekst) && h.hvor === "KB-3N"),
+      "ingen overløb — så beviser testen intet om agenten");
+  });
+
+  it("med den stopper sporet, før bufferen løber over", () => {
+    assert.ok(stopN, "agenten stoppede ikke spor N");
+    assert.match(stopN.tekst, /KB-3N står · buffer \d+ %/);
+    assert.ok(!med.haendelser.some((h) => /Overløb/.test(h.tekst)), "der var overløb alligevel");
+  });
+
+  it("handler ikke på én prøve, men heller ikke for sent", () => {
+    // Fundet skal holde i overvejelsestiden, og det skal ske i god tid før
+    // de hundrede procent: ved omkring 55, ikke ved 99.
+    const pct = Number(stopN!.tekst.match(/buffer (\d+) %/)![1]);
+    assert.ok(pct >= 55 && pct < 70, `stoppede ved ${pct} %`);
+  });
+
+  it("starter sporet igen, når årsagen er væk", () => {
+    assert.ok(startN, "sporet blev aldrig startet igen");
+    assert.match(startN.tekst, /KB-3N kører igen/);
+    assert.ok(sek(startN.t) >= STOP_KB3N.fraS + STOP_KB3N.varighedS, "startede, før KB-3N kørte");
+  });
+
+  it("et stoppet spor koster gennemløb — det halve", () => {
+    const under = med.billeder.filter((b) => b.t > stopN!.t + 20_000 && b.t < startN!.t && b.flowPct !== null);
+    const gns = under.reduce((n, b) => n + b.flowPct!, 0) / under.length;
+    assert.ok(gns > 30 && gns < 62, `gennemløbet var ${gns.toFixed(1)} % med ét spor`);
+  });
+
+  it("fordeleren sender alt til det spor, der kører", () => {
+    const b = med.billeder.find((x) => x.t > stopN!.t + 20_000)!;
+    const andelN = b.maskiner.find((m) => m.navn === "Fordeler")!.kanaler.find((k) => k.spec.id === "andelN")!;
+    assert.ok(andelN.value! < 10, `fordeleren sender stadig ${andelN.value} % til spor N`);
+  });
+
+  it("skelner sit eget stop fra en fejl", () => {
+    // KB-3N er fejlen. Resten af sporet står på agentens beslutning.
+    const b = med.billeder.find((x) => x.t > stopN!.t + 5_000)!;
+    const kb = b.maskiner.find((m) => m.wIds.includes("636"))!;
+    const jet = b.maskiner.find((m) => m.navn === "Jetpealer N")!;
+    assert.equal(kb.koerer, false);
+    assert.equal(kb.styret, false, "fejlen må ikke se ud som en beslutning");
+    assert.equal(jet.koerer, false);
+    assert.equal(jet.styret, true);
+  });
+
+  it("siger, hvad den gør og hvorfor", () => {
+    for (const h of med.haendelser.filter((x) => x.ai && /^(Stopper|Starter)/.test(x.tekst))) {
+      assert.match(h.tekst, / · ./, `"${h.tekst}" har ingen årsag`);
+    }
+    assert.ok(med.billeder[med.billeder.length - 1].ai!.beslutninger >= 2);
+  });
+});
+
+describe("Driftsagenten, når den ikke kan se", () => {
+  // Kæden halter fra start, så data er bagud, før KB-3N går i stå.
+  const blind = koerMed({ ...scenarie, tvungenFlaskehals: true }, 240);
+
+  it("holder sine beslutninger, når data er forsinket", () => {
+    assert.ok(blind.haendelser.some((h) => h.ai && h.tekst.startsWith("Holder")), "agenten sagde ikke, at den holdt");
+    assert.ok(!blind.haendelser.some((h) => h.ai && /^(Stopper|Starter) spor/.test(h.tekst)),
+      "agenten handlede på data, den ikke kunne stole på");
+  });
+
+  it("stopper ikke linjen, fordi databasen halter", () => {
+    const b = blind.billeder[4 * 50];
+    assert.ok(b.kaede!.forsinkelseS > 15);
+    assert.ok(b.ai!.spor.every((x) => !x.stoppet), "et spor blev stoppet for en langsom database");
+  });
+
+  it("og så løber bufferen over — det er prisen, og den skal kunne ses", () => {
+    assert.ok(blind.haendelser.some((h) => /Overløb/.test(h.tekst)));
   });
 });

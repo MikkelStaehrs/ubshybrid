@@ -91,6 +91,48 @@ const sliberi: Agent[] = [
     beslutning: "besluttet",
   },
 
+  {
+    id: "AG-SLIB-DRIFT",
+    name: "Driftsagent",
+    role: "styring",
+    til: "Operatør",
+    svarerPaa: "Skal et spor stoppes nu?",
+    // Den eneste agent, der griber ind frem for at skrive. Den stopper et
+    // spor, før en ophobning løber over eller frøet tager skade, og starter
+    // det igen, når årsagen er væk.
+    //
+    // Den kan ikke stoppe noget i dag: der findes ingen vej fra en agent
+    // tilbage til styringen. Den vej — en skrivning til PLC'en, interlocks,
+    // hvem der kan tilsidesætte — er en sikkerhedsbeslutning og skal tages
+    // for sig, før agenten slås til. Se "Åbne ender" i CLAUDE.md.
+    job: "Stopper et spor, før en fejl eller en ophobning løber over, og starter det igen, når årsagen er væk.",
+    scope: { kind: "line" },
+    inputs: [
+      {
+        type: "motor-run",
+        required: true,
+        need: "Driftssignal (DI) pr. maskine på linjen",
+      },
+      {
+        // En agent, der styrer, må ikke se forsinket. Uden databasen ser den
+        // ingenting, og halter den, holder agenten sine beslutninger.
+        chainStep: "mssql",
+        required: true,
+        need: "Databasen skal tage imod rækker, uden at halte",
+      },
+      {
+        inlet: "materiale",
+        required: false,
+        need: "Materialestrøm ved linjens indgang",
+      },
+    ],
+    // Reglerne afgør, hvornår noget er galt. Claude vejer, om det er et stop
+    // værd, og skriver hvorfor — kun når der sker noget, ikke løbende.
+    engine: "claude",
+    cadence: "Ved hændelser",
+    beslutning: "besluttet",
+  },
+
   // --- Idéer -------------------------------------------------------------
   // Tænkt, men ikke besluttet. De tæller ikke med i optællinger og får ingen
   // zone på gulvet, før nogen siger ja til dem.

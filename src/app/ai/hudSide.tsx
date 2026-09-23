@@ -46,6 +46,9 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
   // ?flaskehals=1 holder en flaskehals i kæden fremme — til at vise, hvordan
   // en ser ud, uden at vente på den næste. Kun i fremskrivningen.
   const flaskehals = fremskriv && params.flaskehals === "1";
+  // ?ophobning=1 lader KB-3N gå i stå kort efter, siden er åbnet — så man kan
+  // se Driftsagenten gribe ind, uden at vente på et tilfældigt stop.
+  const ophobning = fremskriv && params.ophobning === "1";
 
   return (
     <HudView
@@ -56,6 +59,7 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
       measure={measure}
       fokusWid={fokusWid}
       flaskehals={flaskehals}
+      ophobning={ophobning}
     />
   );
 }

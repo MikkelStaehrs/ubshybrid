@@ -72,8 +72,12 @@ export type LinkTone = "drift" | "test" | "brud" | "moerk";
  * et led ingen tal, står listen tom.
  */
 export interface LinkInstrument {
-  /** Korte par i mono: "KANAL · AI1", "REGISTER · 30001–30002". */
-  readings: { label: string; value: string }[];
+  /**
+   * Korte par i mono: "KANAL · AI1", "REGISTER · 30001–30002". `tone`
+   * farver tallet, når det er noget at lægge mærke til — et underskud, et
+   * forudsat kort.
+   */
+  readings: { label: string; value: string; tone?: "test" | "brud" }[];
   /**
    * Kanalpladserne på IO-kortet. `used` er de optagede. Tom, når der ikke
    * er et kort at tælle pladser på endnu.
@@ -122,6 +126,8 @@ export interface HudAgent {
   idea: boolean;
   /** Besluttet, men kører ikke: ånder svagt. */
   sovende: boolean;
+  /** Agenten griber ind i driften i stedet for at skrive en rapport. */
+  styring: boolean;
   /** Hvad første kørsel kræver. Udledt. */
   blocker: string;
   /** Kroner pr. måned. 0 for kode-agenter. */
@@ -254,16 +260,25 @@ function instrumentFor(
         used: i < u.used,
       })),
     );
-    const brugt = report.uses.reduce((n, u) => n + u.used, 0);
-    const ialt = report.uses.reduce((n, u) => n + u.total, 0);
-    return {
-      readings: [
-        { label: "Skab", value: cabinet.id },
-        { label: "Pladser", value: `${brugt} / ${ialt}` },
-      ],
-      slots,
-      waits,
-    };
+    // Analoge og digitale kanaler hver for sig. Lagt sammen skjulte de et
+    // underskud: "17 / 24" så ud som plads, mens 13 driftssignaler ingen
+    // kanal havde, fordi de analoge pladser var ledige.
+    const readings: LinkInstrument["readings"] = [{ label: "Skab", value: cabinet.id }];
+    for (const u of report.uses) {
+      if (u.total === 0 && u.needed === 0) continue;
+      readings.push({ label: u.kind.toUpperCase(), value: `${u.used} / ${u.total}` });
+    }
+    const mangler = report.uses.reduce((n, u) => n + Math.max(0, u.needed - u.total), 0);
+    if (mangler > 0) readings.push({ label: "Mangler", value: `${mangler} kanaler`, tone: "brud" });
+    const forudsat = cabinet.hardware.filter((h) => h.id.startsWith("X-"));
+    if (forudsat.length > 0) {
+      readings.push({
+        label: "Forudsat",
+        value: forudsat.map((h) => `+${h.qty} ${h.id.replace("X-IO-", "")}`).join(" · "),
+        tone: "test",
+      });
+    }
+    return { readings, slots, waits };
   }
 
   return { readings: [], waits };
@@ -394,6 +409,7 @@ export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudMod
       idea,
       // Besluttet, men kører ikke. Den ånder — den er ikke død.
       sovende: !idea && st.agent.beslutning !== "aktiveret",
+      styring: st.agent.role === "styring",
       blocker: firstRunBlocker(st),
       kr: c.perMaaned,
       gratis: c.gratis,

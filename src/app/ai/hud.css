@@ -526,6 +526,8 @@
 }
 .hp-stort-tal i { font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); margin-left: 2px; }
 .hp-stort-tal.is-brud { color: var(--hud-brud); text-shadow: 0 0 14px rgba(255, 111, 92, 0.35); }
+.hp-stort-tal.is-styret { color: var(--hud-test-lys); }
+.hud-readout > .hp-sim { align-self: center; }
 
 .hp-klima { display: grid; gap: 8px; }
 .hp-klima-rk { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: baseline; }
@@ -544,6 +546,8 @@
 .hp-kb-navn { font-family: var(--font-mono); font-size: 10px; color: var(--hud-ink); letter-spacing: 0.04em; }
 .hp-kb-rk.is-stop .hp-kb-navn { color: var(--hud-brud); }
 .hp-kb-rk.is-stop .hp-kb-celle { opacity: 0.45; }
+.hp-kb-rk.is-styret .hp-kb-navn { color: var(--hud-test-lys); }
+.hp-kb-rk.is-styret .hp-kb-celle { opacity: 0.45; }
 .hp-kb-celle { display: grid; gap: 3px; }
 .hp-kb-tal { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
 .hp-kb-celle.is-alarm .hp-kb-tal { color: var(--hud-brud); }
@@ -583,7 +587,7 @@
 .hp-haendelser { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; overflow: hidden; }
 .hp-haendelser li {
   display: grid;
-  grid-template-columns: 58px 74px 1fr;
+  grid-template-columns: 58px 84px 1fr;
   gap: 8px;
   padding: 3px 0 3px 7px;
   border-left: 2px solid var(--hud-moerk);
@@ -595,12 +599,52 @@
 @keyframes ind-venstre { from { opacity: 0; transform: translateX(-10px); background: rgba(111, 224, 194, 0.12); } }
 .hp-haendelser time { color: var(--hud-dim); font-variant-numeric: tabular-nums; }
 .hh-hvor { color: var(--hud-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hh-tekst { color: var(--hud-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Teksten må brydes over to linjer: en beslutning uden sin begrundelse er
+   ikke til at stole på. */
+.hh-tekst {
+  color: var(--hud-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .hp-haendelser li.n-advarsel { border-left-color: var(--hud-test); }
 .hp-haendelser li.n-advarsel .hh-tekst { color: var(--hud-test-lys); }
 .hp-haendelser li.n-alarm { border-left-color: var(--hud-brud); background: rgba(255, 111, 92, 0.05); }
 .hp-haendelser li.n-alarm .hh-tekst { color: var(--hud-brud); }
 .hp-haendelser li.n-info { border-left-color: var(--hud-drift); }
+
+/* --- Agentens mærke ---------------------------------------------------------
+   Hver beslutning, Driftsagenten træffer, bærer "AI". Det er ikke en farve,
+   men et mærke — farven er stadig tilstanden: rav for et styret stop. */
+.hh-ai, .hb-ai {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 3px;
+  border: 1px solid currentColor;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+  vertical-align: 1px;
+}
+.hb-ai { font-size: 9px; color: var(--hud-test-lys); }
+.hc-ai {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--hud-muted);
+}
+.hc-ai.t-handler { color: var(--hud-test-lys); }
+.hc-ai.t-holder { color: var(--hud-brud); }
+.hc-ai .hp-sim { margin-left: auto; }
+.hud-break.is-ai { --t: var(--hud-test); --t-lys: var(--hud-test-lys); }
+.hud-break.is-ai .hb-where { color: var(--hud-test-lys); }
 
 /* --- Scenens overskrift ---------------------------------------------------- */
 .hud-break {
@@ -699,6 +743,7 @@
 @keyframes fokus-ind { from { opacity: 0; transform: translateY(8px); clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
 .hud-fokus.t-koerer { --f: var(--hud-drift-lys); }
 .hud-fokus.t-staar, .hud-fokus.t-alarm { --f: var(--hud-brud); }
+.hud-fokus.t-styret { --f: var(--hud-test-lys); }
 .hf-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
 .hf-navn { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .hf-id { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; color: var(--hud-dim); }
@@ -735,6 +780,8 @@
 }
 .h3-tag.t-koerer { --c: var(--hud-drift-lys); }
 .h3-tag.t-staar, .h3-tag.t-alarm { --c: var(--hud-brud); }
+.h3-tag.t-styret { --c: var(--hud-test-lys); }
+.h3-styret { margin-left: auto; color: var(--hud-test-lys); font-weight: 700; letter-spacing: 0.14em; font-size: 7.5px; text-transform: uppercase; }
 .h3-tag.t-alarm { animation: h3-alarm 1s steps(2) infinite; }
 @keyframes h3-alarm { 50% { background: rgba(80, 18, 12, 0.85); } }
 .h3-tag.is-fokus { transform: scale(1.12); box-shadow: 0 0 22px color-mix(in srgb, var(--c) 30%, transparent); }
