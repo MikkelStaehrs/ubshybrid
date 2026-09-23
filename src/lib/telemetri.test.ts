@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import sliberi from "../../data/lines/sliberi.json";
 import { layoutLine } from "./layout";
 import { FAULT_LOW_MA } from "./live-source";
-import { kanalerFor, simulator, tomtBillede, INDKOERING_S, SIM, type TelemetriBillede } from "./telemetri";
+import { kanalerFor, maskinFart, simulator, tomtBillede, INDKOERING_S, SIM, type TelemetriBillede } from "./telemetri";
 import type { LineData } from "./types";
 
 const layout = layoutLine(sliberi as LineData);
@@ -422,5 +422,41 @@ describe("Driftsagenten, når den ikke kan se", () => {
 
   it("og så løber bufferen over — det er prisen, og den skal kunne ses", () => {
     assert.ok(blind.haendelser.some((h) => /Overløb/.test(h.tekst)));
+  });
+});
+
+describe("partiklernes fart", () => {
+  const spec = (id: string, nominal: number) =>
+    ({ id, label: id, unit: "", nominal, spredning: 0, min: 0, max: 99, decimaler: 0 });
+
+  it("står stille, når vi ikke ved, om maskinen kører", () => {
+    // Den rigtige visning i dag: ingen driftssignaler, ingen bevægelse.
+    for (const m of tomtBillede(layout, T0, null).maskiner) assert.equal(maskinFart(m), 0, m.kort);
+  });
+
+  it("følger elevatorens hastighed — og bremser ned, når den stopper", () => {
+    const k = (v: number) => [{ spec: spec("hastighed", 2.4), value: v, alarm: false }];
+    assert.ok(Math.abs(maskinFart({ koerer: true, kanaler: k(2.4) }) - 1) < 1e-9);
+    // Lige efter et stop er farten på vej ned, ikke væk.
+    const bremser = maskinFart({ koerer: false, kanaler: k(1.2) });
+    assert.ok(bremser > 0 && bremser < 1, `${bremser}`);
+    assert.equal(maskinFart({ koerer: false, kanaler: k(0) }), 0);
+  });
+
+  it("uden en hastighed er det kører eller står", () => {
+    assert.equal(maskinFart({ koerer: true, kanaler: [] }), 1);
+    assert.equal(maskinFart({ koerer: false, kanaler: [] }), 0);
+  });
+
+  it("i demoen bevæger en maskine, der står, sig aldrig hurtigere, end den kørte", () => {
+    for (const b of forloeb.filter((_, i) => i % 40 === 0)) {
+      for (const m of b.maskiner) {
+        const f = maskinFart(m);
+        assert.ok(f >= 0 && f <= 1.5, `${m.kort}: ${f}`);
+        if (m.koerer === false && !m.kanaler.some((k) => k.spec.id === "hastighed" || k.spec.id === "rpm")) {
+          assert.equal(f, 0, `${m.kort} står, men bevæger sig`);
+        }
+      }
+    }
   });
 });

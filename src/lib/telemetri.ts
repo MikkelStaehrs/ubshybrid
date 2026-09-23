@@ -151,6 +151,22 @@ export function kanalerFor(m: Pick<PlacedMachine, "kind" | "name" | "wIds">): Ka
   return base.map((k) => ({ ...k, ...(egne[k.id] ?? {}) }));
 }
 
+/**
+ * Hvor hurtigt materialet bevæger sig gennem en maskine, som andel af det
+ * normale. Partiklerne i hologrammet flytter sig med den fart.
+ *
+ * Nul, når vi ikke ved, om maskinen kører — i den rigtige visning i dag står
+ * alt stille, fordi ingen ved det. Har maskinen en hastighed eller et
+ * omdrejningstal, følger farten den, så en elevator, der stopper, bremser ned
+ * over et par sekunder i stedet for at fryse på et blink.
+ */
+export function maskinFart(m: Pick<MaskinLaesning, "koerer" | "kanaler">): number {
+  if (m.koerer === null) return 0;
+  const k = m.kanaler.find((x) => x.spec.id === "hastighed" || x.spec.id === "rpm");
+  if (k && k.value !== null && k.spec.nominal > 0) return Math.min(1.5, Math.max(0, k.value / k.spec.nominal));
+  return m.koerer ? 1 : 0;
+}
+
 /** "E-743" for elevatorer, navnet for resten. Vippestolene er én gruppe. */
 export function kortNavn(m: Pick<PlacedMachine, "kind" | "name" | "wIds">): string {
   if (m.kind === "elevator") return `E-${m.wIds[0]}`;

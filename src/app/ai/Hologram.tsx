@@ -15,7 +15,7 @@ import { KOERER_OVER_PCT } from "../../lib/flow";
 import { layoutLine, type Layout } from "../../lib/layout";
 import { formFor, formTop } from "../../lib/machine-form";
 import type { OtLayout } from "../../lib/ot";
-import type { MaskinLaesning, TelemetriBillede } from "../../lib/telemetri";
+import { maskinFart, type MaskinLaesning, type TelemetriBillede } from "../../lib/telemetri";
 import type { LineData } from "../../lib/types";
 
 /**
@@ -74,9 +74,19 @@ const PALET = /* glsl */ `
 const CLOUD_VERT = /* glsl */ `
   attribute float aBright;
   attribute float aMaskine;
+  // Maskinens midte og længdeakse på gulvet, og dens højde, længde og om
+  // den er en elevator. Det er det, materialet bevæger sig langs.
+  attribute vec2 aMidte;
+  attribute vec2 aAkse;
+  attribute vec3 aMaal;
   uniform float uSize;
   uniform float uTime;
   uniform float uState[${MAX_MASKINER}];
+  // Hvor hurtigt materialet bevæger sig gennem maskinen. 0 står stille.
+  uniform float uFart[${MAX_MASKINER}];
+  // Hvor langt materialet er nået. Løber kun frem med farten, så en maskine,
+  // der bremser, bremser — den springer ikke og løber aldrig baglæns.
+  uniform float uFase[${MAX_MASKINER}];
   uniform float uFadeNear;
   uniform float uFadeFar;
   varying vec3 vCol;
@@ -84,10 +94,44 @@ const CLOUD_VERT = /* glsl */ `
   ${PALET}
 
   void main() {
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    float dist = -mv.z;
     float s = aMaskine < 0.0 ? 0.0 : uState[int(aMaskine)];
+    float f = aMaskine < 0.0 ? 0.0 : uFart[int(aMaskine)];
+    float t = aMaskine < 0.0 ? 0.0 : uFase[int(aMaskine)];
     float lys = aBright;
+    vec3 p = position;
+
+    // Kører maskinen, bevæger dens partikler sig — med maskinens fart, og
+    // kun så længe den kører. Står den, står de.
+    // Vægten glider ind og ud med farten, så en maskine, der starter eller
+    // stopper, ikke får sine partikler til at hoppe.
+    float w = smoothstep(0.0, 0.08, f);
+    if (w > 0.0) {
+      float h = fract(sin(dot(position, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      // De fleste sværmer let om deres plads, så formen bevares.
+      float a = t * (0.9 + h * 1.8) + h * 6.2831;
+      float r = (0.035 + fract(h * 7.13) * 0.06) * w;
+      p += vec3(cos(a) * r, sin(a * 1.3) * r * 0.5, sin(a) * r);
+
+      // Hver femte er materiale: løftes op gennem en elevator eller flyder
+      // på langs gennem en maskine, og toner ind og ud i enderne.
+      if (h < 0.2) {
+        bool elevator = aMaal.z > 0.5;
+        float fase = fract(h * 5.0 + t * (elevator ? 0.3 : 0.14));
+        vec3 flyt = p;
+        if (elevator) {
+          flyt.y = mix(0.4, aMaal.x, fase);
+        } else {
+          vec2 rel = p.xz - aMidte;
+          float langs = dot(rel, aAkse);
+          flyt.xz = aMidte + (rel - aAkse * langs) + aAkse * ((fase - 0.5) * aMaal.y);
+        }
+        p = mix(p, flyt, w);
+        lys *= mix(1.0, 1.5 * smoothstep(0.0, 0.1, fase) * smoothstep(1.0, 0.9, fase) + 0.2, w);
+      }
+    }
+
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    float dist = -mv.z;
 
     // Kører den, ånder den. Står den, står den stille. Alarmen banker.
     if (s > 1.5 && s < 2.5) lys *= 0.82 + 0.18 * sin(uTime * 1.3 + aMaskine * 1.7);
@@ -120,14 +164,48 @@ const CLOUD_FRAG = /* glsl */ `
   }
 `;
 
-function Cloud({ data, state, still }: { data: HologramData; state: Float32Array; still: boolean }) {
+function Cloud({ data, state, fart, layout, ids, still }: {
+  data: HologramData;
+  state: Float32Array;
+  /** Materialets fart pr. maskine, som andel af normalt. Se maskinFart(). */
+  fart: Float32Array;
+  layout: Layout;
+  ids: string[];
+  still: boolean;
+}) {
   const geometry = useMemo(() => {
     const g = new BufferGeometry();
     g.setAttribute("position", new BufferAttribute(data.positions, 3));
     g.setAttribute("aBright", new BufferAttribute(data.bright, 1));
     g.setAttribute("aMaskine", new BufferAttribute(data.maskine, 1));
+    // Hvert punkt kender sin maskines midte, akse og mål — det, materialet
+    // bevæger sig langs. Gulvet har nul overalt og bevæger sig aldrig.
+    const n = data.count;
+    const midte = new Float32Array(n * 2);
+    const akse = new Float32Array(n * 2);
+    const maal = new Float32Array(n * 3);
+    const form = ids.map((id) => {
+      const m = layout.byId.get(id);
+      if (!m) return null;
+      // Maskinens egen x-akse i kortets akser — samme drejning som punkterne.
+      return {
+        cx: m.pos[0], cz: m.pos[2],
+        ax: Math.cos(m.rotY), az: -Math.sin(m.rotY),
+        h: m.size.h, l: m.size.x * 0.9, elev: m.kind === "elevator" ? 1 : 0,
+      };
+    });
+    for (let i = 0; i < n; i++) {
+      const f = form[data.maskine[i]];
+      if (!f) continue;
+      midte[i * 2] = f.cx; midte[i * 2 + 1] = f.cz;
+      akse[i * 2] = f.ax; akse[i * 2 + 1] = f.az;
+      maal[i * 3] = f.h; maal[i * 3 + 1] = f.l; maal[i * 3 + 2] = f.elev;
+    }
+    g.setAttribute("aMidte", new BufferAttribute(midte, 2));
+    g.setAttribute("aAkse", new BufferAttribute(akse, 2));
+    g.setAttribute("aMaal", new BufferAttribute(maal, 3));
     return g;
-  }, [data]);
+  }, [data, layout, ids]);
 
   const material = useMemo(
     () =>
@@ -139,6 +217,8 @@ function Cloud({ data, state, still }: { data: HologramData; state: Float32Array
           uTime: { value: 0 },
           uGain: { value: 0.62 },
           uState: { value: new Float32Array(MAX_MASKINER) },
+          uFart: { value: new Float32Array(MAX_MASKINER) },
+          uFase: { value: new Float32Array(MAX_MASKINER) },
           uFadeNear: { value: 50 },
           uFadeFar: { value: 200 },
         },
@@ -149,9 +229,18 @@ function Cloud({ data, state, still }: { data: HologramData; state: Float32Array
     [],
   );
 
-  useFrame(({ clock }) => {
+  // Hver maskine har sin egen fase, drevet af sin egen fart. Farten glattes,
+  // så en maskine uden hastighedsmåler også bremser blødt, når den stopper.
+  useFrame(({ clock }, dt) => {
     material.uniforms.uTime.value = still ? 0 : clock.elapsedTime;
     (material.uniforms.uState.value as Float32Array).set(state);
+    const vist = material.uniforms.uFart.value as Float32Array;
+    const fase = material.uniforms.uFase.value as Float32Array;
+    const k = Math.min(1, dt * 2.5);
+    for (let i = 0; i < MAX_MASKINER; i++) {
+      vist[i] += ((still ? 0 : fart[i]) - vist[i]) * k;
+      if (!still) fase[i] += dt * vist[i];
+    }
   });
 
   useEffect(() => () => geometry.dispose(), [geometry]);
@@ -679,6 +768,17 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
     return arr;
   }, [cloud, tele, billede.simuleret]);
 
+  // Materialets fart i hver maskine. Samme regel som resten: bevægelse kun
+  // for det, der kører — og slet ingen, hvor vi ikke ved det.
+  const fart = useMemo(() => {
+    const arr = new Float32Array(MAX_MASKINER);
+    cloud.machines.forEach((m, i) => {
+      const t = tele.get(m.id);
+      if (t) arr[i] = maskinFart(t);
+    });
+    return arr;
+  }, [cloud, tele]);
+
   // Strømmen. I fremskrivningen løber den mellem maskiner, der begge kører.
   // Ellers kun hvor flow er målt, og kun når måleren siger, at der løber noget.
   const kanter = useMemo(() => {
@@ -727,7 +827,7 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
       >
         <color attach="background" args={["#020504"]} />
         <fog attach="fog" args={["#020504", 70, 190]} />
-        <Cloud data={cloud} state={state} still={still} />
+        <Cloud data={cloud} state={state} fart={fart} layout={layout} ids={ids} still={still} />
         <Silhouetter layout={layout} ids={ids} state={state} still={still} />
         <Fodspor layout={layout} ids={ids} state={state} still={still} />
         <Baner data={data} layout={layout} />

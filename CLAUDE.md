@@ -190,6 +190,12 @@ En test scanner modellens synlige strenge for dem.
 er to linjer: hvor kæden stopper, og hvad den afventer. Skal noget uddybes,
 hører det til i dokumentvisningen. Også det er en test.
 
+**Partiklerne i maskinerne bevæger sig kun, når maskinen kører**, og med dens
+fart (`maskinFart()`): løftet op gennem elevatorerne, på langs gennem
+maskinerne. Ved vi ikke, om den kører — som i den rigtige visning i dag —
+står de stille. Hver maskine har sin egen fase, så en maskine, der bremser,
+bremser i stedet for at springe.
+
 ### Fremskrivningen
 
 `/ai/demo` viser anlægget, som det ville se ud med signalerne
