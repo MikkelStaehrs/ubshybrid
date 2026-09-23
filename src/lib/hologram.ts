@@ -159,6 +159,12 @@ export interface HologramData {
   bright: Float32Array;
   /** 0 = tåge, 1 = test (rav), 2 = drift (hvid). Shaderen farver efter den. */
   tone: Float32Array;
+  /**
+   * Hvilken maskine punktet tilhører, som indeks i `machines`. -1 er gulvet.
+   * Shaderen slår maskinens aktuelle tilstand op med den — så en maskine kan
+   * skifte farve, når den stopper, uden at skyen skal bygges om.
+   */
+  maskine: Float32Array;
   count: number;
   machines: MachineCloud[];
   /** Kanter med målt flow. Kun de her bærer bevægelse. */
@@ -209,9 +215,10 @@ export function buildHologram(
   const pos: number[] = [];
   const bright: number[] = [];
   const tone: number[] = [];
+  const maskine: number[] = [];
   const clouds: MachineCloud[] = [];
 
-  for (const { m, state, prims, weight } of weights) {
+  for (const [idx, { m, state, prims, weight }] of weights.entries()) {
     const n = Math.max(24, Math.round((weight / totalWeight) * machineBudget));
     const r = rng(seedFrom(m.wIds.join("/") || m.id));
     const vols = prims.map(volumeOf);
@@ -231,6 +238,7 @@ export function buildHologram(
       // Lidt variation, så skyen ikke er fladt ensartet.
       bright.push(LYS[state] * (0.7 + r() * 0.45));
       tone.push(TONE_INDEX[state]);
+      maskine.push(idx);
       if (ly > top) top = ly;
     }
 
@@ -255,6 +263,7 @@ export function buildHologram(
       );
       bright.push(0.14);
       tone.push(0);
+      maskine.push(-1);
     }
   }
 
@@ -269,6 +278,7 @@ export function buildHologram(
     positions: new Float32Array(pos),
     bright: new Float32Array(bright),
     tone: new Float32Array(tone),
+    maskine: new Float32Array(maskine),
     count: pos.length / 3,
     machines: clouds,
     flowEdges: flowEdgesFor(data, layout, ot),

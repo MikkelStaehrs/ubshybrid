@@ -18,6 +18,7 @@ Den vigtigste skelnen i repoet. Bland de to, og arbejde går tabt.
 | `data/ot-sensor-types.ts` | Håndholdt — sensorkatalog |
 | `data/line-config.ts` | Håndholdt — normtakt, stopdefinition, stopårsager |
 | `data/agents.ts` | Håndholdt — agenterne |
+| `data/fremskrivning.ts` | Håndholdt — fremskrivningens antagelser: kanaler, driftspunkter, alarmgrænser |
 
 Alt håndholdt bindes til maskinerne på **W-ID**, aldrig på tegningens celle-id
 eller på maskinens navn. En hændelse, en sensor eller en override skal følge
@@ -109,7 +110,9 @@ Kortet må aldrig vise noget, der ser ud som en måling uden at være det.
 - Adresser og tal, der er foreslået og ikke aftalt, skrives som forslag
   (registerkortet, stopgrænsen på 120 s, grænserne for lavt og højt flow).
 - **Fremskrivningen er den ene undtagelse** — og den er mærket hele vejen.
-  Se nedenfor.
+  Se nedenfor. Hvert instrument, der viser et simuleret tal, bærer sit eget
+  SIM-mærke; mærkatet øverst på siden er ikke nok alene, for et udsnit af
+  skærmen kan sendes videre uden det.
 
 ## Status udledes
 
@@ -199,10 +202,24 @@ skabet og kæden står. Derefter regner `pathState()`, `signalDelivery()` og
 agentstatus som altid — de ved ikke, at de er i en fremskrivning, og de får
 ingen særbehandling. Går en regel i stykker, går den i stykker begge steder.
 
-**Intet tal opfindes.** De ekstra signaler gribes ikke ud af luften: de
+**Strukturen opfindes ikke.** De ekstra signaler gribes ikke ud af luften: de
 kommer fra agenternes egne `type`-inputs, så fremskrivningen viser det
 anlæg, de besluttede agenter allerede har bedt om. Et `signalId` peger på en
 bestemt måler og kan ikke opfindes. En idé bliver ikke slået til.
+
+**Tallene er simulerede, og det står på dem.** Temperatur, fugt, hastighed,
+omdrejninger, FV0–FV3 og BIGF/BIGH/NOTS kommer fra simulatoren i
+`src/lib/telemetri.ts`, som læser sine antagelser fra `data/fremskrivning.ts`.
+Ret antagelserne dér — ikke i koden. Simulatoren er seedet og testet for
+fysik: værdier holder sig inden for deres grænser, en stoppet elevator har
+ingen fart, en motor køler mod hallen og ikke under den, en maskine i
+indkøring melder ikke "for langsom", og en sensorfejl er aldrig et stop.
+Hyppigheden af stop og fejl er skruet op til en skærm, man ser på i fem
+minutter — den siger intet om anlægget.
+
+I den rigtige visning er der ingen simulator. Maskinerne har ingen tal, og
+panelerne siger "Afventer signal". Kun flowet kommer ind, fra den samme
+LiveSource som kortet.
 
 **Opdigtede tags kan kendes.** De hedder `X…` og har modellen "Ikke valgt" —
 de må ikke kunne forveksles med et tag, nogen har tildelt.
@@ -214,11 +231,26 @@ bedre ud, end det er.
 Mærkatet øverst kan ikke klikkes væk og ligger over topbåndet, så det følger
 med på et skærmbillede, nogen sender videre.
 
-**Alt der bevæger sig, viser en tilstand.** En puls løber kun på led, der
-leverer, og stopper ved bruddet. Ingen tilfældig flimren, ingen tal der
-tæller op for syns skyld. Står noget stille i virkeligheden, står det stille
-på skærmen. `prefers-reduced-motion` slukker alle animationer uden at tabe
-indhold.
+**Alt der bevæger sig, er enten data eller grænseflade — og de holdes adskilt.**
+
+- *Data*: pulser, materialestrøm, visere, kurver, farver på maskinerne, en
+  maskine der ånder, fordi den kører. Hver af dem svarer til en tilstand.
+  En puls løber kun på led, der leverer, og stopper ved bruddet. Står noget
+  stille i virkeligheden, står det stille på skærmen. Ingen tal tæller op
+  for syns skyld — et tal glider kun fra sin gamle værdi til sin nye.
+- *Grænseflade*: opstarten, hvor panelerne låser på, og kameraets tur mellem
+  maskinerne. De viser ingen data og må ikke ligne det. Opstartslinjerne er
+  fakta fra modellen — antal maskiner, hvor langt kæden rækker.
+
+Skanningen over scenen hører til data: den løber kun, når Kædevagten kører.
+`prefers-reduced-motion` slukker begge slags uden at tabe indhold.
+
+**Mærkaterne i 3D lever kun inde i scenen.** Bag et panel ville de skinne
+igennem og ligne noget, panelet sagde. De projiceres hver frame og skjules
+uden for scenens rektangel.
+
+`?fokus=<W-ID>` låser kameraet på én maskine og sætter turen på pause — til
+et møde, hvor man vil se på netop den.
 
 ## Trin for trin
 
@@ -287,6 +319,9 @@ har sagt tallet.
   *hvorfor*, ikke *hvad* — koden siger allerede hvad.
 - **Ingen nye dependencies** uden at spørge. Sparklinen er håndtegnet SVG,
   zonerne er `planeGeometry`, testene kører på `node:test`. Det er med vilje.
+  Én undtagelse, sagt ja til: `@react-three/postprocessing` (og dens
+  `postprocessing`) til bloom og vignet på /ai. Glød kan ikke laves ordentligt
+  i hånden. Målere, kurver, oscilloskop og fordelinger er stadig håndtegnet.
 - **`npm test` findes** og kører `node:test` gennem tsx. Grænseværdier for
   signaler **skal** have en test: skalering, klemning og fejlgrænser er præcis
   den slags, der går i stykker uden at nogen opdager det. Prøv en ny test af
@@ -319,6 +354,10 @@ har sagt tallet.
   total udledt af den er et estimat og skal blive ved med at hedde det.
 - **Hysteresen og de fem/to procent er valgt, ikke målt.** De skal forbi
   driften sammen med stopgrænsen.
+- **Fremskrivningens kanaler er gæt.** FV0–FV3 er læst som fire klasser, der
+  summer til 100 %; BIGF/BIGH/NOTS som andele af den tunge side. Begge dele,
+  og alle driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
+  driften, før nogen tager tallene for pålydende.
 - **Den tværgående agent venter på linje nr. 2.** Der er ikke noget at gå på
   tværs af endnu.
 - **Fase 4 er et Python-script på serveren**, der henter `/api/context`,

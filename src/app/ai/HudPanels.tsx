@@ -1,28 +1,41 @@
 "use client";
+import { ANALYSE } from "../../../data/fremskrivning";
 import { kr } from "../../lib/agent-cost";
-import { AGENT_ENGINE_LABEL } from "../../lib/agents";
+import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
 import type { HudAgent, HudLink, HudModel, LinkTone } from "../../lib/ai-hud";
+import {
+  flowLimits, nominalFor, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
+} from "../../lib/flow";
+import type { MaskinLaesning, TelemetriBillede } from "../../lib/telemetri";
+import { Afkod, Bjaelke, Fordeling, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
+import { TAKT_MS, type Historik } from "./useTelemetri";
 
 /**
  * Panelerne rundt om hologrammet.
  *
- * Alt her kommer fra HudModel, som er bygget på serveren. Komponenterne
- * regner ingenting ud — de vælger, hvad der skal stå hvor. Tekstreglen
- * gælder: ingen forklarende sætninger, labels på højst fire ord. Skal noget
- * uddybes, hører det til i dokumentvisningen.
+ * Alt her kommer fra HudModel og TelemetriBillede. Komponenterne regner
+ * ingenting nyt ud — de vælger, hvad der skal stå hvor. Tekstreglen gælder:
+ * labels på højst fire ord, ingen forklarende sætninger.
+ *
+ * Et tomt felt står som "Afventer signal", aldrig som et nul.
  */
 
-/** Et panel med hjørnebeslag. Ingen afrundede kasser i et kontrolrum. */
-export function Panel({ label, right, children, className = "" }: {
+const klok = (t: number) =>
+  new Date(t).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+/** Et panel med hjørnebeslag. `nr` styrer rækkefølgen, de tændes i ved opstart. */
+export function Panel({ label, right, children, className = "", nr = 0, still }: {
   label: string;
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  nr?: number;
+  still?: boolean;
 }) {
   return (
-    <section className={`hud-panel ${className}`}>
+    <section className={`hud-panel ${className}`} style={{ ["--i" as string]: nr }}>
       <header className="hp-head">
-        <span className="hp-label">{label}</span>
+        <span className="hp-label"><Afkod tekst={label} forsinkelse={300 + nr * 110} still={still} /></span>
         {right}
       </header>
       {children}
@@ -30,32 +43,72 @@ export function Panel({ label, right, children, className = "" }: {
   );
 }
 
+/** Mærkatet på simulerede tal. Det følger tallet, ikke siden. */
+export const Sim = () => <span className="hp-sim" title="Simuleret — ikke målt">SIM</span>;
+
+const Afventer = ({ tekst = "Afventer signal" }: { tekst?: string }) => (
+  <p className="hp-afventer"><span className="hp-afventer-mark" aria-hidden />{tekst}</p>
+);
+
 // ---------------------------------------------------------------------------
+// Scenens overskrift
 
 /**
- * Bruddet: sidens vigtigste oplysning lige nu.
+ * Det vigtigste lige nu, midt i scenen.
  *
- * Det står midt i scenen, ikke som en detalje i kæden nedenfor. Kæden viser
- * hvor, det her viser hvad der skal ske — ét navn, udledt af de noder der
- * blokerer leddet.
+ * Er kæden brudt, er det bruddet. Står den, er det det, der er galt i
+ * anlægget: en alarm før et stop, et stop før ingenting. Kører alt, siger
+ * den det — med flowet ved indgangen som bevis.
  */
-export function BreakStage({ link, tone }: { link: HudLink | null; tone: LinkTone }) {
-  if (!link) {
-    // "Hel" er ikke det samme som "i drift": isDone() regner også test som
-    // leverende. Tonen kommer derfor fra modellen og hardcodes ikke grøn.
+export function Overskrift({ model, billede, still }: {
+  model: HudModel;
+  billede: TelemetriBillede;
+  still?: boolean;
+}) {
+  if (model.broken) return <Brud link={model.broken} tone={model.chainTone} still={still} />;
+
+  const alarm = billede.haendelser.find((h) => h.niveau === "alarm" && billede.t - h.t < 20_000);
+  const staar = billede.maskiner.filter((m) => m.koerer === false);
+
+  if (alarm) {
     return (
-      <div className={`hud-break is-whole tone-${tone}`}>
-        <p className="hb-where">Kæden er hel</p>
+      <div className="hud-break tone-brud">
+        <p className="hb-kicker"><span className="hb-dot" aria-hidden />Alarm · {alarm.hvor}</p>
+        <p className="hb-where">{alarm.tekst}</p>
+        <p className="hb-next"><span className="hb-next-label">{klok(alarm.t)}</span></p>
+      </div>
+    );
+  }
+  if (staar.length > 0) {
+    return (
+      <div className="hud-break tone-brud is-stop">
+        <p className="hb-kicker"><span className="hb-dot" aria-hidden />{staar.length === 1 ? "Stoppet" : `${staar.length} stoppet`}</p>
+        <p className="hb-where">{staar.slice(0, 3).map((m) => m.kort).join(" · ")}</p>
+        <p className="hb-next">
+          <span className="hb-next-label">Kører</span>
+          <strong>{billede.koerende} / {billede.maskiner.length}</strong>
+        </p>
       </div>
     );
   }
   return (
-    <div className={`hud-break tone-${tone}`}>
-      <p className="hb-kicker">
-        <span className="hb-dot" aria-hidden />
-        Kæden stopper ved
+    <div className={`hud-break is-whole tone-${billede.simuleret ? "drift" : model.chainTone}`}>
+      <p className="hb-kicker">{billede.simuleret ? "Alle maskiner kører" : "Kæden er hel"}</p>
+      <p className="hb-where">
+        {billede.flowPct === null ? "Linjen kører" : <><Tal v={billede.flowPct} d={1} /> %</>}
       </p>
-      <p className="hb-where">{link.label}</p>
+      {billede.flowPct !== null && (
+        <p className="hb-next"><span className="hb-next-label">Flow ved indgang</span></p>
+      )}
+    </div>
+  );
+}
+
+function Brud({ link, tone, still }: { link: HudLink; tone: LinkTone; still?: boolean }) {
+  return (
+    <div className={`hud-break tone-${tone}`}>
+      <p className="hb-kicker"><span className="hb-dot" aria-hidden />Kæden stopper ved</p>
+      <p className="hb-where"><Afkod tekst={link.label} forsinkelse={900} still={still} /></p>
       {link.next && (
         <p className="hb-next">
           <span className="hb-next-label">Afventer</span>
@@ -66,133 +119,282 @@ export function BreakStage({ link, tone }: { link: HudLink | null; tone: LinkTon
   );
 }
 
-// ---------------------------------------------------------------------------
-
-/** Det store udlæste tal. Rav er test; intet er i drift, så intet er grønt. */
+/** Det store udlæste tal. Farven tændes kun, når der er noget at farve. */
 export function Readout({ tally }: { tally: HudModel["tally"] }) {
   return (
     <div className="hud-readout">
-      {/* Farven tændes kun, når der er noget at farve. Et grønt nul ville
-          påstå en drift, der ikke findes. */}
       <span className={`ro-group${tally.drift > 0 ? " is-drift" : ""}`}>
         <span className="ro-label">I drift</span>
-        <span className="ro-value">{tally.drift}</span>
+        <Tal v={tally.drift} d={0} className="ro-value" />
         <span className="ro-of">/ {tally.total}</span>
       </span>
       <span className={`ro-group${tally.test > 0 ? " is-test" : ""}`}>
         <span className="ro-label">Test</span>
-        <span className="ro-value">{tally.test}</span>
+        <Tal v={tally.test} d={0} className="ro-value" />
       </span>
       <span className="ro-group">
         <span className="ro-label">Afventer</span>
-        <span className="ro-value">{tally.afventer}</span>
+        <Tal v={tally.afventer} d={0} className="ro-value" />
       </span>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
+// Flowet ved indgangen
 
-/**
- * Omkostning pr. måned.
- *
- * Kun besluttede agenter tæller med i totalen — en idé koster ingenting,
- * før nogen siger ja til den. Kode-agenter koster nul og siger hvorfor.
- */
-export function CostPanel({ model }: { model: HudModel }) {
-  const koster = model.agents.filter((a) => !a.idea && a.kr > 0);
-  const gratis = model.agents.filter((a) => !a.idea && a.kr === 0);
+/** Kører / kører ikke / sensorfejl — udledt af forløbet, ikke af én prøve. */
+function tilstandAf(serie: (number | null)[]): RunState | null {
+  if (serie.length === 0) return null;
+  const segs = runSegments(serie.map((value, i) => ({ t: i * TAKT_MS, value })));
+  return segs.length ? segs[segs.length - 1].state : null;
+}
+
+const RUN_TONE: Record<RunState, string> = { koerer: "drift", staar: "moerk", fejl: "brud" };
+
+export function FlowPanel({ model, billede, historik, sim, nr, still }: {
+  model: HudModel;
+  billede: TelemetriBillede;
+  historik: Historik;
+  sim: boolean;
+  nr: number;
+  still?: boolean;
+}) {
+  const ops = lineOpsFor(model.lineId);
+  const graenser = flowLimits(ops);
+  const signal = model.links.find((l) => l.instrument.signalId)?.instrument.signalId ?? "FT-743";
+  const nominal = nominalFor(ops, signal);
+  const rate = rateFrom(billede.flowPct, nominal);
+  const tilstand = tilstandAf(historik.get("flow") ?? []);
+  const tone = tilstand ? RUN_TONE[tilstand] : "moerk";
 
   return (
-    <Panel label="Omkostning" className="hp-cost">
-      <p className="hp-total">
-        <span className="hp-total-value">{kr(model.totalKr)}</span>
-        <span className="hp-total-unit">pr. måned</span>
-      </p>
-      {model.smaabeloeb && <p className="hp-note">Estimat · småbeløb</p>}
-
-      <ul className="hp-rows">
-        {koster.map((a) => (
-          <li key={a.id}>
-            <span className="hp-row-name">{a.name}</span>
-            <span className="hp-row-value fm-num">{kr(a.kr)}</span>
-          </li>
-        ))}
-        {gratis.map((a) => (
-          <li key={a.id} className="is-free">
-            <span className="hp-row-name">{a.name}</span>
-            <span className="hp-row-value">{a.gratis ?? "0 kr."}</span>
-          </li>
-        ))}
-      </ul>
-
-      {model.ideas > 0 && (
-        <p className="hp-note">{model.ideas} idéer · ikke medregnet</p>
-      )}
+    <Panel label={`Flow · ${signal}`} nr={nr} still={still} className="hp-flow" right={sim ? <Sim /> : undefined}>
+      <div className="hp-flow-top">
+        <Maaler
+          v={billede.flowPct}
+          min={0}
+          max={150}
+          enhed="%"
+          tone={tone}
+          zoner={[[0, graenser.lowPct, "lav"], [graenser.lowPct, graenser.highPct, "ok"], [graenser.highPct, 150, "hoej"]]}
+        />
+        <div className="hp-flow-side">
+          <span className={`hp-run run-${tilstand ?? "ukendt"}`}>
+            {tilstand ? RUN_STATE_LABEL[tilstand] : "Afventer"}
+          </span>
+          <dl className="hp-kv">
+            <div><dt>Råsignal</dt><dd><Tal v={billede.flowMa} d={2} /> <i>mA</i></dd></div>
+            <div>
+              <dt>Takt</dt>
+              <dd>{rate === null ? <span className="hp-ikke">Ikke udfyldt</span> : <><Tal v={rate} d={1} /> <i>{ops!.rateUnit}</i></>}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+      <Oscilloskop serie={historik.get("flowMa") ?? []} />
     </Panel>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-/**
- * Kørselsloggen.
- *
- * Den er tom, og det er sandheden: der er ikke kaldt et API fra dette repo.
- * Der står ingen eksempelrække — den ville kunne forveksles med en kørsel,
- * der havde fundet sted.
- */
-export function RunLog({ model }: { model: HudModel }) {
+export function DriftPanel({ billede, historik, nr, still }: {
+  billede: TelemetriBillede;
+  historik: Historik;
+  nr: number;
+  still?: boolean;
+}) {
+  const kendt = billede.oppetidPct !== null;
+  return (
+    <Panel label="Drift" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
+      {!kendt ? (
+        <Afventer tekst="Afventer driftssignaler" />
+      ) : (
+        <>
+          <div className="hp-tre">
+            <div className="hp-stort">
+              <span className="hp-stort-label">Oppetid</span>
+              <span className="hp-stort-tal"><Tal v={billede.oppetidPct} d={1} /><i>%</i></span>
+            </div>
+            <div className="hp-stort">
+              <span className="hp-stort-label">Kører</span>
+              <span className={`hp-stort-tal${billede.koerende < billede.maskiner.length ? " is-brud" : ""}`}>
+                <Tal v={billede.koerende} d={0} /><i>/ {billede.maskiner.length}</i>
+              </span>
+            </div>
+            <div className="hp-stort">
+              <span className="hp-stort-label">Stop</span>
+              <span className="hp-stort-tal"><Tal v={billede.stop} d={0} /></span>
+            </div>
+          </div>
+          <Kurve serie={historik.get("oppetid") ?? []} tone="drift" hoejde={28} />
+        </>
+      )}
+    </Panel>
+  );
+}
+
+export function KlimaPanel({ billede, historik, nr, still }: {
+  billede: TelemetriBillede;
+  historik: Historik;
+  nr: number;
+  still?: boolean;
+}) {
+  const har = billede.hal.some((k) => k.value !== null);
+  return (
+    <Panel label="Hallen" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
+      {!har ? <Afventer /> : (
+        <div className="hp-klima">
+          {billede.hal.map((k) => (
+            <div key={k.spec.id} className={`hp-klima-rk${k.alarm ? " is-alarm" : ""}`}>
+              <span className="hp-klima-lbl">{k.spec.label}</span>
+              <span className="hp-klima-tal"><Tal v={k.value} d={k.spec.decimaler} /><i>{k.spec.unit}</i></span>
+              <Kurve serie={historik.get(`hal:${k.spec.id}`) ?? []} tone={k.alarm ? "brud" : "drift"} hoejde={22} graense={k.spec.alarmHoej !== undefined ? [k.spec.alarmHoej] : undefined} />
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Kvaliteten
+
+export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
+  const sidst = billede.analyse.find((a) => a.proeveT !== null)?.proeveT ?? null;
   return (
     <Panel
-      label="Kørsler"
-      right={<span className="hp-count fm-num">{model.runs.length}</span>}
+      label="Analyse · FV"
+      nr={nr}
+      still={still}
+      right={billede.simuleret ? <Sim /> : undefined}
     >
-      {model.runs.length === 0 ? (
-        <p className="hp-empty">
-          <span className="hp-empty-mark" aria-hidden>—</span>
-          Ingen kørsler
-        </p>
-      ) : (
-        <ul className="hp-rows hp-log">
-          {model.runs.map((r) => (
-            <li key={r.id} className={r.validering === "afvist" ? "is-rejected" : undefined}>
-              <span className="hp-row-name fm-num">{r.tidspunkt.slice(0, 16).replace("T", " ")}</span>
-              <span className="hp-row-value fm-num">{kr(r.prisDkk)}</span>
-            </li>
+      {billede.analyse.every((a) => a.andele === null) ? <Afventer /> : (
+        <>
+          {billede.analyse.map((a) => (
+            <div key={a.lane} className="hp-analyse">
+              <span className="hp-spor">Spor {a.lane}</span>
+              <Fordeling andele={a.andele} navne={ANALYSE.klasser} alarm={a.alarm} />
+            </div>
           ))}
-        </ul>
+          {sidst && <p className="hp-note">Prøve {klok(sidst)}</p>}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/** De fire kasteborde og det, der ender på deres tunge side. */
+export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
+  const kb = billede.maskiner.filter((m) => /^kb[-\s]/i.test(m.navn));
+  const har = kb.some((m) => m.kanaler.some((k) => k.value !== null));
+  return (
+    <Panel label="Kasteborde · tung side" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
+      {!har ? <Afventer /> : (
+        <div className="hp-kb">
+          <div className="hp-kb-hoved">
+            <span />
+            {["BIGF", "BIGH", "NOTS"].map((k) => <span key={k}>{k}</span>)}
+          </div>
+          {kb.map((m) => (
+            <div key={m.id} className={`hp-kb-rk${m.koerer === false ? " is-stop" : ""}`}>
+              <span className="hp-kb-navn">{m.kort}</span>
+              {["bigf", "bigh", "nots"].map((id) => {
+                const k = m.kanaler.find((x) => x.spec.id === id);
+                if (!k) return <span key={id} />;
+                return (
+                  <span key={id} className={`hp-kb-celle${k.alarm ? " is-alarm" : ""}`}>
+                    <Tal v={k.value} d={1} className="hp-kb-tal" />
+                    <Bjaelke v={k.value} max={id === "nots" ? 12 : 100} graense={k.spec.alarmHoej} alarm={k.alarm} />
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       )}
     </Panel>
   );
 }
 
 // ---------------------------------------------------------------------------
+// Maskinen i fokus
 
-/**
- * Agentkernerne.
- *
- * Ringen er vejen til drift: `done` af `total` trin opfyldt. En idé er et
- * stiplet omrids uden lys — den er tænkt, ikke besluttet. En besluttet agent,
- * der ikke kører, ånder svagt.
- */
+export function FokusPanel({ m, historik, sim }: { m: MaskinLaesning | null; historik: Historik; sim: boolean }) {
+  if (!m) return null;
+  const tilstand = m.alarm ? "alarm" : m.koerer === false ? "staar" : m.koerer ? "koerer" : "ukendt";
+  return (
+    <section className={`hud-fokus t-${tilstand}`} key={m.id}>
+      <header className="hf-head">
+        <span className="hf-navn">{m.kort}</span>
+        <span className="hf-id">W-{m.wIds.join(" · W-")}{m.lane ? ` · Spor ${m.lane}` : ""}</span>
+        {sim && <Sim />}
+        <span className="hf-tilstand">
+          {tilstand === "alarm" ? "Alarm" : tilstand === "staar" ? "Stoppet" : tilstand === "koerer" ? "Kører" : "Afventer"}
+        </span>
+      </header>
+      {m.kanaler.every((k) => k.value === null) ? <Afventer /> : (
+        <div className="hf-kanaler">
+          {m.kanaler.map((k) => (
+            <div key={k.spec.id} className={`hf-kanal${k.alarm ? " is-alarm" : ""}`}>
+              <span className="hf-lbl">{k.spec.label}</span>
+              <span className="hf-tal"><Tal v={k.value} d={k.spec.decimaler} /><i>{k.spec.unit}</i></span>
+              <Kurve
+                serie={historik.get(`m:${m.id}:${k.spec.id}`) ?? []}
+                tone={k.alarm ? "brud" : "drift"}
+                hoejde={26}
+                graense={[k.spec.alarmHoej, k.spec.alarmLav].filter((g): g is number => g !== undefined)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hændelserne
+
+export function Haendelser({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
+  return (
+    <Panel
+      label="Hændelser"
+      nr={nr}
+      still={still}
+      className="hp-log"
+      right={billede.simuleret ? <Sim /> : <span className="hp-count fm-num">{billede.haendelser.length}</span>}
+    >
+      {billede.haendelser.length === 0 ? <Afventer tekst="Ingen signaler at melde fra" /> : (
+        <ol className="hp-haendelser">
+          {billede.haendelser.slice(0, 14).map((h) => (
+            <li key={`${h.t}-${h.hvor}-${h.tekst}`} className={`n-${h.niveau}`}>
+              <time>{klok(h.t)}</time>
+              <span className="hh-hvor">{h.hvor}</span>
+              <span className="hh-tekst">{h.tekst}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Agenterne
+
 function Core({ a }: { a: HudAgent }) {
-  const R = 15;
+  const R = 13;
   const OMKREDS = 2 * Math.PI * R;
   const andel = a.total > 0 ? a.done / a.total : 0;
-
   return (
     <li className={`hud-core st-${a.state}${a.idea ? " is-idea" : ""}${a.sovende ? " is-sleeping" : ""}`}>
-      <svg viewBox="0 0 36 36" className="hc-ring" aria-hidden>
-        <circle cx="18" cy="18" r={R} className="hc-track" />
-        <circle
-          cx="18"
-          cy="18"
-          r={R}
-          className="hc-arc"
-          strokeDasharray={`${andel * OMKREDS} ${OMKREDS}`}
-          transform="rotate(-90 18 18)"
-        />
+      <svg viewBox="0 0 32 32" className="hc-ring" aria-hidden>
+        <circle cx="16" cy="16" r={R} className="hc-track" />
+        <circle cx="16" cy="16" r={R} className="hc-arc" strokeDasharray={`${andel * OMKREDS} ${OMKREDS}`} transform="rotate(-90 16 16)" />
+        {a.state === "paa-plads" && <circle cx="16" cy="16" r="4" className="hc-kerne" />}
       </svg>
       <div className="hc-body">
         <span className="hc-name">{a.name}</span>
@@ -203,31 +405,27 @@ function Core({ a }: { a: HudAgent }) {
           <span className="hc-sep" aria-hidden>·</span>
           <span className="hc-engine">{AGENT_ENGINE_LABEL[a.engine]}</span>
         </span>
-        <span className="hc-til">{a.til}</span>
       </div>
     </li>
   );
 }
 
-export function AgentCores({ model }: { model: HudModel }) {
+export function AgentCores({ model, nr, still }: { model: HudModel; nr: number; still?: boolean }) {
   const besluttet = model.agents.filter((a) => !a.idea);
   const ideer = model.agents.filter((a) => a.idea);
-
   return (
     <Panel
       label="Agenter"
+      nr={nr}
+      still={still}
       className="hp-agents"
-      right={<span className="hp-count fm-num">{model.decided}</span>}
+      right={<span className="hp-count fm-num">{kr(model.totalKr)} / md.</span>}
     >
-      <ul className="hud-cores">
-        {besluttet.map((a) => <Core key={a.id} a={a} />)}
-      </ul>
+      <ul className="hud-cores">{besluttet.map((a) => <Core key={a.id} a={a} />)}</ul>
       {ideer.length > 0 && (
         <>
-          <p className="hp-sub">Idéer</p>
-          <ul className="hud-cores">
-            {ideer.map((a) => <Core key={a.id} a={a} />)}
-          </ul>
+          <p className="hp-sub">Idéer · ikke medregnet</p>
+          <ul className="hud-cores is-ideer">{ideer.map((a) => <Core key={a.id} a={a} />)}</ul>
         </>
       )}
     </Panel>

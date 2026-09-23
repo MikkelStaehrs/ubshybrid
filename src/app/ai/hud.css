@@ -1,49 +1,64 @@
 /* ------------------------------------------------------------------------
-   AI-overblik, HUD — mørkt kontrolrum.
+   AI-overblik, HUD — kontrolrum.
 
    Paletten er scopet til .ai-hud og følger ikke brugerens tema: et
-   kontrolrum er mørkt, også for den der kører i lyst tema. Farverne er
-   kortets egne mørke værdier, ikke en generisk sci-fi-palet.
+   kontrolrum er mørkt, også for den der kører i lyst tema.
 
-   Regel: alt der lyser eller bevæger sig svarer til en tilstand fra
-   pathState(), signalDelivery() eller agentstatus. Ingen dekoration der
-   antyder aktivitet, der ikke findes.
+   Farve er signal og intet andet:
+     kølig hvid/grøn  kører, leverer
+     rav              test, eller uden for det aftalte bånd
+     rød              stop, alarm, brud
+     grå              ingen viden
 
-   KOMPOSITION
-   Én skærm, ingen scroll, faste zoner. Hologrammet er scenen og fylder
-   hele fladen; panelerne ligger ovenpå i kanterne, så midten er fri.
-   Der er ingen kolonne med maksimumsbredde — det her skal kunne læses på
-   afstand på en skærm i et mødelokale.
+   To slags bevægelse, holdt adskilt:
+     Data         pulser, strøm, visere, kurver. Svarer til en tilstand.
+     Grænseflade  opstarten, kameraets tur. Viser ingen data.
+   prefers-reduced-motion slukker begge uden at tabe indhold.
 ------------------------------------------------------------------------- */
+
+@property --bk {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 10px;
+}
+@property --bc {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #1f2d2a;
+}
+
 .ai-hud {
-  --hud-bg: #070a09;
-  --hud-panel: rgba(9, 13, 12, 0.72);
-  --hud-line: #1e2a27;
-  --hud-ink: #dfe9e5;
-  --hud-muted: #7f918b;
+  --hud-bg: #020504;
+  --hud-panel: rgba(4, 9, 8, 0.9);
+  --hud-panel-2: rgba(10, 18, 16, 0.8);
+  --hud-line: #1f2d2a;
+  --hud-line-2: #2b3d39;
+  --hud-ink: #e4eeea;
+  --hud-muted: #7a8e88;
+  --hud-dim: #4a5c57;
 
-  /* Fra kortets palet: procesgrøn, elevatorrav, fejlrød. */
-  --hud-drift: #34806f;
-  --hud-drift-lys: #5fc4a9;
+  --hud-drift: #2f8f79;
+  --hud-drift-lys: #6fe0c2;
   --hud-test: #c8962f;
-  --hud-test-lys: #f0bd5c;
-  --hud-brud: #e0705f;
-  --hud-moerk: #2b3936;
+  --hud-test-lys: #ffc766;
+  --hud-brud: #ff6f5c;
+  --hud-brud-dyb: #b8412f;
+  --hud-moerk: #25332f;
 
-  --pad: clamp(14px, 1.6vw, 26px);
-  --col-left: clamp(210px, 17vw, 280px);
-  --col-right: clamp(230px, 19vw, 320px);
+  --pad: clamp(10px, 1.1vw, 20px);
+  --col-left: clamp(250px, 19vw, 370px);
+  --col-right: clamp(270px, 21vw, 390px);
 
   position: fixed;
   inset: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: var(--col-left) 1fr var(--col-right);
+  grid-template-columns: var(--col-left) minmax(0, 1fr) var(--col-right);
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "top   top    top"
     "left  stage  right"
-    "chain chain  chain";
+    "chain chain  events";
   gap: var(--pad);
   padding: var(--pad);
   background: var(--hud-bg);
@@ -51,20 +66,15 @@
   font-family: var(--font-ui);
 }
 .ai-hud * { box-sizing: border-box; }
-
-/* Tabeltal, så cifre ikke danser, når de skifter. */
 .ai-hud .fm-num { font-variant-numeric: tabular-nums; }
+.ai-hud i { font-style: normal; }
 
-/* --- Scenen: hologrammet bag alt andet ----------------------------------- */
-.holo {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background: #050807;
-}
-.holo canvas { display: block; }
+/* --- Scenen ---------------------------------------------------------------- */
+.holo { position: fixed; inset: 0; z-index: 0; background: var(--hud-bg); }
+.holo canvas { display: block; touch-action: none; cursor: grab; }
+.holo canvas:active { cursor: grabbing; }
 
-/* Fint gitter som registreringsmærker. Statisk, ét lag, koster ingenting. */
+/* Fint gitter som registreringsmærker. Statisk. */
 .ai-hud::before {
   content: "";
   position: fixed;
@@ -72,613 +82,92 @@
   z-index: 1;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(223, 233, 229, 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(223, 233, 229, 0.045) 1px, transparent 1px);
-  background-size: 96px 96px;
+    linear-gradient(to right, rgba(111, 224, 194, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(111, 224, 194, 0.035) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse at 50% 45%, #000 30%, transparent 85%);
 }
 
-/* Indholdet ligger over scenen. */
-.ai-hud > *:not(.holo) { position: relative; z-index: 2; min-width: 0; }
+/* Skanlinjer som tekstur. De bevæger sig ikke — en bevægelig skanning ville
+   ligne aktivitet, og det er den ikke. */
+.hud-skanlinjer {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.16) 2px 3px);
+  mix-blend-mode: multiply;
+}
 
-/* --- Zoner --------------------------------------------------------------- */
+.ai-hud > *:not(.holo):not(.hud-skanlinjer):not(.hud-opstart) { position: relative; z-index: 2; min-width: 0; min-height: 0; }
+
+/* --- Zoner ------------------------------------------------------------------ */
 .hud-top { grid-area: top; }
 .hud-left { grid-area: left; }
 .hud-stage { grid-area: stage; }
 .hud-right { grid-area: right; }
 .hud-chain { grid-area: chain; }
+.hud-events { grid-area: events; display: flex; }
+.hud-events > .hud-panel { flex: 1; }
 
 .hud-left, .hud-right {
   display: flex;
   flex-direction: column;
   gap: var(--pad);
-  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.hud-left::-webkit-scrollbar, .hud-right::-webkit-scrollbar { display: none; }
 
-/* Scenens midte holdes fri. Bruddet står øverst som blikfang, tallet i
-   bunden — hologrammet kan ses imellem dem. */
 .hud-stage {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  min-height: 0;
-  padding: clamp(8px, 2vh, 28px) 0;
+  padding: clamp(4px, 1.4vh, 22px) 0 0;
   pointer-events: none;
 }
-
-/* --- Topbånd ------------------------------------------------------------- */
-.hud-top {
+.hud-stage > * { pointer-events: auto; }
+.hud-stage-bund {
+  width: 100%;
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--hud-line);
-}
-.hud-eyebrow,
-.hud-line-name {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-  white-space: nowrap;
-}
-.hud-line-name { color: var(--hud-ink); }
-.hud-sep {
-  width: 1px;
-  height: 11px;
-  background: var(--hud-line);
-}
-.hud-top h1 {
-  margin: 0 0 0 auto;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(18px, 1.9vw, 28px);
-  line-height: 1;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.hud-switch {
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 12px;
-  border: 1px solid var(--hud-line);
-  color: var(--hud-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-}
-/* Ingen signalfarve på et link. Grøn betyder drift, ikke "musen er her". */
-.hud-switch:hover { border-color: var(--hud-ink); color: var(--hud-ink); }
-
-/* --- Panel med hjørnebeslag ----------------------------------------------
-   Ingen afrundede kasser. Beslagene tegnes som otte baggrundsgradienter —
-   statisk, ingen ekstra elementer, ingen omkostning ved gentegning. */
-.hud-panel {
-  --bk: 10px;
-  --bc: var(--hud-line);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 12px 14px;
-  background-color: var(--hud-panel);
-  background-image:
-    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
-    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
-    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
-    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc));
-  background-repeat: no-repeat;
-  background-size:
-    var(--bk) 1px, 1px var(--bk),
-    var(--bk) 1px, 1px var(--bk),
-    var(--bk) 1px, 1px var(--bk),
-    var(--bk) 1px, 1px var(--bk);
-  background-position:
-    left top, left top,
-    right top, right top,
-    left bottom, left bottom,
-    right bottom, right bottom;
-}
-
-.hp-head {
-  display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.hp-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.hp-count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--hud-ink);
-}
-.hp-sub {
-  margin: 12px 0 6px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.hp-note {
-  margin: 8px 0 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--hud-muted);
+  gap: var(--pad);
 }
 
-/* --- Omkostning og log --------------------------------------------------- */
-.hp-total { display: flex; align-items: baseline; gap: 8px; margin: 0; }
-.hp-total-value {
-  font-family: var(--font-display);
-  font-size: clamp(22px, 2.2vw, 32px);
-  font-weight: 600;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.hp-total-unit {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-
-.hp-rows {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-  min-height: 0;
-  overflow-y: auto;
-}
-.hp-rows li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 3px 0;
-  border-bottom: 1px solid rgba(30, 42, 39, 0.6);
-  font-size: 12px;
-}
-.hp-row-name { color: var(--hud-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hp-row-value { font-family: var(--font-mono); font-size: 11px; color: var(--hud-ink); }
-.hp-rows li.is-free .hp-row-name,
-.hp-rows li.is-free .hp-row-value { color: var(--hud-muted); }
-.hp-rows li.is-rejected .hp-row-value { color: var(--hud-brud); }
-
-/* Tom log. Stregen står, hvor tallet ville stå — der er ingen kørsler. */
-.hp-empty {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.hp-empty-mark { color: var(--hud-moerk); font-size: 16px; }
-
-/* --- Agentkerner --------------------------------------------------------- */
-.hp-agents { flex: 1; }
-.hud-cores {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-  min-height: 0;
-  overflow-y: auto;
-}
-.hud-core {
-  --c: var(--hud-moerk);
-  display: grid;
-  grid-template-columns: 30px 1fr;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 0;
-  border-bottom: 1px solid rgba(30, 42, 39, 0.6);
-}
-/* Farve er kun signal. Rav = test, grøn = i drift. Afventer er mørk. */
-.hud-core.st-test { --c: var(--hud-test-lys); }
-.hud-core.st-paa-plads { --c: var(--hud-drift-lys); }
-
-.hc-ring { width: 30px; height: 30px; display: block; }
-.hc-track { fill: none; stroke: var(--hud-moerk); stroke-width: 2; }
-.hc-arc {
-  fill: none;
-  stroke: var(--c);
-  stroke-width: 2;
-  stroke-linecap: butt;
-}
-/* En idé er tænkt, ikke besluttet: stiplet omrids, intet lys. */
-.hud-core.is-idea .hc-track { stroke-dasharray: 3 3; }
-.hud-core.is-idea .hc-arc { stroke: var(--hud-moerk); }
-.hud-core.is-idea .hc-name { color: var(--hud-muted); }
-
-.hc-body { display: grid; gap: 2px; min-width: 0; }
-.hc-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--hud-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hc-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.hc-state { color: var(--c); }
-.hud-core.is-idea .hc-state { color: var(--hud-muted); }
-.hc-sep { color: var(--hud-moerk); }
-.hc-til {
-  font-size: 10px;
-  color: var(--hud-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* --- Bruddet: sidens vigtigste oplysning --------------------------------- */
-.hud-break {
-  pointer-events: auto;
-  text-align: center;
-  padding: 14px clamp(16px, 3vw, 40px);
-  /* Tonen kommer fra modellen. En hel kæde af led, der kun er sat op, er
-     rav — grøn kræver, at hvert led er i drift. */
-  border-top: 1px solid var(--t, var(--hud-brud));
-  border-bottom: 1px solid var(--t, var(--hud-brud));
-}
-/* Gløden er alarmen. Den hører kun til et brud, ikke til en hel kæde. */
-.hud-break.tone-brud {
-  background: radial-gradient(70% 140% at 50% 50%, rgba(224, 112, 95, 0.14), transparent 72%);
-}
-
-.hb-kicker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.hb-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--t, var(--hud-brud));
-  animation: hb-blink 2.6s ease-in-out infinite;
-}
-@keyframes hb-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-.hb-where {
-  margin: 6px 0 0;
-  font-family: var(--font-display);
-  font-size: clamp(30px, 4.4vw, 62px);
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-.hb-next {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 10px;
-  margin: 10px 0 0;
-  font-size: clamp(13px, 1.3vw, 18px);
-}
-.hb-next-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.hb-next strong { font-weight: 600; color: var(--hud-ink); }
-
-/* --- Det store udlæste tal ----------------------------------------------- */
-.hud-readout {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 6px clamp(18px, 3vw, 44px);
-  padding-top: 10px;
-  border-top: 1px solid var(--hud-line);
-  min-width: min(520px, 100%);
-}
-.ro-group { display: flex; align-items: baseline; gap: 8px; }
-.ro-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
-}
-.ro-value {
-  font-family: var(--font-display);
-  font-size: clamp(28px, 3.4vw, 50px);
-  font-weight: 600;
-  line-height: 0.9;
-  letter-spacing: 0.01em;
-  color: var(--hud-ink);
-  font-variant-numeric: tabular-nums;
-}
-.ro-of { font-family: var(--font-mono); font-size: 12px; color: var(--hud-muted); }
-/* Farve er kun signal, og kun når der er noget at farve: klasserne sættes
-   først, når tallet er over nul. Et grønt nul ville påstå en drift,
-   der ikke findes. */
-.ro-group.is-test .ro-value { color: var(--hud-test-lys); }
-.ro-group.is-drift .ro-value { color: var(--hud-drift-lys); }
-
-/* --- Kæden som bånd i bunden --------------------------------------------- */
-.hud-chain {
-  display: grid;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--hud-line);
-}
-.hud-chain .hc-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.hc-reach { font-family: var(--font-mono); font-size: 11px; color: var(--hud-ink); }
-
-.cc { display: block; }
-/* Bredden styrer: svg'en beholder sit format og fylder båndet ud. */
-.cc-svg { display: block; width: 100%; height: auto; overflow: visible; }
-
-.tone-drift { --t: var(--hud-drift); --t-lys: var(--hud-drift-lys); }
-.tone-test { --t: var(--hud-test); --t-lys: var(--hud-test-lys); }
-.tone-brud { --t: var(--hud-brud); --t-lys: var(--hud-brud); }
-.tone-moerk { --t: var(--hud-moerk); --t-lys: var(--hud-moerk); }
-
-/* Gløden: forblødt, statisk, aldrig animeret med filteret på.
-   Kun opacity ændrer sig, og kun når en tilstand siger det. */
-.cc-glow {
-  fill: var(--t-lys);
-  opacity: 0.1;
-  filter: blur(14px);
-}
-.cc-node.tone-moerk .cc-glow { opacity: 0; }
-.cc-glow.is-pulse {
-  /* Sløringen beregnes én gang og lægges i sit eget lag. Derefter ændrer
-     kun alfa sig — filteret køres ikke om for hver frame. */
-  will-change: opacity;
-  animation: cc-breathe 2.6s ease-in-out infinite;
-}
-@keyframes cc-breathe {
-  0%, 100% { opacity: 0.22; }
-  50% { opacity: 0.5; }
-}
-
-.cc-box {
-  fill: rgba(9, 13, 12, 0.82);
-  stroke: var(--t);
-  stroke-width: 1.5;
-}
-.cc-node.tone-moerk .cc-box { stroke-dasharray: 4 4; }
-.cc-node.is-broken .cc-box { stroke-width: 2.5; }
-
-/* Overskrift og status i instrumentets hoved. */
-.cc-label {
-  fill: var(--hud-ink);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.cc-node.tone-moerk .cc-label { fill: var(--hud-muted); }
-.cc-status {
-  fill: var(--t);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-anchor: end;
-  text-transform: uppercase;
-}
-.cc-node.tone-moerk .cc-status { fill: var(--hud-muted); }
-.cc-rule { stroke: var(--hud-line); stroke-width: 1; }
-
-/* Aflæsningerne: etiket til venstre, tal til højre, som på et instrument. */
-.cc-rd-label {
-  fill: var(--hud-muted);
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.cc-rd-value {
-  fill: var(--hud-ink);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-anchor: end;
-}
-.cc-node.tone-moerk .cc-rd-value { fill: var(--hud-muted); }
-
-/* Måleraflæsningen. Den er stor, fordi den er det eneste tal på skærmen,
-   der kommer fra en måler — og mærket, fordi den er simuleret. */
-.cc-live-value {
-  fill: var(--t-lys);
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-.cc-sim {
-  fill: var(--hud-muted);
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.18em;
-  text-anchor: end;
-}
-
-/* Kanalpladser. En fyldt plads er optaget, en tom er ledig — stiplet,
-   som alt andet der ikke findes endnu. */
-.cc-slot { fill: none; stroke: var(--hud-moerk); stroke-width: 1; }
-.cc-slot.is-used { fill: var(--t); stroke: var(--t); }
-
-.cc-waits {
-  fill: var(--hud-muted);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-}
-.cc-node.is-broken .cc-waits { fill: var(--hud-brud); }
-
-/* --- Banen og pulsen ----------------------------------------------------- */
-.cc-track { stroke: var(--hud-moerk); stroke-width: 2; }
-.cc-seg.is-live .cc-track { stroke: var(--t); opacity: 0.4; }
-/* Efter bruddet: vejen kan ses, men den er ikke tændt. */
-.cc-seg.is-ghost .cc-track { stroke-dasharray: 3 7; opacity: 0.5; }
-
-/* Pulsen løber kun på led, der leverer. Den findes ikke på de andre.
-   Hoved med hale, skubbet langs banen — ingen filtre, kun transform. */
-.cc-spark {
-  will-change: transform;
-  animation: cc-run 2.2s linear infinite;
-}
-@keyframes cc-run {
-  from { transform: translateX(0); }
-  to { transform: translateX(var(--len)); }
-}
-.cc-head { fill: var(--t-lys); }
-.cc-tail {
-  stroke: var(--t-lys);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  opacity: 0.32;
-}
-
-/* Ringen ved bruddet. Den deler takt med pulsen, så den slår ud præcis
-   når noget ankommer — én ring pr. blokeret puls, ikke en pynteeffekt. */
-.cc-ring {
-  fill: none;
-  stroke: var(--hud-brud);
-  stroke-width: 2;
-  transform-box: fill-box;
-  transform-origin: center;
-  will-change: transform, opacity;
-  animation: cc-blocked 2.2s ease-out infinite;
-}
-@keyframes cc-blocked {
-  0% { transform: scale(0.35); opacity: 0.85; }
-  40% { transform: scale(2.1); opacity: 0; }
-  100% { transform: scale(2.1); opacity: 0; }
-}
-
-/* --- Stilstand ----------------------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  /* Alt står stille. Intet indhold går tabt: pulsen bliver en tændt linje,
-     gløden bliver stående, og bruddet er stadig markeret. */
-  .ai-hud *,
-  .ai-hud *::before,
-  .ai-hud *::after {
-    animation: none !important;
-    transition: none !important;
-  }
-  /* Pulsen bliver stående ved bruddet i stedet for at løbe: den siger
-     stadig, at noget når frem hertil og ikke længere. */
-  .cc-spark { transform: translateX(var(--len)); }
-  .cc-ring { opacity: 0.55; }
-  .cc-glow.is-pulse { opacity: 0.36; }
-  .hb-dot { opacity: 1; }
-  /* Hologrammet står stille af sig selv — Hologram.tsx slukker banen. */
-  .holo { filter: none; }
-}
-
-/* --- Smallere skærme -----------------------------------------------------
-   Under en laptopbredde giver tre søjler ikke mening. Zonerne stables, og
-   siden må gerne rulle — et kontrolrum på en telefon er en læsning, ikke
-   en skærm i et mødelokale. */
-@media (max-width: 1100px) {
-  .ai-hud {
-    position: static;
-    overflow: visible;
-    min-height: 100dvh;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto auto;
-    grid-template-areas:
-      "top"
-      "stage"
-      "chain"
-      "right"
-      "left";
-  }
-  .hud-stage { gap: 22px; padding: 26px 0; }
-  .hud-cores, .hp-rows { overflow: visible; }
-}
-
-@media (max-width: 720px) {
-  .hud-top { flex-wrap: wrap; }
-  .hud-top h1 { margin-left: 0; width: 100%; }
-  .hud-readout { min-width: 0; }
-}
-
-/* --- Fremskrivningen: opdigtet, og det skal kunne ses ---------------------
-   Den eneste flade i projektet, hvor tallene ikke kommer fra anlægget.
-   Mærkatet er derfor ikke til at klikke væk, og det ligger øverst, så det
-   følger med på et skærmbillede. Rav, ikke rødt: det er ikke en fejl, det
-   er en antagelse. */
-.ai-hud.is-fremskrevet { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+/* --- Fremskrivningens mærkat ----------------------------------------------- */
 .ai-hud.is-fremskrevet {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
     "mark  mark   mark"
     "top   top    top"
     "left  stage  right"
-    "chain chain  chain";
+    "chain chain  events";
 }
 .hud-opdigtet {
   grid-area: mark;
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 7px 12px;
+  padding: 6px 12px;
   border: 1px solid var(--hud-test);
-  background: rgba(200, 150, 47, 0.12);
+  background:
+    repeating-linear-gradient(-45deg, rgba(200, 150, 47, 0.1) 0 8px, transparent 8px 16px),
+    rgba(200, 150, 47, 0.08);
 }
 .ho-mark {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--hud-test-lys);
 }
 .ho-text {
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--hud-muted);
 }
@@ -687,13 +176,677 @@
   color: var(--hud-ink);
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-@media (max-width: 1100px) {
-  .ai-hud.is-fremskrevet {
-    grid-template-rows: auto auto auto auto auto auto;
-    grid-template-areas: "mark" "top" "stage" "chain" "right" "left";
+/* --- Topbånd ---------------------------------------------------------------- */
+.hud-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--hud-line);
+  background: linear-gradient(to bottom, rgba(2, 5, 4, 0.9), transparent);
+}
+.hud-eyebrow, .hud-line-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+  white-space: nowrap;
+}
+.hud-line-name { color: var(--hud-ink); }
+.hud-sep { width: 1px; height: 12px; background: var(--hud-line-2); }
+.hud-ur {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--hud-ink);
+}
+.hud-ur i { color: var(--hud-dim); padding: 0 1px; }
+
+.hud-puls {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--hud-line-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.hud-puls-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hud-dim); }
+.hud-puls.is-live { color: var(--hud-drift-lys); border-color: var(--hud-drift); }
+.hud-puls.is-live .hud-puls-dot {
+  background: var(--hud-drift-lys);
+  box-shadow: 0 0 8px var(--hud-drift-lys);
+  /* Slår én gang pr. nyt billede — key skifter, animationen spiller igen. */
+  animation: puls 1s ease-out;
+}
+@keyframes puls { 0% { transform: scale(1.8); opacity: 1; } 100% { transform: scale(1); opacity: 0.55; } }
+
+.hud-top h1 {
+  margin: 0 0 0 auto;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(18px, 1.7vw, 28px);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hud-switch {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--hud-line-2);
+  color: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+/* Ingen signalfarve på et link. Grøn betyder drift, ikke "musen er her". */
+.hud-switch:hover { border-color: var(--hud-ink); color: var(--hud-ink); }
+
+/* --- Panel med hjørnebeslag ------------------------------------------------ */
+.hud-panel {
+  --bk: 10px;
+  --bc: var(--hud-line-2);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 11px 13px 12px;
+  background-color: var(--hud-panel);
+  background-image:
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(to bottom, rgba(111, 224, 194, 0.04), transparent 40%);
+  background-repeat: no-repeat;
+  background-size:
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    100% 100%;
+  background-position:
+    left top, left top, right top, right top,
+    left bottom, left bottom, right bottom, right bottom,
+    0 0;
+  border-left: 1px solid rgba(31, 45, 42, 0.5);
+}
+.hp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.hp-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+  white-space: nowrap;
+}
+/* Et registreringsmærke, ikke et signal — derfor ingen signalfarve. */
+.hp-label::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  background: var(--hud-muted);
+}
+.hp-count { font-family: var(--font-mono); font-size: 10px; color: var(--hud-ink); letter-spacing: 0.06em; }
+.hp-sim {
+  padding: 1px 5px;
+  border: 1px solid var(--hud-test);
+  color: var(--hud-test-lys);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.hp-sub {
+  margin: 10px 0 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+.hp-note {
+  margin: 7px 0 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--hud-dim);
+}
+.hp-ikke { color: var(--hud-test-lys); font-size: 11px; }
+
+/* Et tomt felt er stiplet, som alt andet der ikke findes endnu. */
+.hp-afventer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 10px;
+  border: 1px dashed var(--hud-line-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+.hp-afventer-mark { width: 14px; height: 1px; background: var(--hud-dim); }
+
+/* --- Tonerne ---------------------------------------------------------------- */
+.tone-drift { --t: var(--hud-drift); --t-lys: var(--hud-drift-lys); }
+.tone-test { --t: var(--hud-test); --t-lys: var(--hud-test-lys); }
+.tone-brud { --t: var(--hud-brud-dyb); --t-lys: var(--hud-brud); }
+.tone-moerk { --t: var(--hud-moerk); --t-lys: var(--hud-dim); }
+
+/* --- Instrumenter ----------------------------------------------------------- */
+.m-maaler { position: relative; width: 100%; max-width: 150px; aspect-ratio: 120 / 108; }
+.m-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.m-spor { fill: none; stroke: var(--hud-moerk); stroke-width: 7; }
+.m-zone { fill: none; stroke-width: 2; opacity: 0.8; }
+.m-zone.z-ok { stroke: var(--hud-drift); }
+.m-zone.z-lav, .m-zone.z-hoej { stroke: var(--hud-test); }
+.m-streg { stroke: var(--hud-dim); stroke-width: 0.8; }
+.m-streg.is-lang { stroke: var(--hud-muted); stroke-width: 1.1; }
+.m-fyld { fill: none; stroke: var(--t-lys); stroke-width: 7; filter: drop-shadow(0 0 4px var(--t-lys)); }
+.m-spids { fill: #fff; filter: drop-shadow(0 0 5px var(--t-lys)); }
+.m-tal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 6%;
+}
+.m-vaerdi {
+  font-family: var(--font-display);
+  font-size: clamp(17px, 1.55vw, 30px);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-ink);
+  text-shadow: 0 0 18px rgba(111, 224, 194, 0.25);
+}
+.m-enhed { font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); letter-spacing: 0.1em; }
+.m-label { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--hud-dim); }
+
+.m-kurve { display: block; width: 100%; overflow: visible; }
+.m-kurve.is-tom { border-bottom: 1px dashed var(--hud-line-2); }
+.m-linje { fill: none; stroke: var(--t-lys); stroke-width: 1.4; }
+.m-flade { fill: var(--t-lys); opacity: 0.08; }
+.m-prik { fill: var(--t-lys); filter: drop-shadow(0 0 3px var(--t-lys)); }
+.m-graense { stroke: var(--hud-brud); stroke-width: 0.6; stroke-dasharray: 2 3; opacity: 0.55; }
+
+/* Oscilloskopet: fosforgrøn på sort, sløjfens grænser trukket op. */
+.m-scope {
+  position: relative;
+  height: clamp(70px, 10vh, 108px);
+  margin-top: 8px;
+  border: 1px solid var(--hud-line);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(111, 224, 194, 0.05), transparent 70%),
+    #010403;
+}
+.m-scope svg { display: block; width: 100%; height: 100%; }
+.m-gitter { stroke: var(--hud-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.m-fejlzone { fill: rgba(255, 111, 92, 0.07); }
+.m-ma { stroke-width: 1; stroke-dasharray: 3 4; }
+.m-ma-nom { stroke: var(--hud-drift); opacity: 0.6; }
+.m-ma-fejl { stroke: var(--hud-brud); opacity: 0.6; }
+.m-spor-glod { fill: none; stroke: var(--hud-drift-lys); stroke-width: 7; opacity: 0.16; }
+.m-spor-linje { fill: none; stroke: var(--hud-drift-lys); stroke-width: 1.6; }
+.m-scope.is-fejl .m-spor-glod, .m-scope.is-fejl .m-spor-linje { stroke: var(--hud-brud); }
+.m-scope-akse { position: absolute; inset: 0; pointer-events: none; }
+.m-ma-lbl {
+  position: absolute;
+  right: 4px;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  padding: 0 2px;
+  background: #010403;
+}
+.m-ma-lbl.m-ma-nom { color: var(--hud-drift); }
+.m-ma-lbl.m-ma-fejl { color: var(--hud-brud); }
+
+/* Fordelingen: fire klasser i ét bånd. */
+.m-fordeling { display: grid; gap: 5px; }
+.m-fordeling.is-tom span { font-family: var(--font-mono); font-size: 9.5px; color: var(--hud-dim); letter-spacing: 0.14em; text-transform: uppercase; }
+.m-bånd { display: flex; height: 10px; gap: 2px; }
+.m-del { display: block; height: 100%; transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.m-del.d-0 { background: var(--hud-brud); }
+.m-del.d-1 { background: var(--hud-test); }
+.m-del.d-2 { background: var(--hud-drift); }
+.m-del.d-3 { background: var(--hud-drift-lys); box-shadow: 0 0 10px rgba(111, 224, 194, 0.35); }
+.m-akse { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.m-klasse { display: flex; align-items: baseline; gap: 3px; font-family: var(--font-mono); font-size: 10px; color: var(--hud-ink); }
+.m-klasse b { font-weight: 500; font-size: 8.5px; letter-spacing: 0.1em; color: var(--hud-muted); margin-right: 2px; }
+.m-klasse i { font-size: 8px; color: var(--hud-dim); }
+.m-klasse.d-0 b { color: var(--hud-brud); }
+.m-fordeling.is-alarm .m-klasse.d-0 { color: var(--hud-brud); }
+
+.m-bjaelke { position: relative; display: block; height: 3px; background: var(--hud-moerk); }
+.m-bjaelke-fyld { display: block; height: 100%; background: var(--hud-drift-lys); transition: width 0.4s ease-out; }
+.m-bjaelke.is-alarm .m-bjaelke-fyld { background: var(--hud-brud); box-shadow: 0 0 6px var(--hud-brud); }
+.m-bjaelke-graense { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--hud-brud); opacity: 0.7; }
+
+/* --- Paneler ---------------------------------------------------------------- */
+.hp-flow-top { display: grid; grid-template-columns: minmax(104px, 50%) 1fr; gap: 10px; align-items: center; }
+.hp-flow-side { display: grid; gap: 10px; align-content: center; }
+.hp-run {
+  justify-self: start;
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--hud-dim);
+}
+.hp-run.run-koerer { color: var(--hud-drift-lys); box-shadow: 0 0 14px rgba(111, 224, 194, 0.18) inset; }
+.hp-run.run-staar { color: var(--hud-muted); }
+.hp-run.run-fejl { color: var(--hud-brud); box-shadow: 0 0 14px rgba(255, 111, 92, 0.2) inset; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.4; } }
+.hp-kv { margin: 0; display: grid; gap: 5px; }
+.hp-kv > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--hud-line); padding-bottom: 3px; }
+.hp-kv dt { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-muted); }
+.hp-kv dd { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--hud-ink); font-variant-numeric: tabular-nums; }
+.hp-kv dd i { font-size: 9px; color: var(--hud-muted); }
+
+.hp-tre { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 6px; }
+.hp-stort { display: grid; gap: 2px; }
+.hp-stort-label { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--hud-muted); }
+.hp-stort-tal {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 1.8vw, 30px);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hp-stort-tal i { font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); margin-left: 2px; }
+.hp-stort-tal.is-brud { color: var(--hud-brud); text-shadow: 0 0 14px rgba(255, 111, 92, 0.35); }
+
+.hp-klima { display: grid; gap: 8px; }
+.hp-klima-rk { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: baseline; }
+.hp-klima-rk .m-kurve { grid-column: 1 / -1; }
+.hp-klima-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-muted); }
+.hp-klima-tal { font-family: var(--font-display); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hp-klima-tal i { font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); margin-left: 3px; }
+.hp-klima-rk.is-alarm .hp-klima-tal { color: var(--hud-brud); }
+
+.hp-analyse { display: grid; gap: 4px; margin-bottom: 8px; }
+.hp-spor { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--hud-muted); }
+
+.hp-kb { display: grid; gap: 6px; }
+.hp-kb-hoved, .hp-kb-rk { display: grid; grid-template-columns: 62px repeat(3, 1fr); gap: 8px; align-items: end; }
+.hp-kb-hoved span { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; color: var(--hud-muted); }
+.hp-kb-navn { font-family: var(--font-mono); font-size: 10px; color: var(--hud-ink); letter-spacing: 0.04em; }
+.hp-kb-rk.is-stop .hp-kb-navn { color: var(--hud-brud); }
+.hp-kb-rk.is-stop .hp-kb-celle { opacity: 0.45; }
+.hp-kb-celle { display: grid; gap: 3px; }
+.hp-kb-tal { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
+.hp-kb-celle.is-alarm .hp-kb-tal { color: var(--hud-brud); }
+
+/* Agenterne. */
+.hp-agents .hp-count { color: var(--hud-muted); }
+.hud-cores { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.hud-core {
+  --c: var(--hud-dim);
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(31, 45, 42, 0.6);
+}
+.hud-core.st-test { --c: var(--hud-test-lys); }
+.hud-core.st-paa-plads { --c: var(--hud-drift-lys); }
+.hc-ring { width: 26px; height: 26px; display: block; overflow: visible; }
+.hc-track { fill: none; stroke: var(--hud-moerk); stroke-width: 2; }
+.hc-arc { fill: none; stroke: var(--c); stroke-width: 2; }
+.hc-kerne { fill: var(--c); filter: drop-shadow(0 0 4px var(--c)); animation: kerne 2.4s ease-in-out infinite; }
+@keyframes kerne { 50% { opacity: 0.45; } }
+.hud-core.is-idea .hc-track { stroke-dasharray: 3 3; }
+.hud-core.is-idea .hc-arc { stroke: var(--hud-moerk); }
+.hud-core.is-idea .hc-name { color: var(--hud-muted); }
+.hc-body { display: grid; gap: 1px; min-width: 0; }
+.hc-name { font-size: 12px; font-weight: 600; color: var(--hud-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hc-meta { display: flex; align-items: baseline; gap: 5px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hud-dim); }
+.hc-state { color: var(--c); }
+.hud-core.is-idea .hc-state { color: var(--hud-dim); }
+.hc-sep { color: var(--hud-moerk); }
+
+/* Hændelserne. Nyeste øverst; en ny række glider ind. */
+.hp-log { overflow: hidden; }
+.hp-haendelser { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; overflow: hidden; }
+.hp-haendelser li {
+  display: grid;
+  grid-template-columns: 58px 74px 1fr;
+  gap: 8px;
+  padding: 3px 0 3px 7px;
+  border-left: 2px solid var(--hud-moerk);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  animation: ind-venstre 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes ind-venstre { from { opacity: 0; transform: translateX(-10px); background: rgba(111, 224, 194, 0.12); } }
+.hp-haendelser time { color: var(--hud-dim); font-variant-numeric: tabular-nums; }
+.hh-hvor { color: var(--hud-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hh-tekst { color: var(--hud-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-haendelser li.n-advarsel { border-left-color: var(--hud-test); }
+.hp-haendelser li.n-advarsel .hh-tekst { color: var(--hud-test-lys); }
+.hp-haendelser li.n-alarm { border-left-color: var(--hud-brud); background: rgba(255, 111, 92, 0.05); }
+.hp-haendelser li.n-alarm .hh-tekst { color: var(--hud-brud); }
+.hp-haendelser li.n-info { border-left-color: var(--hud-drift); }
+
+/* --- Scenens overskrift ---------------------------------------------------- */
+.hud-break {
+  text-align: center;
+  padding: 12px clamp(18px, 3vw, 48px) 14px;
+  border-top: 1px solid var(--t, var(--hud-brud));
+  border-bottom: 1px solid var(--t, var(--hud-brud));
+  background: linear-gradient(90deg, transparent, rgba(2, 5, 4, 0.72) 20%, rgba(2, 5, 4, 0.72) 80%, transparent);
+}
+.hud-break.tone-brud {
+  background:
+    radial-gradient(70% 140% at 50% 50%, rgba(255, 111, 92, 0.16), transparent 72%),
+    linear-gradient(90deg, transparent, rgba(2, 5, 4, 0.7) 20%, rgba(2, 5, 4, 0.7) 80%, transparent);
+}
+.hb-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.hb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--t-lys, var(--hud-brud));
+  box-shadow: 0 0 10px var(--t-lys, var(--hud-brud));
+  animation: hb-blink 1.3s ease-in-out infinite;
+}
+@keyframes hb-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.hb-where {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 4vw, 66px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-shadow: 0 0 28px color-mix(in srgb, var(--t-lys, #fff) 40%, transparent);
+}
+.hud-break.is-whole .hb-where { color: var(--t-lys); }
+.hb-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  font-size: clamp(13px, 1.1vw, 17px);
+}
+.hb-next-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--hud-muted); }
+.hb-next strong { font-weight: 600; color: var(--hud-ink); }
+
+/* --- Det store udlæste tal -------------------------------------------------- */
+.hud-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px clamp(14px, 2vw, 36px);
+  padding: 8px 14px 4px;
+  border-top: 1px solid var(--hud-line-2);
+  /* En blød mørk bund, så tallene kan læses, når scenen ligger bag dem. */
+  background: radial-gradient(ellipse 80% 120% at 60% 100%, rgba(2, 5, 4, 0.85), rgba(2, 5, 4, 0.4) 60%, transparent);
+}
+.ro-group { display: flex; align-items: baseline; gap: 7px; }
+.ro-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--hud-muted); text-shadow: 0 0 6px #000, 0 0 12px #000; }
+.ro-value {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3.2vw, 54px);
+  font-weight: 600;
+  line-height: 0.9;
+  color: var(--hud-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ro-of { font-family: var(--font-mono); font-size: 12px; color: var(--hud-muted); }
+.ro-group.is-test .ro-value { color: var(--hud-test-lys); text-shadow: 0 0 20px rgba(255, 199, 102, 0.35); }
+.ro-group.is-drift .ro-value { color: var(--hud-drift-lys); text-shadow: 0 0 20px rgba(111, 224, 194, 0.35); }
+
+/* --- Maskinen i fokus ------------------------------------------------------- */
+.hud-fokus {
+  --f: var(--hud-dim);
+  width: min(380px, 48%);
+  padding: 10px 12px 12px;
+  border: 1px solid var(--hud-line-2);
+  border-left: 3px solid var(--f);
+  background: var(--hud-panel-2);
+  animation: fokus-ind 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes fokus-ind { from { opacity: 0; transform: translateY(8px); clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+.hud-fokus.t-koerer { --f: var(--hud-drift-lys); }
+.hud-fokus.t-staar, .hud-fokus.t-alarm { --f: var(--hud-brud); }
+.hf-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.hf-navn { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.hf-id { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; color: var(--hud-dim); }
+.hf-tilstand {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--f);
+}
+.hf-kanaler { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; }
+.hf-kanal { display: grid; grid-template-columns: 1fr auto; gap: 1px 6px; align-items: baseline; }
+.hf-kanal .m-kurve { grid-column: 1 / -1; }
+.hf-lbl { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-muted); }
+.hf-tal { font-family: var(--font-mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+.hf-tal i { font-size: 9px; color: var(--hud-muted); margin-left: 3px; }
+.hf-kanal.is-alarm .hf-tal { color: var(--hud-brud); }
+
+/* --- Mærkaterne i 3D ------------------------------------------------------- */
+.h3-wrap { pointer-events: none; }
+.h3-tag {
+  --c: var(--hud-dim);
+  min-width: 78px;
+  padding: 4px 7px 5px;
+  border: 1px solid color-mix(in srgb, var(--c) 70%, transparent);
+  background: rgba(2, 6, 5, 0.78);
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+  font-family: var(--font-mono);
+  color: var(--hud-ink);
+  white-space: nowrap;
+  transition: transform 0.3s;
+}
+.h3-tag.t-koerer { --c: var(--hud-drift-lys); }
+.h3-tag.t-staar, .h3-tag.t-alarm { --c: var(--hud-brud); }
+.h3-tag.t-alarm { animation: h3-alarm 1s steps(2) infinite; }
+@keyframes h3-alarm { 50% { background: rgba(80, 18, 12, 0.85); } }
+.h3-tag.is-fokus { transform: scale(1.12); box-shadow: 0 0 22px color-mix(in srgb, var(--c) 30%, transparent); }
+.h3-head { display: flex; align-items: center; gap: 5px; font-size: 9px; letter-spacing: 0.12em; }
+.h3-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.h3-navn { text-transform: uppercase; }
+.h3-stop { margin-left: auto; color: var(--hud-brud); font-weight: 700; letter-spacing: 0.16em; font-size: 8px; text-transform: uppercase; }
+.h3-sim { margin-left: auto; color: var(--hud-test-lys); font-weight: 700; letter-spacing: 0.16em; font-size: 7px; text-transform: uppercase; }
+.h3-stop + .h3-sim { margin-left: 4px; }
+.h3-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.h3-lbl { font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--hud-dim); }
+.h3-val { font-size: 12px; font-variant-numeric: tabular-nums; }
+.h3-val i { font-size: 8px; color: var(--hud-muted); margin-left: 2px; }
+.h3-row.is-alarm .h3-val { color: var(--hud-brud); }
+
+/* --- Kæden som bånd -------------------------------------------------------- */
+.hud-chain {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hud-line);
+  /* Scenen fader ud bag båndet, så instrumenterne kan læses. */
+  background: linear-gradient(to bottom, rgba(2, 5, 4, 0.55), rgba(2, 5, 4, 0.92) 40%);
+  box-shadow: 0 -40px 60px -20px rgba(2, 5, 4, 0.8);
+}
+.hud-chain .hc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.hc-reach { font-family: var(--font-mono); font-size: 11px; color: var(--hud-ink); }
+
+.cc { display: block; }
+.cc-svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.cc-glow { fill: var(--t-lys); opacity: 0.08; filter: blur(16px); }
+.cc-node.tone-moerk .cc-glow { opacity: 0; }
+.cc-glow.is-pulse { will-change: opacity; animation: cc-breathe 2.2s ease-in-out infinite; }
+@keyframes cc-breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.48; } }
+
+.cc-box { fill: rgba(3, 8, 7, 0.86); stroke: var(--t); stroke-width: 1.5; }
+.cc-node.tone-drift .cc-box { stroke: var(--hud-drift-lys); stroke-opacity: 0.7; }
+.cc-node.tone-moerk .cc-box { stroke-dasharray: 4 4; }
+.cc-node.is-broken .cc-box { stroke-width: 2.5; stroke: var(--hud-brud); }
+.cc-label { fill: var(--hud-ink); font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+.cc-node.tone-moerk .cc-label { fill: var(--hud-muted); }
+.cc-status { fill: var(--t-lys); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-anchor: end; text-transform: uppercase; }
+.cc-node.tone-moerk .cc-status { fill: var(--hud-dim); }
+.cc-rule { stroke: var(--hud-line-2); stroke-width: 1; }
+.cc-rd-label { fill: var(--hud-dim); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+.cc-rd-value { fill: var(--hud-ink); font-family: var(--font-mono); font-size: 10.5px; text-anchor: end; }
+.cc-node.tone-moerk .cc-rd-value { fill: var(--hud-muted); }
+.cc-live-value { fill: var(--t-lys); font-family: var(--font-mono); font-size: 17px; font-variant-numeric: tabular-nums; }
+.cc-sim { fill: var(--hud-test-lys); font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; letter-spacing: 0.2em; text-anchor: end; }
+.cc-slot { fill: none; stroke: var(--hud-moerk); stroke-width: 1; }
+.cc-slot.is-used { fill: var(--t-lys); stroke: var(--t-lys); }
+.cc-waits { fill: var(--hud-dim); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; }
+.cc-node.is-broken .cc-waits { fill: var(--hud-brud); }
+
+.cc-track { stroke: var(--hud-moerk); stroke-width: 2; }
+.cc-seg.is-live .cc-track { stroke: var(--t-lys); opacity: 0.35; }
+.cc-seg.is-ghost .cc-track { stroke-dasharray: 3 7; opacity: 0.5; }
+.cc-spark { will-change: transform; animation: cc-run 1.8s linear infinite; }
+@keyframes cc-run { from { transform: translateX(0); } to { transform: translateX(var(--len)); } }
+.cc-head { fill: #fff; filter: drop-shadow(0 0 4px var(--t-lys)); }
+.cc-tail { stroke: var(--t-lys); stroke-width: 3; stroke-linecap: round; opacity: 0.45; }
+.cc-ring {
+  fill: none;
+  stroke: var(--hud-brud);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: cc-blocked 1.8s ease-out infinite;
+}
+@keyframes cc-blocked {
+  0% { transform: scale(0.35); opacity: 0.9; }
+  40% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* --- Opstarten -------------------------------------------------------------
+   Grænsefladen kommer til syne. Beslagene låser på: de starter som en hel
+   ramme og trækker sig ind i hjørnerne. Linjerne i midten er fakta fra
+   modellen — antal maskiner, hvor langt kæden rækker. */
+.ai-hud.is-boot .hud-panel,
+.ai-hud.is-boot .hud-chain,
+.ai-hud.is-boot .hud-top,
+.ai-hud.is-boot .hud-opdigtet {
+  animation: ind 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 120ms + 350ms);
+}
+.ai-hud.is-boot .hud-top { --i: -1; }
+.ai-hud.is-boot .hud-panel { animation-name: ind, laas; animation-duration: 0.9s, 1.2s; }
+@keyframes ind {
+  0% { opacity: 0; clip-path: inset(0 0 100% 0); transform: translateY(8px); }
+  50% { opacity: 1; }
+  100% { opacity: 1; clip-path: inset(0); transform: none; }
+}
+@keyframes laas {
+  0% { --bk: 50%; --bc: var(--hud-drift-lys); }
+  70% { --bk: 50%; --bc: var(--hud-drift-lys); }
+  100% { --bk: 10px; --bc: var(--hud-line-2); }
+}
+.ai-hud.is-boot .hud-stage > *, .ai-hud.is-boot .hud-events {
+  animation: ind 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 1.5s both;
+}
+
+.hud-opstart {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 6px;
+  padding: 18px 24px;
+  pointer-events: none;
+  animation: opstart-ud 3s ease-in both;
+}
+@keyframes opstart-ud { 0%, 78% { opacity: 1; } 100% { opacity: 0; } }
+.hud-opstart p {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hud-drift-lys);
+  text-shadow: 0 0 12px rgba(111, 224, 194, 0.5);
+}
+.op-nr { color: var(--hud-dim); }
+
+/* --- Stilstand -------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .ai-hud *, .ai-hud *::before, .ai-hud *::after {
+    animation: none !important;
+    transition: none !important;
   }
+  .cc-spark { transform: translateX(var(--len)); }
+  .cc-ring { opacity: 0.55; }
+  .cc-glow.is-pulse { opacity: 0.36; }
+  .hud-opstart { display: none; }
+}
+
+/* --- Smallere skærme ------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .ai-hud, .ai-hud.is-fremskrevet {
+    position: static;
+    overflow: visible;
+    min-height: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas: "mark" "top" "stage" "left" "right" "chain" "events";
+  }
+  .ai-hud:not(.is-fremskrevet) { grid-template-areas: "top" "stage" "left" "right" "chain" "events"; }
+  .hud-stage { min-height: 60vh; }
+  .hud-left, .hud-right { overflow: visible; }
+  .hud-top { flex-wrap: wrap; }
 }

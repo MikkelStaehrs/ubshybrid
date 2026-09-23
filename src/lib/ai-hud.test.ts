@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AGENT_ENGINE_LABEL } from "./agents";
 import { SMÅBELØB_UNDER } from "./agent-cost";
-import { chainToneOf, hudAgentState, hudModel, hudState, type HudLink } from "./ai-hud";
+import { chainToneOf, hudAgentState, hudModel, hudState, tallyMedTelemetri, type HudLink } from "./ai-hud";
 
 const m = hudModel("sliberi");
 assert.ok(m, "sliberi burde have en HUD-model");
@@ -256,5 +256,34 @@ describe("kæden som instrumenter", () => {
     const i = m.links.findIndex((l) => l.broken);
     assert.ok(i > 0, "bruddet ligger ikke som første led i dag");
     assert.equal(m.links[i - 1].delivers, true);
+  });
+});
+
+describe("det store tal med telemetri", () => {
+  it("er modellens eget tal, når intet er simuleret", () => {
+    const tomt = { simuleret: false, maskiner: [] };
+    assert.deepEqual(tallyMedTelemetri(m, tomt), m.tally);
+  });
+
+  it("tæller en maskine med kanaler som på plads — også når den står", () => {
+    // Et stop er ikke "afventer": maskinen findes og melder, at den står.
+    const frem = hudModel("sliberi", { fremskriv: true })!;
+    const ids = Object.keys(frem.maskinTilstand);
+    const stoppet = ids[3];
+    const billede = {
+      simuleret: true,
+      maskiner: ids.map((id) => ({ id, kanaler: id === ids[0] ? [] : [{}], koerer: id !== stoppet })),
+    };
+    const t = tallyMedTelemetri(frem, billede);
+    assert.equal(t.total, frem.tally.total, "totalen må ikke ændre sig");
+    assert.equal(t.drift + t.test + t.afventer, t.total);
+    // Kun maskinen uden kanaler kan stå tilbage som noget andet end på plads.
+    assert.equal(t.drift, ids.length - 1 + (frem.maskinTilstand[ids[0]] === "paa-plads" ? 1 : 0));
+  });
+
+  it("den rigtige model bærer hver maskines tilstand, og den summer til tallet", () => {
+    const tilstande = Object.values(m.maskinTilstand);
+    assert.equal(tilstande.length, m.tally.total);
+    assert.equal(tilstande.filter((s) => s === "test").length, m.tally.test);
   });
 });

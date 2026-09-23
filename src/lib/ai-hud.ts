@@ -132,6 +132,8 @@ export interface HudModel {
   lineName: string;
   /** Maskinerne fordelt på de tre tilstande. Det store udlæste tal. */
   tally: { drift: number; test: number; afventer: number; total: number };
+  /** Hver maskines HUD-tilstand, nøglet på maskinens id. Grundlaget for `tally`. */
+  maskinTilstand: Record<string, HudState>;
   links: HudLink[];
   /**
    * Kædens samlede tone. Grøn kræver, at hvert led er i drift — `isDone()`
@@ -261,6 +263,36 @@ function toneOf(status: OtStatus, delivers: boolean, broken: boolean): LinkTone 
   return status === "active" ? "drift" : "test";
 }
 
+function taelTilstande(tilstande: HudState[]): HudModel["tally"] {
+  return {
+    drift: tilstande.filter((s) => s === "paa-plads").length,
+    test: tilstande.filter((s) => s === "test").length,
+    afventer: tilstande.filter((s) => s === "afventer").length,
+    total: tilstande.length,
+  };
+}
+
+/**
+ * Det store tal, når fremskrivningens telemetri er inde.
+ *
+ * En maskine, simulatoren giver kanaler, har sine signaler på plads — også
+ * når den står. Et stop er ikke "afventer": maskinen findes og melder, at
+ * den står. Stoppet vises for sig, i overskriften og i driftspanelet.
+ *
+ * Uden simuleret telemetri er det modellens eget tal, uændret. Oversættelsen
+ * sker her og ikke i komponenten, så der stadig kun er ét sted.
+ */
+export function tallyMedTelemetri(
+  model: Pick<HudModel, "tally" | "maskinTilstand">,
+  billede: { simuleret: boolean; maskiner: { id: string; kanaler: unknown[] }[] },
+): HudModel["tally"] {
+  if (!billede.simuleret) return model.tally;
+  const medKanaler = new Set(billede.maskiner.filter((m) => m.kanaler.length > 0).map((m) => m.id));
+  return taelTilstande(
+    Object.entries(model.maskinTilstand).map(([id, s]) => (medKanaler.has(id) ? "paa-plads" : s)),
+  );
+}
+
 export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudModel | null {
   const data = LINES[lineId];
   if (!data) return null;
@@ -335,20 +367,18 @@ export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudMod
   });
 
   // Samme udregning som hologrammet bruger til punkttætheden.
-  const tally = { drift: 0, test: 0, afventer: 0, total: 0 };
+  const maskinTilstand: Record<string, HudState> = {};
   for (const m of layout.machines) {
     if (m.kind === "person") continue;
-    tally.total++;
-    const st = machineState(m, ot);
-    if (st === "paa-plads") tally.drift++;
-    else if (st === "test") tally.test++;
-    else tally.afventer++;
+    maskinTilstand[m.id] = machineState(m, ot);
   }
+  const tally = taelTilstande(Object.values(maskinTilstand));
 
   return {
     lineId,
     lineName: data.line.name,
     tally,
+    maskinTilstand,
     links,
     chainTone: chainToneOf(links),
     reach: { delivers: links.filter((l) => l.delivers).length, total: links.length },

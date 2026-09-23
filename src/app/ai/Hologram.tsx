@@ -1,150 +1,602 @@
 "use client";
-import { OrbitControls } from "@react-three/drei";
+import { Html, Line } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, ShaderMaterial } from "three";
-import { buildHologram, PUNKT_BUDGET, type HologramData } from "../../lib/hologram";
-import { layoutLine } from "../../lib/layout";
-import type { LineData } from "../../lib/types";
+import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
+import { BlendFunction } from "postprocessing";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry,
+  EdgesGeometry, Euler, InstancedMesh, Matrix4, Object3D, Quaternion, RingGeometry,
+  ShaderMaterial, SphereGeometry, Vector2, Vector3,
+} from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { buildHologram, flowEdgesFor, PUNKT_BUDGET, type HologramData } from "../../lib/hologram";
+import { KOERER_OVER_PCT } from "../../lib/flow";
+import { layoutLine, type Layout } from "../../lib/layout";
+import { formFor, formTop } from "../../lib/machine-form";
 import type { OtLayout } from "../../lib/ot";
+import type { MaskinLaesning, TelemetriBillede } from "../../lib/telemetri";
+import type { LineData } from "../../lib/types";
 
 /**
- * Fabrikken som punktsky.
+ * Fabrikken som hologram.
  *
- * Dybden kommer fra skyen selv, ikke fra glød: punkterne bliver mindre med
- * afstanden, de er bløde og runde, de falmer mod sort langt væk, og de
- * blandes additivt, så tætte områder lyser op af sig selv. Der hvor vi ved
- * mest, er der flest punkter — og derfor lysest.
+ * Alt der lyser eller bevæger sig, svarer til en tilstand:
+ *   - Punkternes farve er maskinens tilstand: hvid kører, rød står, rav er
+ *     i test, grå tåge ved vi intet om. En maskine, der kører, ånder svagt.
+ *   - Materialestrømmen flyder kun mellem maskiner, der begge kører, og med
+ *     en fart, der følger flowet ved indgangen.
+ *   - Mærkaterne viser maskinens egne tal.
+ *   - Skanningen løber kun, når Kædevagten kører.
  *
- * Kameraets langsomme bane er synsvinkel, ikke data. Alt andet, der
- * bevæger sig, svarer til en tilstand.
+ * Kameraets tur er synsvinkel, ikke data. Den går efter alarmer først.
  */
 
 /** Er frametiden over det her efter opstart, halveres punkterne én gang. */
-const FRAMETID_GRAENSE_MS = 22;
-/** Hvor længe vi kigger på frametiden, før vi beslutter os. */
-const MAALEVINDUE_MS = 1200;
+const FRAMETID_GRAENSE_MS = 24;
+const MAALEVINDUE_MS = 1400;
+/** Højst så mange maskiner. Uniform-arrays i shaderen har en fast længde. */
+const MAX_MASKINER = 32;
 
-const VERT = /* glsl */ `
+/**
+ * Maskinens tilstand, som shaderne kender den.
+ *   0 ukendt · 1 test · 2 kører · 3 står · 4 alarm
+ */
+type Kode = 0 | 1 | 2 | 3 | 4;
+
+const PALET = /* glsl */ `
+  vec3 farve(float s) {
+    if (s > 3.5) return vec3(1.00, 0.30, 0.24);  // alarm
+    if (s > 2.5) return vec3(0.95, 0.36, 0.28);  // står
+    if (s > 1.5) return vec3(0.78, 0.95, 0.90);  // kører: kølig hvid
+    if (s > 0.5) return vec3(1.00, 0.72, 0.28);  // test: rav
+    return vec3(0.30, 0.38, 0.36);               // ukendt: tåge
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Punktskyen
+
+const CLOUD_VERT = /* glsl */ `
   attribute float aBright;
-  attribute float aTone;
+  attribute float aMaskine;
   uniform float uSize;
+  uniform float uTime;
+  uniform float uState[${MAX_MASKINER}];
   uniform float uFadeNear;
   uniform float uFadeFar;
-  varying float vBright;
-  varying float vTone;
-  varying float vFade;
+  varying vec3 vCol;
+  varying float vAlpha;
+  ${PALET}
 
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float dist = -mv.z;
-    // Punktstørrelse aftager med afstanden — det er perspektivet.
-    gl_PointSize = uSize / max(dist, 0.1);
-    // Dybdefade mod sort, så bagsiden af hallen synker væk.
-    vFade = 1.0 - smoothstep(uFadeNear, uFadeFar, dist);
-    vBright = aBright;
-    vTone = aTone;
+    float s = aMaskine < 0.0 ? 0.0 : uState[int(aMaskine)];
+    float lys = aBright;
+
+    // Kører den, ånder den. Står den, står den stille. Alarmen banker.
+    if (s > 1.5 && s < 2.5) lys *= 0.82 + 0.18 * sin(uTime * 1.3 + aMaskine * 1.7);
+    if (s > 3.5) lys *= 0.55 + 0.45 * (0.5 + 0.5 * sin(uTime * 6.0));
+    if (aMaskine < 0.0) lys *= 0.9;
+
+    gl_PointSize = uSize * (0.75 + 0.25 * aBright) / max(dist, 0.1);
+    vAlpha = lys * (1.0 - smoothstep(uFadeNear, uFadeFar, dist));
+    vCol = aMaskine < 0.0 ? vec3(0.34, 0.44, 0.42) : farve(s);
     gl_Position = projectionMatrix * mv;
   }
 `;
 
-const FRAG = /* glsl */ `
+const CLOUD_FRAG = /* glsl */ `
   precision mediump float;
-  uniform vec3 uTaage;
-  uniform vec3 uTest;
-  uniform vec3 uDrift;
-  varying float vBright;
-  varying float vTone;
-  varying float vFade;
+  uniform float uGain;
+  varying vec3 vCol;
+  varying float vAlpha;
 
   void main() {
-    // Blødt rundt punkt. Firkantede punkter ser ud som fejl, ikke som støv.
+    // Blød kerne. Additiv blanding gør resten — tætte områder lyser selv.
     vec2 d = gl_PointCoord - vec2(0.5);
     float r = dot(d, d);
     if (r > 0.25) discard;
-    float alpha = smoothstep(0.25, 0.0, r);
-
-    vec3 col = uTaage;
-    if (vTone > 1.5) col = uDrift;
-    else if (vTone > 0.5) col = uTest;
-
-    gl_FragColor = vec4(col * vBright, alpha * vBright * vFade);
+    float a = smoothstep(0.25, 0.0, r);
+    a = a * a;
+    gl_FragColor = vec4(vCol * vAlpha * uGain, a * vAlpha * uGain);
   }
 `;
 
-function Cloud({ data, size }: { data: HologramData; size: number }) {
-  const ref = useRef<Points>(null);
-
+function Cloud({ data, state, still }: { data: HologramData; state: Float32Array; still: boolean }) {
   const geometry = useMemo(() => {
     const g = new BufferGeometry();
     g.setAttribute("position", new BufferAttribute(data.positions, 3));
     g.setAttribute("aBright", new BufferAttribute(data.bright, 1));
-    g.setAttribute("aTone", new BufferAttribute(data.tone, 1));
+    g.setAttribute("aMaskine", new BufferAttribute(data.maskine, 1));
     return g;
   }, [data]);
 
   const material = useMemo(
     () =>
       new ShaderMaterial({
-        vertexShader: VERT,
-        fragmentShader: FRAG,
+        vertexShader: CLOUD_VERT,
+        fragmentShader: CLOUD_FRAG,
         uniforms: {
-          uSize: { value: size },
-          uFadeNear: { value: 40 },
-          uFadeFar: { value: 190 },
-          // Hvidt på næsten sort. Farve er kun signal: rav = test.
-          uTaage: { value: [0.62, 0.69, 0.67] },
-          uTest: { value: [0.86, 0.64, 0.24] },
-          uDrift: { value: [1, 1, 1] },
+          uSize: { value: 300 },
+          uTime: { value: 0 },
+          uGain: { value: 0.62 },
+          uState: { value: new Float32Array(MAX_MASKINER) },
+          uFadeNear: { value: 50 },
+          uFadeFar: { value: 200 },
         },
         transparent: true,
         depthWrite: false,
-        // Tætte områder lyser op af sig selv — det er dér dybden kommer fra.
         blending: AdditiveBlending,
       }),
-    [size],
+    [],
   );
 
-  useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
-  return <points ref={ref} geometry={geometry} material={material} frustumCulled={false} />;
+  useFrame(({ clock }) => {
+    material.uniforms.uTime.value = still ? 0 : clock.elapsedTime;
+    (material.uniforms.uState.value as Float32Array).set(state);
+  });
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  return <points geometry={geometry} material={material} frustumCulled={false} />;
 }
 
-/**
- * Langsom, begrænset bane. Synsvinkel, ikke data — og den står stille, hvis
- * brugeren beder om ro, eller griber fat i den med musen.
- */
-function SlowOrbit({ center, still }: { center: [number, number, number]; still: boolean }) {
-  const { camera } = useThree();
-  const held = useRef(false);
-  const t = useRef(0);
+// ---------------------------------------------------------------------------
+// Silhuetterne: skarpe kanter fra den samme form, kortet tegner efter
 
-  useFrame((_, dt) => {
-    if (still || held.current) return;
-    t.current += dt * 0.06;
-    const a = Math.sin(t.current) * (Math.PI / 12); // ±15°
-    const radius = 118;
-    camera.position.set(
-      center[0] + Math.sin(a) * radius,
-      64,
-      center[2] + Math.cos(a) * radius,
-    );
-    camera.lookAt(center[0], 6, center[2]);
+const LINE_VERT = /* glsl */ `
+  attribute float aMaskine;
+  uniform float uState[${MAX_MASKINER}];
+  uniform float uTime;
+  varying vec3 vCol;
+  varying float vAlpha;
+  ${PALET}
+  void main() {
+    float s = uState[int(aMaskine)];
+    vCol = farve(s);
+    // Det, vi intet ved om, er kun en antydning. Alarmen banker.
+    vAlpha = s < 0.5 ? 0.16 : s > 3.5 ? 0.5 + 0.5 * sin(uTime * 6.0) : 0.55;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const LINE_FRAG = /* glsl */ `
+  precision mediump float;
+  varying vec3 vCol;
+  varying float vAlpha;
+  void main() { gl_FragColor = vec4(vCol * vAlpha, vAlpha); }
+`;
+
+function Silhouetter({ layout, ids, state, still }: {
+  layout: Layout;
+  ids: string[];
+  state: Float32Array;
+  still: boolean;
+}) {
+  const geometry = useMemo(() => {
+    const dele: BufferGeometry[] = [];
+    const q = new Quaternion();
+    const e = new Euler();
+    const at = new Vector3();
+    const en = new Vector3(1, 1, 1);
+    ids.forEach((id, i) => {
+      const m = layout.byId.get(id);
+      if (!m) return;
+      const verden = new Matrix4().makeTranslation(m.pos[0], 0, m.pos[2])
+        .multiply(new Matrix4().makeRotationY(m.rotY));
+      for (const p of formFor({ kind: m.kind, name: m.name, size: m.size, wIdCount: m.wIds.length })) {
+        const g = p.form === "box" ? new BoxGeometry(...p.size)
+          : p.form === "cylinder" ? new CylinderGeometry(p.rTop, p.rBottom, p.h, p.sides)
+            : new SphereGeometry(p.r, 10, 6);
+        const kant = new EdgesGeometry(g, 24);
+        g.dispose();
+        const rot = p.form === "sphere" ? [0, 0, 0] : (p.rot ?? [0, 0, 0]);
+        // Samme rækkefølge som punkterne samples i: z, så x, så y.
+        e.set(rot[0], rot[1], rot[2], "YXZ");
+        q.setFromEuler(e);
+        at.set(...p.at);
+        kant.applyMatrix4(verden.clone().multiply(new Matrix4().compose(at, q, en)));
+        const n = kant.getAttribute("position").count;
+        kant.setAttribute("aMaskine", new BufferAttribute(new Float32Array(n).fill(i), 1));
+        dele.push(kant);
+      }
+    });
+    const samlet = mergeGeometries(dele) ?? new BufferGeometry();
+    dele.forEach((d) => d.dispose());
+    return samlet;
+  }, [layout, ids]);
+
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        vertexShader: LINE_VERT,
+        fragmentShader: LINE_FRAG,
+        uniforms: { uState: { value: new Float32Array(MAX_MASKINER) }, uTime: { value: 0 } },
+        transparent: true,
+        depthWrite: false,
+        blending: AdditiveBlending,
+      }),
+    [],
+  );
+
+  useFrame(({ clock }) => {
+    material.uniforms.uTime.value = still ? 0 : clock.elapsedTime;
+    (material.uniforms.uState.value as Float32Array).set(state);
+  });
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  return <lineSegments geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+// ---------------------------------------------------------------------------
+// Fodspor: en ring på gulvet under hver maskine, i tilstandens farve
+
+const RING_FARVE: Record<Kode, Color> = {
+  0: new Color(0.16, 0.22, 0.21),
+  1: new Color(1.3, 0.9, 0.3),
+  2: new Color(0.35, 1.25, 1.0),
+  3: new Color(1.5, 0.45, 0.35),
+  4: new Color(1.8, 0.4, 0.3),
+};
+
+function Fodspor({ layout, ids, state, still }: {
+  layout: Layout;
+  ids: string[];
+  state: Float32Array;
+  still: boolean;
+}) {
+  const ref = useRef<InstancedMesh>(null);
+  const geo = useMemo(() => new RingGeometry(0.9, 1, 64).rotateX(-Math.PI / 2), []);
+  const tmp = useMemo(() => new Object3D(), []);
+
+  useFrame(({ clock }) => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const t = still ? 0 : clock.elapsedTime;
+    ids.forEach((id, i) => {
+      const m = layout.byId.get(id);
+      if (!m) return;
+      const s = state[i] as Kode;
+      const r = Math.max(m.size.x, m.size.z) * 0.78 + 0.4;
+      // Alarmen slår ud som en ring. Resten ligger stille.
+      const puls = s === 4 ? 1 + ((t * 0.9) % 1) * 0.6 : 1;
+      tmp.position.set(m.pos[0], 0.03, m.pos[2]);
+      tmp.scale.setScalar(r * puls);
+      tmp.updateMatrix();
+      mesh.setMatrixAt(i, tmp.matrix);
+      mesh.setColorAt(i, RING_FARVE[s] ?? RING_FARVE[0]);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   });
 
   return (
-    <OrbitControls
-      makeDefault
-      target={[center[0], 6, center[2]]}
-      enablePan={false}
-      enableZoom={false}
-      minPolarAngle={Math.PI / 4}
-      maxPolarAngle={Math.PI / 2.3}
-      minAzimuthAngle={-Math.PI / 12}
-      maxAzimuthAngle={Math.PI / 12}
-      rotateSpeed={0.35}
-      onStart={() => (held.current = true)}
-    />
+    <instancedMesh ref={ref} args={[geo, undefined, ids.length]} frustumCulled={false}>
+      <meshBasicMaterial transparent opacity={0.85} toneMapped={false} depthWrite={false} blending={AdditiveBlending} />
+    </instancedMesh>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Materialestrømmen
+
+const STROEM_VERT = /* glsl */ `
+  attribute vec3 aFra;
+  attribute vec3 aTil;
+  attribute vec3 aOver;
+  attribute float aFase;
+  attribute float aKant;
+  uniform float uOff[${MAX_MASKINER}];
+  uniform float uOn[${MAX_MASKINER}];
+  uniform float uSize;
+  varying float vAlpha;
+  void main() {
+    int k = int(aKant);
+    float t = fract(aFase + uOff[k]);
+    // En bue fra afkastet til næste maskines indløb.
+    vec3 p = mix(mix(aFra, aOver, t), mix(aOver, aTil, t), t);
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    float on = uOn[k];
+    gl_PointSize = uSize * (0.7 + 0.3 * fract(aFase * 17.0)) / max(-mv.z, 0.1) * on;
+    vAlpha = on * smoothstep(0.0, 0.1, t) * smoothstep(1.0, 0.88, t);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const STROEM_FRAG = /* glsl */ `
+  precision mediump float;
+  varying float vAlpha;
+  void main() {
+    vec2 d = gl_PointCoord - vec2(0.5);
+    float r = dot(d, d);
+    if (r > 0.25) discard;
+    float a = smoothstep(0.25, 0.0, r);
+    gl_FragColor = vec4(vec3(0.55, 1.0, 0.85) * 1.6 * a * vAlpha, a * vAlpha);
+  }
+`;
+
+const PR_KANT = 22;
+
+function Stroem({ data, layout, kanter, still }: {
+  data: LineData;
+  layout: Layout;
+  /** Pr. kant: fart i baner pr. sekund. 0 står stille, null findes ikke. */
+  kanter: (number | null)[];
+  still: boolean;
+}) {
+  const geometry = useMemo(() => {
+    const n = data.edges.length * PR_KANT;
+    const fra = new Float32Array(n * 3);
+    const til = new Float32Array(n * 3);
+    const over = new Float32Array(n * 3);
+    const fase = new Float32Array(n);
+    const kant = new Float32Array(n);
+    let j = 0;
+    data.edges.forEach((e, k) => {
+      const a = layout.byId.get(e.from);
+      const b = layout.byId.get(e.to);
+      if (!a || !b) return;
+      const ya = a.size.h * 0.92;
+      const yb = b.size.h * 0.85;
+      const top = Math.max(ya, yb) + 1.6;
+      for (let i = 0; i < PR_KANT; i++, j++) {
+        fra.set([a.pos[0], ya, a.pos[2]], j * 3);
+        til.set([b.pos[0], yb, b.pos[2]], j * 3);
+        over.set([(a.pos[0] + b.pos[0]) / 2, top, (a.pos[2] + b.pos[2]) / 2], j * 3);
+        fase[j] = i / PR_KANT + ((i * 0.618) % 1) * 0.02;
+        kant[j] = k;
+      }
+    });
+    const g = new BufferGeometry();
+    // Positionen regnes i shaderen. Attributten er der, fordi three kræver den.
+    g.setAttribute("position", new BufferAttribute(new Float32Array(n * 3), 3));
+    g.setAttribute("aFra", new BufferAttribute(fra, 3));
+    g.setAttribute("aTil", new BufferAttribute(til, 3));
+    g.setAttribute("aOver", new BufferAttribute(over, 3));
+    g.setAttribute("aFase", new BufferAttribute(fase, 1));
+    g.setAttribute("aKant", new BufferAttribute(kant, 1));
+    return g;
+  }, [data, layout]);
+
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        vertexShader: STROEM_VERT,
+        fragmentShader: STROEM_FRAG,
+        uniforms: {
+          uOff: { value: new Float32Array(MAX_MASKINER) },
+          uOn: { value: new Float32Array(MAX_MASKINER) },
+          uSize: { value: 210 },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: AdditiveBlending,
+      }),
+    [],
+  );
+
+  useFrame((_, dt) => {
+    const off = material.uniforms.uOff.value as Float32Array;
+    const on = material.uniforms.uOn.value as Float32Array;
+    kanter.forEach((fart, k) => {
+      // Tænd og sluk glidende. En strøm, der stopper, forsvinder ikke på et blink.
+      const maal = fart === null ? 0 : fart > 0 ? 1 : 0.35;
+      on[k] += (maal - on[k]) * Math.min(1, dt * 2.5);
+      if (!still && fart) off[k] = (off[k] + dt * fart) % 1;
+    });
+  });
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  return <points geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+/** Banerne selv: svage, stiplede. Man kan se vejen, også hvor intet løber. */
+function Baner({ data, layout }: { data: LineData; layout: Layout }) {
+  const baner = useMemo(
+    () =>
+      data.edges.flatMap((e) => {
+        const a = layout.byId.get(e.from);
+        const b = layout.byId.get(e.to);
+        if (!a || !b) return [];
+        const ya = a.size.h * 0.92;
+        const yb = b.size.h * 0.85;
+        const top = Math.max(ya, yb) + 1.6;
+        const pts: [number, number, number][] = [];
+        for (let i = 0; i <= 16; i++) {
+          const t = i / 16;
+          const u = 1 - t;
+          pts.push([
+            u * u * a.pos[0] + 2 * u * t * ((a.pos[0] + b.pos[0]) / 2) + t * t * b.pos[0],
+            u * u * ya + 2 * u * t * top + t * t * yb,
+            u * u * a.pos[2] + 2 * u * t * ((a.pos[2] + b.pos[2]) / 2) + t * t * b.pos[2],
+          ]);
+        }
+        return [{ id: `${e.from}-${e.to}`, pts }];
+      }),
+    [data, layout],
+  );
+  return (
+    <>
+      {baner.map((b) => (
+        <Line key={b.id} points={b.pts} color="#2d4a44" lineWidth={1} dashed dashSize={0.35} gapSize={0.5} transparent opacity={0.55} />
+      ))}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skanningen: kun når Kædevagten kører
+
+function Skanning({ layout, aktiv }: { layout: Layout; aktiv: boolean }) {
+  const ref = useRef<import("three").Mesh>(null);
+  const start = useRef<number | null>(null);
+  const { minX, maxX, minZ, maxZ } = layout.bounds;
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        uniforms: { uA: { value: 0 } },
+        vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+        fragmentShader: `precision mediump float; uniform float uA; varying vec2 vUv;
+          void main(){
+            float kant = pow(1.0 - abs(vUv.x - 0.5) * 2.0, 6.0);
+            float hoejde = 1.0 - vUv.y;
+            float a = kant * hoejde * uA;
+            gl_FragColor = vec4(vec3(0.45, 1.0, 0.85) * a * 1.4, a);
+          }`,
+        transparent: true,
+        depthWrite: false,
+        blending: AdditiveBlending,
+      }),
+    [],
+  );
+  useFrame(({ clock }) => {
+    const m = ref.current;
+    if (!m) return;
+    if (!aktiv) { start.current = null; material.uniforms.uA.value = 0; return; }
+    if (start.current === null) start.current = clock.elapsedTime;
+    const t = ((clock.elapsedTime - start.current) / 3.6) % 1;
+    m.position.x = minX - 4 + t * (maxX - minX + 8);
+    material.uniforms.uA.value = Math.sin(t * Math.PI) * 0.9;
+  });
+  useEffect(() => () => material.dispose(), [material]);
+  return (
+    <mesh ref={ref} position={[minX, 5, (minZ + maxZ) / 2]} rotation={[0, Math.PI / 2, 0]} material={material}>
+      <planeGeometry args={[maxZ - minZ + 8, 10]} />
+    </mesh>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mærkaterne
+
+const fmt = (v: number | null, d: number) => (v === null ? "—" : v.toFixed(d).replace(".", ","));
+
+/**
+ * Et mærkat skal kun stå inde i scenen. Bag et panel skinner det igennem og
+ * ligner noget, panelet siger; i skærmkanten skæres det over. Derfor
+ * projiceres det hver frame, og uden for scenen skjules det.
+ */
+function Maerkat({ m, pos, fokus, scene, sim }: {
+  m: MaskinLaesning;
+  pos: [number, number, number];
+  fokus: boolean;
+  scene: React.RefObject<DOMRect | null>;
+  /** Tallet er simuleret. Mærkatet siger det selv. */
+  sim: boolean;
+}) {
+  const gruppe = useRef<import("three").Group>(null);
+  const tag = useRef<HTMLDivElement>(null);
+  const v = useMemo(() => new Vector3(), []);
+  const { camera, size } = useThree();
+  useFrame(() => {
+    const r = scene.current;
+    if (!r || !gruppe.current || !tag.current) return;
+    v.set(pos[0], pos[1], pos[2]).project(camera);
+    const x = ((v.x + 1) / 2) * size.width;
+    const y = ((1 - v.y) / 2) * size.height;
+    const inde = v.z < 1 && x > r.left + 50 && x < r.right - 50 && y > r.top + 30 && y < r.bottom - 10;
+    gruppe.current.visible = inde;
+    tag.current.style.opacity = inde ? "1" : "0";
+  });
+  const hoved = m.kanaler.find((k) => k.value !== null);
+  const tilstand = m.alarm ? "alarm" : m.koerer === false ? "staar" : m.koerer ? "koerer" : "ukendt";
+  // Maskinen i fokus får ikke flere rækker her — dens tal står i fokuspanelet,
+  // og et stort mærkat midt i scenen ville støde ind i overskriften.
+  const vis = hoved ? [hoved] : [];
+  return (
+    <group position={pos} ref={gruppe}>
+      <Line points={[[0, -2.6, 0], [0, -0.3, 0]]} color={tilstand === "koerer" ? "#5fc4a9" : tilstand === "ukendt" ? "#2b3936" : "#e0705f"} lineWidth={1} transparent opacity={0.7} />
+      <Html center zIndexRange={[30, 0]} className="h3-wrap">
+        <div ref={tag} className={`h3-tag t-${tilstand}${fokus ? " is-fokus" : ""}`}>
+          <div className="h3-head">
+            <span className="h3-dot" />
+            <span className="h3-navn">{m.kort}</span>
+            {m.koerer === false && <span className="h3-stop">Stop</span>}
+            {sim && <span className="h3-sim">Sim</span>}
+          </div>
+          {vis.map((k) => (
+            <div key={k.spec.id} className={`h3-row${k.alarm ? " is-alarm" : ""}`}>
+              <span className="h3-lbl">{k.spec.label}</span>
+              <span className="h3-val">{fmt(k.value, k.spec.decimaler)}<i>{k.spec.unit}</i></span>
+            </div>
+          ))}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+/** Hvilke maskiner der får et mærkat. Alle ville drukne scenen. */
+function vaelgMaerkater(billede: TelemetriBillede, fokus: string | null): MaskinLaesning[] {
+  return billede.maskiner.filter((m) => {
+    if (!m.kanaler.some((k) => k.value !== null)) return false;
+    if (m.id === fokus || m.alarm || m.koerer === false) return true;
+    // Det, driften kigger efter først: slibningen og kastebordene.
+    return /jet|kb[-\s]|påslag/i.test(m.navn);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Kameraet
+
+function Kamera({ layout, fokus, still }: { layout: Layout; fokus: string | null; still: boolean }) {
+  const { camera, gl } = useThree();
+  const kig = useRef(new Vector3(...layout.center));
+  const oenske = useMemo(() => new Vector3(), []);
+  const maal = useMemo(() => new Vector3(), []);
+  const bruger = useRef({ az: 0, zoom: 1, ned: false, x: 0 });
+
+  useEffect(() => {
+    const el = gl.domElement;
+    const ned = (e: PointerEvent) => { bruger.current.ned = true; bruger.current.x = e.clientX; };
+    const op = () => { bruger.current.ned = false; };
+    const flyt = (e: PointerEvent) => {
+      if (!bruger.current.ned) return;
+      bruger.current.az -= (e.clientX - bruger.current.x) * 0.004;
+      bruger.current.az = Math.max(-1.1, Math.min(1.1, bruger.current.az));
+      bruger.current.x = e.clientX;
+    };
+    const hjul = (e: WheelEvent) => {
+      bruger.current.zoom = Math.max(0.55, Math.min(1.5, bruger.current.zoom * (1 + e.deltaY * 0.0012)));
+    };
+    el.addEventListener("pointerdown", ned);
+    addEventListener("pointerup", op);
+    addEventListener("pointercancel", op);
+    addEventListener("pointermove", flyt);
+    el.addEventListener("wheel", hjul, { passive: true });
+    return () => {
+      el.removeEventListener("pointerdown", ned);
+      removeEventListener("pointerup", op);
+      removeEventListener("pointercancel", op);
+      removeEventListener("pointermove", flyt);
+      el.removeEventListener("wheel", hjul);
+    };
+  }, [gl]);
+
+  useFrame(({ clock }, dt) => {
+    const t = still ? 0 : clock.elapsedTime;
+    const m = fokus ? layout.byId.get(fokus) : undefined;
+    const [cx, , cz] = layout.center;
+    // Overblikket skal rumme hele linjen mellem panelerne. Fokus sætter
+    // maskinen midt i scenen — mærkatet udvides ikke, så overskriften over
+    // den har plads.
+    if (m) maal.set(m.pos[0], m.size.h * 0.5 + 1.5, m.pos[2]);
+    else maal.set(cx, 2, cz);
+
+    const az = Math.sin(t * 0.045) * 0.42 + bruger.current.az;
+    const R = (m ? 52 : 112) * bruger.current.zoom;
+    const H = (m ? 27 : 57) * bruger.current.zoom;
+    oenske.set(maal.x + Math.sin(az) * R, H, maal.z + Math.cos(az) * R);
+
+    const k = still ? 1 : 1 - Math.exp(-dt * (m ? 1.1 : 0.8));
+    camera.position.lerp(oenske, k);
+    kig.current.lerp(maal, still ? 1 : 1 - Math.exp(-dt * 1.4));
+    camera.lookAt(kig.current);
+  });
+  return null;
 }
 
 /** Måler frametiden og skruer ned én gang, hvis maskinen ikke kan følge med. */
@@ -152,7 +604,6 @@ function Governor({ onSlow }: { onSlow: () => void }) {
   const start = useRef(0);
   const frames = useRef(0);
   const done = useRef(false);
-
   useFrame(() => {
     if (done.current) return;
     const now = performance.now();
@@ -161,38 +612,112 @@ function Governor({ onSlow }: { onSlow: () => void }) {
     const elapsed = now - start.current;
     if (elapsed < MAALEVINDUE_MS) return;
     done.current = true;
-    const avg = elapsed / frames.current;
-    if (avg > FRAMETID_GRAENSE_MS) onSlow();
+    if (elapsed / frames.current > FRAMETID_GRAENSE_MS) onSlow();
   });
   return null;
 }
 
-export function Hologram({ data, ot, still }: {
+function Effekter() {
+  const aberration = useMemo(() => new Vector2(0.0007, 0.0005), []);
+  return (
+    <EffectComposer multisampling={4}>
+      <Bloom mipmapBlur intensity={1.25} luminanceThreshold={0.16} luminanceSmoothing={0.35} radius={0.72} />
+      <ChromaticAberration offset={aberration} radialModulation modulationOffset={0.35} blendFunction={BlendFunction.NORMAL} />
+      <Noise opacity={0.045} premultiply blendFunction={BlendFunction.SCREEN} />
+      <Vignette offset={0.22} darkness={0.82} />
+    </EffectComposer>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus, skanning }: {
   data: LineData;
   ot: OtLayout | null;
-  /** prefers-reduced-motion: stillbillede, ingen bane. */
+  /** prefers-reduced-motion: stillbillede. Tilstande vises stadig. */
   still: boolean;
+  billede: TelemetriBillede;
+  /** Maskinen, kameraet er på besøg hos. null er overblikket. */
+  fokus: string | null;
+  /** Kædevagten kører. Skanningen løber. */
+  skanning: boolean;
 }) {
   const [budget, setBudget] = useState(PUNKT_BUDGET);
   const halved = useRef(false);
-
+  const layout = useMemo(() => layoutLine(data), [data]);
   const cloud = useMemo(() => buildHologram(data, ot, budget), [data, ot, budget]);
-  const center = useMemo(() => layoutLine(data).center, [data]);
+  const ids = useMemo(() => cloud.machines.map((m) => m.id), [cloud]);
+  const tele = useMemo(() => new Map(billede.maskiner.map((m) => [m.id, m])), [billede]);
+
+  // Maskinernes tilstand, som shaderne læser den. Simuleret telemetri vinder;
+  // uden den er det signalkæden, der afgør, som resten af HUD'en.
+  const state = useMemo(() => {
+    const arr = new Float32Array(MAX_MASKINER);
+    cloud.machines.forEach((m, i) => {
+      const t = tele.get(m.id);
+      if (billede.simuleret && t) arr[i] = t.alarm ? 4 : t.koerer ? 2 : 3;
+      else arr[i] = m.state === "paa-plads" ? 2 : m.state === "test" ? 1 : 0;
+    });
+    return arr;
+  }, [cloud, tele, billede.simuleret]);
+
+  // Strømmen. I fremskrivningen løber den mellem maskiner, der begge kører.
+  // Ellers kun hvor flow er målt, og kun når måleren siger, at der løber noget.
+  const kanter = useMemo(() => {
+    const flow = billede.flowPct;
+    const fart = flow === null ? 0 : Math.min(1.6, flow / 92) * 0.32;
+    if (billede.simuleret) {
+      return data.edges.map((e) => {
+        const a = tele.get(e.from);
+        const b = tele.get(e.to);
+        return a?.koerer && b?.koerer ? fart : 0;
+      });
+    }
+    const maalt = new Set(flowEdgesFor(data, layout, ot).map((e) => `${e.from}>${e.to}`));
+    return data.edges.map((e) =>
+      maalt.has(`${e.from}>${e.to}`) ? (flow !== null && flow > KOERER_OVER_PCT ? fart : 0) : null,
+    );
+  }, [billede, tele, data, layout, ot]);
+
+  const maerkater = useMemo(() => vaelgMaerkater(billede, fokus), [billede, fokus]);
+
+  // Hvor scenen er på skærmen. Måles igen ved ændret størrelse og løbende
+  // under opstarten, hvor panelerne glider ind.
+  const scene = useRef<DOMRect | null>(null);
+  useEffect(() => {
+    const maal = () => { scene.current = document.querySelector(".hud-stage")?.getBoundingClientRect() ?? null; };
+    maal();
+    const id = setInterval(maal, 1000);
+    addEventListener("resize", maal);
+    return () => { clearInterval(id); removeEventListener("resize", maal); };
+  }, []);
 
   return (
     <div className="holo" aria-hidden>
       <Canvas
-        dpr={[1, 1.6]}
-        gl={{ antialias: false, powerPreference: "high-performance" }}
-        camera={{ fov: 32, near: 1, far: 600, position: [center[0], 64, center[2] + 118] }}
+        dpr={[1, 1.75]}
+        gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
+        camera={{ fov: 34, near: 0.5, far: 500, position: [layout.center[0], 40, 80] }}
       >
-        <color attach="background" args={["#050807"]} />
-        <Cloud data={cloud} size={620} />
-        <SlowOrbit center={center} still={still} />
+        <color attach="background" args={["#020504"]} />
+        <fog attach="fog" args={["#020504", 70, 190]} />
+        <Cloud data={cloud} state={state} still={still} />
+        <Silhouetter layout={layout} ids={ids} state={state} still={still} />
+        <Fodspor layout={layout} ids={ids} state={state} still={still} />
+        <Baner data={data} layout={layout} />
+        <Stroem data={data} layout={layout} kanter={kanter} still={still} />
+        {!still && <Skanning layout={layout} aktiv={skanning} />}
+        {maerkater.map((m) => {
+          const pm = layout.byId.get(m.id);
+          if (!pm) return null;
+          const top = formTop(formFor({ kind: pm.kind, name: pm.name, size: pm.size, wIdCount: pm.wIds.length }));
+          return <Maerkat key={m.id} m={m} pos={[pm.pos[0], top + 3, pm.pos[2]]} fokus={m.id === fokus} scene={scene} sim={billede.simuleret} />;
+        })}
+        <Kamera layout={layout} fokus={fokus} still={still} />
+        <Effekter />
         {!still && (
           <Governor
             onSlow={() => {
-              // Kun én gang. Bliver den ved, jager vi vores egen hale.
               if (halved.current) return;
               halved.current = true;
               setBudget((b) => Math.round(b / 2));
@@ -202,4 +727,4 @@ export function Hologram({ data, ot, still }: {
       </Canvas>
     </div>
   );
-}
+});

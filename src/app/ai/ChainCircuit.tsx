@@ -1,5 +1,6 @@
 "use client";
 import type { HudLink, HudModel } from "../../lib/ai-hud";
+import type { TelemetriBillede } from "../../lib/telemetri";
 
 /**
  * Kæden fra måler til agenter, som et bånd af instrumenter.
@@ -24,15 +25,15 @@ import type { HudLink, HudModel } from "../../lib/ai-hud";
 
 // Båndet er bredt og lavt: det ligger på tværs i bunden af skærmen. Formatet
 // er valgt, så svg'en kan skalere med fuld bredde uden at blive brevkasset.
-const W = 1600;
-const H = 232;
+const W = 1800;
+const H = 200;
 /** Knudens halve bredde. Segmenterne går fra kant til kant. */
-const NODE = 88;
+const NODE = 92;
 /** Luft inden for knudens kant, så tal ikke rører stregen. */
 const PAD = 10;
 
-const BOX_TOP = 30;
-const BOX_H = 172;
+const BOX_TOP = 24;
+const BOX_H = 158;
 /** Første aflæsning sidder under overskriften og dens skillestreg. */
 const FIRST_ROW = BOX_TOP + 62;
 const ROW_H = 17;
@@ -44,15 +45,41 @@ interface Node {
   /** Endestationen: agenterne. Den er ikke et led i kæden. */
   terminal?: boolean;
   readings: { label: string; value: string }[];
+  /** Tallene er simulerede. Instrumentet skal sige det. */
+  sim?: boolean;
 }
 
-function layoutNodes(model: HudModel): Node[] {
+const mio = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2).replace(".", ",")} mio` : n.toLocaleString("da-DK");
+
+/**
+ * Kædens egne tal pr. led, når der er nogen. I dag er der ingen — kæden
+ * står ikke — så kun fremskrivningen har dem, og de er simulerede.
+ */
+function kaedeTal(id: string, kaede: TelemetriBillede["kaede"]): { label: string; value: string }[] {
+  if (!kaede) return [];
+  if (id === "kobler") return [{ label: "Poll", value: `${kaede.pollMs} ms` }];
+  if (id === "edge") return [{ label: "Rækker/s", value: String(kaede.raekkerPrS) }];
+  if (id === "mssql") {
+    return [
+      { label: "Skrevet", value: mio(kaede.skrevet) },
+      { label: "Seneste", value: `${kaede.senesteMs} ms` },
+    ];
+  }
+  return [];
+}
+
+function layoutNodes(model: HudModel, kaede: TelemetriBillede["kaede"]): Node[] {
   const all: Omit<Node, "x">[] = [
-    ...model.links.map((link) => ({
-      label: link.label,
-      link,
-      readings: link.instrument.readings,
-    })),
+    ...model.links.map((link) => {
+      const ekstra = kaedeTal(link.id, kaede);
+      return {
+        label: link.label,
+        link,
+        readings: [...link.instrument.readings, ...ekstra],
+        sim: ekstra.length > 0,
+      };
+    }),
     {
       label: "Agenter",
       terminal: true,
@@ -129,7 +156,7 @@ function Slots({ x, y, slots }: {
   );
 }
 
-function Instrument({ n, reading }: { n: Node; reading?: string }) {
+function Instrument({ n, reading, sim }: { n: Node; reading?: string; sim?: boolean }) {
   const tone = n.terminal ? "moerk" : n.link!.tone;
   const broken = !!n.link?.broken;
   const inst = n.link?.instrument;
@@ -159,7 +186,7 @@ function Instrument({ n, reading }: { n: Node; reading?: string }) {
       {reading && (
         <>
           <text x={left} y={FIRST_ROW + 4} className="cc-live-value">{reading}</text>
-          <text x={right} y={FIRST_ROW + 4} className="cc-sim">SIM</text>
+          {sim !== false && <text x={right} y={FIRST_ROW + 4} className="cc-sim">SIM</text>}
         </>
       )}
 
@@ -175,14 +202,28 @@ function Instrument({ n, reading }: { n: Node; reading?: string }) {
       )}
 
       {venter && (
-        <text x={left} y={BOX_TOP + BOX_H - 12} className="cc-waits">Venter · {venter}</text>
+        <>
+          <text x={left} y={BOX_TOP + BOX_H - 34} className="cc-rd-label">Venter</text>
+          {ombryd(venter, 29).map((linje, i) => (
+            <text key={i} x={left} y={BOX_TOP + BOX_H - 21 + i * 12} className="cc-waits">{linje}</text>
+          ))}
+        </>
+      )}
+      {n.sim && !venter && (
+        <text x={right} y={BOX_TOP + BOX_H - 12} className="cc-sim">SIM</text>
       )}
     </g>
   );
 }
 
-export function ChainCircuit({ model, reading }: { model: HudModel; reading?: string }) {
-  const nodes = layoutNodes(model);
+export function ChainCircuit({ model, reading, kaede = null, sim }: {
+  model: HudModel;
+  reading?: string;
+  kaede?: TelemetriBillede["kaede"];
+  /** Er aflæsningen simuleret? Så mærkes den. */
+  sim?: boolean;
+}) {
+  const nodes = layoutNodes(model, kaede);
   const y = BOX_TOP + BOX_H / 2;
   if (nodes.length < 2) return null;
 
@@ -215,6 +256,7 @@ export function ChainCircuit({ model, reading }: { model: HudModel; reading?: st
             key={n.label}
             n={n}
             reading={n.link?.instrument.signalId ? reading : undefined}
+            sim={sim}
           />
         ))}
 
@@ -224,6 +266,25 @@ export function ChainCircuit({ model, reading }: { model: HudModel; reading?: st
       </svg>
     </div>
   );
+}
+
+/**
+ * Ombryd en tekst til højst to linjer af `bredde` tegn. SVG-tekst ombrydes
+ * ikke af sig selv, og et navn, der løber ud over instrumentets kant, ser
+ * ud som en fejl.
+ */
+function ombryd(tekst: string, bredde: number): string[] {
+  const linjer: string[] = [];
+  let cur = "";
+  for (const ord of tekst.split(" ")) {
+    const naeste = cur ? `${cur} ${ord}` : ord;
+    if (naeste.length > bredde && cur) { linjer.push(cur); cur = ord; }
+    else cur = naeste;
+  }
+  if (cur) linjer.push(cur);
+  if (linjer.length <= 2) return linjer;
+  const anden = linjer.slice(1).join(" ");
+  return [linjer[0], anden.length > bredde ? `${anden.slice(0, bredde - 1)}…` : anden];
 }
 
 /** Kortere navne i kasserne — den fulde tekst står i aria-labelen. */

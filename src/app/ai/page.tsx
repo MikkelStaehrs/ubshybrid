@@ -53,7 +53,9 @@ export default async function AiPage({
   // Samme variabel som kortet læser. Måleren aflæses på HUD'en, så man kan
   // se, at den svarer — og at intet af det når frem til en database endnu.
   const liveSource = process.env.LIVE_SOURCE === "api" ? "api" : "mock";
+  // ?fokus=<W-ID> låser kameraet på én maskine — "lad os se på 743" i et møde.
+  const fokusWid = typeof params.fokus === "string" ? params.fokus.replace(/^w-?/i, "") : undefined;
   return (
-    <HudView model={model} line={line} ot={ot} liveSource={liveSource} measure={measure} />
+    <HudView model={model} line={line} ot={ot} liveSource={liveSource} measure={measure} fokusWid={fokusWid} />
   );
 }
