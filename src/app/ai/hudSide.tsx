@@ -43,6 +43,9 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
   const liveSource = process.env.LIVE_SOURCE === "api" ? "api" : "mock";
   // ?fokus=<W-ID> låser kameraet på én maskine — "lad os se på 743" i et møde.
   const fokusWid = typeof params.fokus === "string" ? params.fokus.replace(/^w-?/i, "") : undefined;
+  // ?flaskehals=1 holder en flaskehals i kæden fremme — til at vise, hvordan
+  // en ser ud, uden at vente på den næste. Kun i fremskrivningen.
+  const flaskehals = fremskriv && params.flaskehals === "1";
 
   return (
     <HudView
@@ -52,6 +55,7 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
       liveSource={liveSource}
       measure={measure}
       fokusWid={fokusWid}
+      flaskehals={flaskehals}
     />
   );
 }

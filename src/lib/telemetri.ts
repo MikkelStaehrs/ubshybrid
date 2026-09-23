@@ -15,7 +15,7 @@
 // Simulatoren er ren: ingen React, ingen Date.now() inde i regnestykket,
 // seedet tilfældighed. Samme seed og samme skridt giver de samme tal, og
 // det er det, der gør den testbar.
-import { AFVIGELSER, ANALYSE, HAL, KANALER, type KanalSpec } from "../../data/fremskrivning";
+import { AFVIGELSER, ANALYSE, FLASKEHALS, HAL, KAEDE, KANALER, type KanalSpec } from "../../data/fremskrivning";
 import { maFromPercent } from "./live-source";
 import type { Layout, PlacedMachine } from "./layout";
 
@@ -50,6 +50,46 @@ export interface MaskinLaesning {
   alarm: boolean;
 }
 
+export type KaedeLedId = "kobler" | "edge" | "mssql";
+
+/** Ét led i kæden, målt mod sin egen kapacitet. */
+export interface KaedeLed {
+  id: KaedeLedId;
+  /** Efterspørgsel over kapacitet. Over 1 er leddet en flaskehals. */
+  udnyttelse: number;
+  /** Hvor mange signaler leddet kan bære ved sin nuværende kapacitet. */
+  pladsTil: number;
+}
+
+/** Kædens egne tal. Kun når kæden står — altså kun i fremskrivningen i dag. */
+export interface KaedeTal {
+  signaler: number;
+  pollMs: number;
+  cyklusMs: number;
+  raekkerPrS: number;
+  /** Databasens kapacitet lige nu, og i normal drift. */
+  dbKapacitet: number;
+  dbNormal: number;
+  /** Rækker, der venter i edge's buffer på at blive skrevet. */
+  koe: number;
+  buffer: number;
+  /** Hvor langt databasen er bagud. */
+  forsinkelseS: number;
+  /** Rækker tabt, fordi bufferen var fuld. */
+  tabt: number;
+  /** Samlet siden start. Til regnskabet: modtaget = skrevet + kø + tabt. */
+  modtaget: number;
+  skrevetIalt: number;
+  /** Tæller til visning. */
+  skrevet: number;
+  senesteMs: number;
+  /** Leddet, der ikke kan følge med. null når alle kan. */
+  flaskehals: KaedeLedId | null;
+  /** Hvorfor, når der er en grund. */
+  aarsag: string | null;
+  led: KaedeLed[];
+}
+
 export interface TelemetriBillede {
   t: number;
   /** Alt her er opdigtet, når den er true. Fladen skal mærke det. */
@@ -62,7 +102,7 @@ export interface TelemetriBillede {
   flowMa: number | null;
   analyse: { lane: string; andele: number[] | null; alarm: boolean; proeveT: number | null }[];
   /** Kædens egne tal. null når kæden ikke står. */
-  kaede: { pollMs: number; raekkerPrS: number; skrevet: number; senesteMs: number } | null;
+  kaede: KaedeTal | null;
   /** Nyeste først. */
   haendelser: Haendelse[];
   /** Andel af maskintiden, maskinerne har kørt. null uden driftssignaler. */
@@ -220,7 +260,13 @@ export interface Simulator {
  * stedet for at flimre. Når maskinen står, søger den mod sin hvileværdi —
  * hastigheden mod nul, motortemperaturen langsomt mod hallens.
  */
-export function simulator(layout: Layout, seed = 743, stopEfterS = SIM.stopEfterS): Simulator {
+export function simulator(
+  layout: Layout,
+  seed = 743,
+  stopEfterS = SIM.stopEfterS,
+  /** Hold flaskehalsen fremme hele tiden — til at vise den i et møde. */
+  tvungenFlaskehals = false,
+): Simulator {
   const r = rng(seed);
   const maskiner: MaskinTilstand[] = layout.machines
     .filter((m) => m.kind !== "person")
@@ -245,7 +291,16 @@ export function simulator(layout: Layout, seed = 743, stopEfterS = SIM.stopEfter
   let sensorfejlTil: number | null = null;
   let analyse = ["N", "S"].map((lane) => ({ lane, andele: [...ANALYSE.andele], alarm: false, proeveT: null as number | null }));
   let naesteAnalyse = 0;
-  let skrevet = 1_184_000;
+  // Kæden. Tælleren til visning starter et sted, regnskabet starter i nul.
+  const skrevetStart = 1_184_000;
+  let modtaget = 0;
+  let skrevetIalt = 0;
+  let koe = 0;
+  let tabt = 0;
+  let foersteT: number | null = null;
+  let iEpisode = false;
+  let alarmeret = false;
+  let indhentFra: number | null = null;
   let stop = 0;
   let sidsteVagt = -1;
   const log: Haendelse[] = [];
@@ -354,16 +409,93 @@ export function simulator(layout: Layout, seed = 743, stopEfterS = SIM.stopEfter
     }
 
     // --- Kæden --------------------------------------------------------------
+    // Hvert signal gemmes fire gange i sekundet. Rækkerne går gennem
+    // kobleren og edge og skal skrives i databasen. Kan databasen ikke
+    // følge med, hober de sig op i edge's buffer; er bufferen fuld, tabes de.
     const signaler = maskiner.reduce((n, s) => n + s.kanaler.length, 0) + hal.length + 1;
-    const raekkerPrS = signaler * 4;
-    skrevet += raekkerPrS * dt;
+    const raekkerPrS = signaler * KAEDE.proeverPrS;
+    const forespoergsler = Math.ceil((signaler * KAEDE.registreProSignal) / KAEDE.registreProForespoergsel);
+    const pollMs = forespoergsler * KAEDE.msProForespoergsel + Math.round(Math.abs(gauss(r)) * 2);
+
+    // Episoden: databasen skriver langsommere en periode.
+    if (foersteT === null) foersteT = nu;
+    const siden = (nu - foersteT) / 1000 - FLASKEHALS.foersteS;
+    const episode = tvungenFlaskehals || (siden >= 0 && siden % FLASKEHALS.hverS < FLASKEHALS.varighedS);
+    const dbKapacitet = KAEDE.dbKapacitet * (episode ? FLASKEHALS.kapacitetAndel : 1);
+
+    if (episode && !iEpisode) {
+      skriv({ t: nu, hvor: "MSSQL", tekst: `Skriver langsommere · ${FLASKEHALS.aarsag}`, niveau: "advarsel" });
+    }
+    if (!episode && iEpisode) {
+      skriv({ t: nu, hvor: "MSSQL", tekst: "Kapacitet tilbage", niveau: "info" });
+      indhentFra = nu;
+    }
+    iEpisode = episode;
+
+    const ind = raekkerPrS * dt;
+    modtaget += ind;
+    // Databasen skriver det, der kommer, plus det, der venter — op til loftet.
+    const skrives = Math.min(koe + ind, dbKapacitet * dt);
+    skrevetIalt += skrives;
+    koe += ind - skrives;
+    if (koe > KAEDE.buffer) {
+      if (tabt === 0) skriv({ t: nu, hvor: "Edge", tekst: "Buffer fuld · data tabes", niveau: "alarm" });
+      tabt += koe - KAEDE.buffer;
+      koe = KAEDE.buffer;
+    }
+    // Hvor langt bagud: den ældste række i køen, ved den fart databasen skriver.
+    const forsinkelseS = koe > 0.5 ? koe / dbKapacitet : 0;
+
+    // Kædevagten: kan jeg stole på data lige nu? Ikke hvis de er forsinkede.
+    if (forsinkelseS > FLASKEHALS.forsinkelseAlarmS && !alarmeret) {
+      alarmeret = true;
+      skriv({ t: nu, hvor: "Kædevagt", tekst: `Data ${Math.round(forsinkelseS)} s forsinket`, niveau: "alarm" });
+    }
+    if (koe <= 0.5 && indhentFra !== null) {
+      skriv({ t: nu, hvor: "MSSQL", tekst: `Indhentet · ${Math.round((nu - indhentFra) / 1000)} s`, niveau: "info" });
+      indhentFra = null;
+      alarmeret = false;
+    }
 
     // Kædevagten kører hvert kvarter på uret — samme kadence som i agents.ts.
+    // Den melder det, den ser: svarer leddene, men halter data, er det ikke
+    // "kæden svarer" — så kan man ikke stole på tallene lige nu.
     const kvarter = Math.floor(nu / 900_000);
     if (kvarter !== sidsteVagt) {
-      if (sidsteVagt !== -1) skriv({ t: nu, hvor: "Kædevagt", tekst: "Kæden svarer", niveau: "info" });
+      if (sidsteVagt !== -1) {
+        skriv(forsinkelseS >= 1
+          ? { t: nu, hvor: "Kædevagt", tekst: `Kæden svarer · ${Math.round(forsinkelseS)} s bagud`, niveau: "advarsel" }
+          : { t: nu, hvor: "Kædevagt", tekst: "Kæden svarer", niveau: "info" });
+      }
       sidsteVagt = kvarter;
     }
+
+    const led: KaedeLed[] = [
+      {
+        id: "kobler",
+        udnyttelse: pollMs / KAEDE.cyklusMs,
+        pladsTil: Math.floor(
+          (KAEDE.cyklusMs / KAEDE.msProForespoergsel) * KAEDE.registreProForespoergsel / KAEDE.registreProSignal,
+        ),
+      },
+      {
+        id: "edge",
+        udnyttelse: raekkerPrS / KAEDE.edgeKapacitet,
+        pladsTil: Math.floor(KAEDE.edgeKapacitet / KAEDE.proeverPrS),
+      },
+      {
+        id: "mssql",
+        // Efterspørgslen er det, der kommer ind — ikke det, der når at blive
+        // skrevet. Ellers ville en flaskehals aldrig kunne ses som en.
+        udnyttelse: raekkerPrS / dbKapacitet,
+        pladsTil: Math.floor(dbKapacitet / KAEDE.proeverPrS),
+      },
+    ];
+    // Flaskehalsen er det led, der ikke kan følge med — og står der en kø,
+    // er det den, selv om kapaciteten lige er kommet tilbage.
+    const overbelastet = led.filter((l) => l.udnyttelse >= 1).sort((a, b) => b.udnyttelse - a.udnyttelse)[0];
+    const flaskehals = overbelastet?.id ?? (koe > 0.5 ? "mssql" : null);
+
 
     const koerende = maskiner.filter((s) => s.stopTil === null).length;
     const tid = maskiner.reduce((n, s) => n + s.totalMs, 0);
@@ -392,10 +524,23 @@ export function simulator(layout: Layout, seed = 743, stopEfterS = SIM.stopEfter
       flowMa: fejl ? 3.2 + r() * 0.2 : maFromPercent(flow),
       analyse,
       kaede: {
-        pollMs: 250 + Math.round(gauss(r) * 3),
+        signaler,
+        pollMs,
+        cyklusMs: KAEDE.cyklusMs,
         raekkerPrS,
-        skrevet: Math.floor(skrevet),
-        senesteMs: Math.round(r() * 250),
+        dbKapacitet,
+        dbNormal: KAEDE.dbKapacitet,
+        koe: Math.round(koe),
+        buffer: KAEDE.buffer,
+        forsinkelseS,
+        tabt: Math.round(tabt),
+        modtaget,
+        skrevetIalt,
+        skrevet: Math.floor(skrevetStart + skrevetIalt),
+        senesteMs: Math.round(forsinkelseS * 1000 + r() * 250),
+        flaskehals,
+        aarsag: episode ? FLASKEHALS.aarsag : null,
+        led,
       },
       haendelser: [...log],
       oppetidPct: tid > 0 ? (koert / tid) * 100 : null,

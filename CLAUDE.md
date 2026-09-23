@@ -221,6 +221,31 @@ I den rigtige visning er der ingen simulator. Maskinerne har ingen tal, og
 panelerne siger "Afventer signal". Kun flowet kommer ind, fra den samme
 LiveSource som kortet.
 
+### Flaskehalse i kæden
+
+Status og ydelse er to forskellige akser. Status siger, om et led *findes*
+— de tre ord, PÅ PLADS, TEST, AFVENTER. Ydelse siger, om det *kan følge
+med*. Et led kan være på plads og stadig være en flaskehals, så en
+flaskehals skifter aldrig leddets status. Den får sit eget mærke over
+instrumentet, en udnyttelsesbjælke og en kø på banen foran sig.
+
+Hvert led har en kapacitet, sat i `KAEDE` i `data/fremskrivning.ts`, og
+viser **plads til N signaler** ved den. Det tal er svaret på, *hvor* en
+flaskehals ville opstå: det led med plads til færrest signaler rammer loftet
+først, når anlægget vokser. Med de nuværende skøn er det databasen.
+
+Demoen viser også, *hvordan* en ser ud: med jævne mellemrum skriver
+databasen langsommere (`FLASKEHALS`), rækkerne hober sig op i edge's
+buffer, data bliver forsinket, og Kædevagten melder det. Bagefter indhenter
+kæden køen. Er data forsinkede, er det overskriften — så er alt andet på
+skærmen forældet. `?flaskehals=1` holder den fremme til et møde.
+
+**Ingen række forsvinder i regnestykket.** Det, der kommer ind, er skrevet,
+i kø eller — kun når bufferen er fuld — tabt. Regnskabet har en test.
+
+Kædevagtens kvartersrunde siger ikke "Kæden svarer", når data halter.
+Teknisk sandt, og vildledende.
+
 **Opdigtede tags kan kendes.** De hedder `X…` og har modellen "Ikke valgt" —
 de må ikke kunne forveksles med et tag, nogen har tildelt.
 
@@ -358,6 +383,10 @@ har sagt tallet.
   summer til 100 %; BIGF/BIGH/NOTS som andele af den tunge side. Begge dele,
   og alle driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
   driften, før nogen tager tallene for pålydende.
+- **Kædens kapaciteter er skøn.** Kobleren, edge-maskinen og databasen er ikke
+  valgt. Med de nuværende tal i `KAEDE` er databasen loftet ved omkring 225
+  signaler — tjek det, når udstyret vælges, for det er dér, anlægget ville
+  løbe tør først.
 - **Den tværgående agent venter på linje nr. 2.** Der er ikke noget at gå på
   tværs af endnu.
 - **Fase 4 er et Python-script på serveren**, der henter `/api/context`,

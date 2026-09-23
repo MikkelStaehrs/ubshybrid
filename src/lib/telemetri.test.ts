@@ -219,3 +219,105 @@ describe("alarmerne er værd at lytte til", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Kæden og flaskehalsen
+
+describe("kædens regnskab", () => {
+  it("ingen række forsvinder: modtaget = skrevet + i kø + tabt", () => {
+    for (const b of forloeb.filter((_, i) => i % 400 === 0)) {
+      const k = b.kaede!;
+      const rest = k.modtaget - k.skrevetIalt - k.koe - k.tabt;
+      assert.ok(Math.abs(rest) < 1.5, `regnskabet mangler ${rest} rækker ved ${b.t - T0} ms`);
+    }
+  });
+
+  it("i normal drift kan alle led følge med, og der er ingen kø", () => {
+    // Første episode kommer efter FLASKEHALS.foersteS. Før den er alt roligt.
+    const roligt = forloeb.slice(0, 4 * 80);
+    for (const b of roligt) {
+      const k = b.kaede!;
+      assert.equal(k.flaskehals, null);
+      assert.equal(k.koe, 0);
+      for (const l of k.led) assert.ok(l.udnyttelse < 1, `${l.id} er over loftet i ro`);
+    }
+  });
+
+  it("databasen er det led, der rammer loftet først, når anlægget vokser", () => {
+    // Det tal viser, hvor en flaskehals ville opstå: det led med plads til
+    // færrest signaler.
+    const k = forloeb[10].kaede!;
+    const faerrest = [...k.led].sort((a, b) => a.pladsTil - b.pladsTil)[0];
+    assert.equal(faerrest.id, "mssql");
+    assert.ok(k.signaler < faerrest.pladsTil, "anlægget er ikke over loftet i dag");
+  });
+});
+
+describe("flaskehalsen i demoen", () => {
+  const i = forloeb.findIndex((b) => b.kaede!.flaskehals !== null);
+
+  it("opstår, når databasen skriver langsommere, end rækkerne kommer", () => {
+    assert.ok(i > 0, "der kom ingen flaskehals");
+    const k = forloeb[i].kaede!;
+    assert.equal(k.flaskehals, "mssql");
+    assert.ok(k.dbKapacitet < k.raekkerPrS, "kapaciteten skal være under det, der kommer ind");
+    assert.ok(k.aarsag, "en flaskehals i demoen har en årsag");
+  });
+
+  it("køen og forsinkelsen vokser, så længe den står", () => {
+    const senere = forloeb[i + 4 * 30].kaede!;
+    assert.ok(senere.koe > forloeb[i].kaede!.koe);
+    assert.ok(senere.forsinkelseS > forloeb[i].kaede!.forsinkelseS);
+  });
+
+  it("Kædevagten melder, når data er forsinket", () => {
+    const slut = forloeb[forloeb.length - 1];
+    assert.ok(
+      slut.haendelser.some((h) => h.hvor === "Kædevagt" && h.niveau === "alarm" && /forsinket/.test(h.tekst)),
+      "Kædevagten sagde intet",
+    );
+  });
+
+  it("kæden indhenter køen bagefter", () => {
+    const efter = forloeb.slice(i).findIndex((b) => b.kaede!.flaskehals === null);
+    assert.ok(efter > 0, "køen blev aldrig indhentet");
+    assert.equal(forloeb[i + efter].kaede!.koe, 0);
+  });
+
+  it("siger aldrig 'kæden svarer' uden at nævne, at data halter", () => {
+    // Den fejl, reglen kom af: kvartersrunden sagde "Kæden svarer", mens
+    // data var 38 sekunder bagud. Teknisk sandt, og vildledende.
+    for (const b of forloeb) {
+      const h = b.haendelser[0];
+      if (!h || h.t !== b.t || h.tekst !== "Kæden svarer") continue;
+      assert.ok(b.kaede!.forsinkelseS < 1, `"Kæden svarer" med ${b.kaede!.forsinkelseS} s forsinkelse`);
+    }
+  });
+});
+
+describe("en flaskehals, der ikke går over", () => {
+  const sim = simulator(layout, 743, undefined, true);
+  const tvunget: TelemetriBillede[] = [];
+  for (let n = 0; n < 4 * 60 * 15; n++) tvunget.push(sim.skridt(DT, T0 + n * DT));
+
+  it("fylder bufferen, og først da tabes data", () => {
+    const slut = tvunget[tvunget.length - 1].kaede!;
+    assert.ok(slut.tabt > 0, "bufferen blev aldrig fuld på et kvarter");
+    for (const b of tvunget) {
+      const k = b.kaede!;
+      assert.ok(k.koe <= k.buffer, "køen voksede ud over bufferen");
+      if (k.koe < k.buffer) assert.equal(k.tabt, 0, "data tabt, før bufferen var fuld");
+      else break;
+    }
+  });
+
+  it("melder, når data begynder at gå tabt", () => {
+    const slut = tvunget[tvunget.length - 1];
+    assert.ok(slut.haendelser.some((h) => /Buffer fuld/.test(h.tekst) && h.niveau === "alarm"));
+  });
+
+  it("holder regnskabet også, når data tabes", () => {
+    const k = tvunget[tvunget.length - 1].kaede!;
+    assert.ok(Math.abs(k.modtaget - k.skrevetIalt - k.koe - k.tabt) < 1.5);
+  });
+});

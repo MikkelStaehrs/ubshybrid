@@ -56,9 +56,10 @@ const Afventer = ({ tekst = "Afventer signal" }: { tekst?: string }) => (
 /**
  * Det vigtigste lige nu, midt i scenen.
  *
- * Er kæden brudt, er det bruddet. Står den, er det det, der er galt i
- * anlægget: en alarm før et stop, et stop før ingenting. Kører alt, siger
- * den det — med flowet ved indgangen som bevis.
+ * Er kæden brudt, er det bruddet. Halter den, er det flaskehalsen — er data
+ * forsinkede, er alt andet på skærmen forældet, og det er vigtigere end én
+ * maskine. Ellers det, der er galt i anlægget: en alarm før et stop, et
+ * stop før ingenting. Kører alt, siger den det — med flowet som bevis.
  */
 export function Overskrift({ model, billede, still }: {
   model: HudModel;
@@ -67,13 +68,33 @@ export function Overskrift({ model, billede, still }: {
 }) {
   if (model.broken) return <Brud link={model.broken} tone={model.chainTone} still={still} />;
 
+  const k = billede.kaede;
+  if (k?.flaskehals && k.forsinkelseS >= 5) {
+    return (
+      <div className="hud-break tone-brud">
+        <p className="hb-kicker"><span className="hb-dot" aria-hidden />Flaskehals · {k.flaskehals.toUpperCase()}{billede.simuleret && <Sim />}</p>
+        <p className="hb-where">Data <Tal v={k.forsinkelseS} d={0} /> s bagud</p>
+        <p className="hb-next">
+          <span className="hb-next-label">Kø</span>
+          <strong><Tal v={k.koe} d={0} /> rækker</strong>
+          {k.aarsag && (
+            <>
+              <span className="hb-next-label">Årsag</span>
+              <strong>{k.aarsag}</strong>
+            </>
+          )}
+        </p>
+      </div>
+    );
+  }
+
   const alarm = billede.haendelser.find((h) => h.niveau === "alarm" && billede.t - h.t < 20_000);
   const staar = billede.maskiner.filter((m) => m.koerer === false);
 
   if (alarm) {
     return (
       <div className="hud-break tone-brud">
-        <p className="hb-kicker"><span className="hb-dot" aria-hidden />Alarm · {alarm.hvor}</p>
+        <p className="hb-kicker"><span className="hb-dot" aria-hidden />Alarm · {alarm.hvor}{billede.simuleret && <Sim />}</p>
         <p className="hb-where">{alarm.tekst}</p>
         <p className="hb-next"><span className="hb-next-label">{klok(alarm.t)}</span></p>
       </div>
@@ -82,7 +103,7 @@ export function Overskrift({ model, billede, still }: {
   if (staar.length > 0) {
     return (
       <div className="hud-break tone-brud is-stop">
-        <p className="hb-kicker"><span className="hb-dot" aria-hidden />{staar.length === 1 ? "Stoppet" : `${staar.length} stoppet`}</p>
+        <p className="hb-kicker"><span className="hb-dot" aria-hidden />{staar.length === 1 ? "Stoppet" : `${staar.length} stoppet`}{billede.simuleret && <Sim />}</p>
         <p className="hb-where">{staar.slice(0, 3).map((m) => m.kort).join(" · ")}</p>
         <p className="hb-next">
           <span className="hb-next-label">Kører</span>
@@ -93,7 +114,7 @@ export function Overskrift({ model, billede, still }: {
   }
   return (
     <div className={`hud-break is-whole tone-${billede.simuleret ? "drift" : model.chainTone}`}>
-      <p className="hb-kicker">{billede.simuleret ? "Alle maskiner kører" : "Kæden er hel"}</p>
+      <p className="hb-kicker">{billede.simuleret ? "Alle maskiner kører" : "Kæden er hel"}{billede.simuleret && <Sim />}</p>
       <p className="hb-where">
         {billede.flowPct === null ? "Linjen kører" : <><Tal v={billede.flowPct} d={1} /> %</>}
       </p>

@@ -482,7 +482,9 @@ function Skanning({ layout, aktiv }: { layout: Layout; aktiv: boolean }) {
 // ---------------------------------------------------------------------------
 // Mærkaterne
 
-const fmt = (v: number | null, d: number) => (v === null ? "—" : v.toFixed(d).replace(".", ","));
+/** Samme talformat som panelerne: dansk, med tusindtalsseparator. */
+const fmt = (v: number | null, d: number) =>
+  v === null ? "—" : v.toLocaleString("da-DK", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /**
  * Et mærkat skal kun stå inde i scenen. Bag et panel skinner det igennem og

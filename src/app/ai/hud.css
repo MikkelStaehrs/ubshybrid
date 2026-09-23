@@ -590,6 +590,7 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
+  flex-wrap: wrap;
   margin: 0;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -749,8 +750,43 @@
 .cc-status { fill: var(--t-lys); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-anchor: end; text-transform: uppercase; }
 .cc-node.tone-moerk .cc-status { fill: var(--hud-dim); }
 .cc-rule { stroke: var(--hud-line-2); stroke-width: 1; }
-.cc-rd-label { fill: var(--hud-dim); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; }
-.cc-rd-value { fill: var(--hud-ink); font-family: var(--font-mono); font-size: 10.5px; text-anchor: end; }
+/* Kæden skaleres ned til skærmens bredde, så teksten skal være større i
+   svg'en, end den skal læses — ellers bliver den under 8 px på en 1920-skærm. */
+.cc-rd-label { fill: var(--hud-muted); font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; }
+.cc-rd-value { fill: var(--hud-ink); font-family: var(--font-mono); font-size: 11.5px; text-anchor: end; }
+.cc-rd-value.rd-test { fill: var(--hud-test-lys); }
+.cc-rd-value.rd-brud { fill: var(--hud-brud); }
+
+/* Udnyttelsen. Grøn med luft, rav tæt på loftet, rød over det. */
+.cc-udny { --u: var(--hud-drift-lys); }
+.cc-udny.u-test { --u: var(--hud-test-lys); }
+.cc-udny.u-brud { --u: var(--hud-brud); }
+.cc-udny-tal { fill: var(--u); font-family: var(--font-mono); font-size: 11.5px; text-anchor: end; }
+.cc-udny-spor { fill: var(--hud-moerk); }
+.cc-udny-fyld { fill: var(--u); }
+
+/* Flaskehalsens mærke over kassen. Det banker, mens køen vokser. */
+.cc-flag-bg { fill: rgba(40, 8, 5, 0.9); stroke: var(--hud-brud); stroke-width: 1; }
+.cc-flag-tekst {
+  fill: var(--hud-brud);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-anchor: middle;
+  text-transform: uppercase;
+}
+.cc-flag.is-flaskehals { animation: flag 1.1s steps(2) infinite; }
+@keyframes flag { 50% { opacity: 0.45; } }
+.cc-flag.is-indhenter .cc-flag-bg { fill: rgba(40, 28, 5, 0.9); stroke: var(--hud-test); }
+.cc-flag.is-indhenter .cc-flag-tekst { fill: var(--hud-test-lys); }
+/* Flaskehalsens ramme: rød, fordi den ikke kan følge med — men uden
+   bruddets tykke streg og bankende glød. Mærket over kassen siger resten. */
+.cc-node.is-flaskehals .cc-box { stroke: var(--hud-brud); stroke-width: 1.5; }
+
+/* Køen foran flaskehalsen: én blok pr. 500 ventende rækker. */
+.cc-koe { fill: var(--hud-test-lys); opacity: 0.85; }
+.cc-seg.has-koe .cc-track { stroke: var(--hud-test); opacity: 0.7; }
 .cc-node.tone-moerk .cc-rd-value { fill: var(--hud-muted); }
 .cc-live-value { fill: var(--t-lys); font-family: var(--font-mono); font-size: 17px; font-variant-numeric: tabular-nums; }
 .cc-sim { fill: var(--hud-test-lys); font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; letter-spacing: 0.2em; text-anchor: end; }
@@ -762,7 +798,7 @@
 .cc-track { stroke: var(--hud-moerk); stroke-width: 2; }
 .cc-seg.is-live .cc-track { stroke: var(--t-lys); opacity: 0.35; }
 .cc-seg.is-ghost .cc-track { stroke-dasharray: 3 7; opacity: 0.5; }
-.cc-spark { will-change: transform; animation: cc-run 1.8s linear infinite; }
+.cc-spark { will-change: transform; animation: cc-run var(--varighed, 1.8s) linear infinite; }
 @keyframes cc-run { from { transform: translateX(0); } to { transform: translateX(var(--len)); } }
 .cc-head { fill: #fff; }
 .cc-head-glod { fill: var(--t-lys); opacity: 0.3; }

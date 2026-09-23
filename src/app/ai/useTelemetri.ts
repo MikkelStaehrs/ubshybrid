@@ -51,8 +51,10 @@ export function useTelemetri(opts: {
   fremskrevet: boolean;
   liveSource: LiveSourceKind;
   flowSignal: string | undefined;
+  /** Hold flaskehalsen i kæden fremme. Kun i fremskrivningen. */
+  flaskehals?: boolean;
 }): Telemetri {
-  const { layout, fremskrevet, liveSource, flowSignal } = opts;
+  const { layout, fremskrevet, liveSource, flowSignal, flaskehals = false } = opts;
 
   // --- Anlægget som det står --------------------------------------------------
   const ids = useMemo(() => (flowSignal && !fremskrevet ? [flowSignal] : []), [flowSignal, fremskrevet]);
@@ -64,7 +66,7 @@ export function useTelemetri(opts: {
 
   useEffect(() => {
     if (!fremskrevet) return;
-    const s = simulator(layout);
+    const s = simulator(layout, undefined, undefined, flaskehals);
     const h: Historik = new Map();
     // Forvarm et minut, så kurverne har noget at vise fra første billede.
     const nu = Date.now();
@@ -85,7 +87,7 @@ export function useTelemetri(opts: {
       setSim(nyt);
     }, TAKT_MS);
     return () => clearInterval(id);
-  }, [fremskrevet, layout]);
+  }, [fremskrevet, layout, flaskehals]);
 
   if (fremskrevet && sim) return { billede: sim, historik: historik.current };
 

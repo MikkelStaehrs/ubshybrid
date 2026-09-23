@@ -32,7 +32,7 @@ import "./hud.css";
  *   - Grænseflade: opstarten og kameraets tur. De viser ingen data og
  *     lader ikke som om. `prefers-reduced-motion` slukker begge.
  */
-export function HudView({ model, line, ot, liveSource, measure, fokusWid }: {
+export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals }: {
   model: HudModel;
   line: LineData;
   ot: OtLayout | null;
@@ -40,13 +40,15 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid }: {
   measure?: boolean;
   /** Lås kameraet på maskinen med det her W-ID. Turen holder pause. */
   fokusWid?: string;
+  /** Hold en flaskehals i kæden fremme. */
+  flaskehals?: boolean;
 }) {
   useFrameProbe(measure);
   const still = useReducedMotion();
   const layout = useMemo(() => layoutLine(line), [line]);
   const flowSignal = model.links.find((l) => l.instrument.signalId)?.instrument.signalId;
   const { billede, historik } = useTelemetri({
-    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal,
+    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals,
   });
   const nu = useUr();
   const boot = useOpstart(still);

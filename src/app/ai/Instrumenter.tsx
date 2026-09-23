@@ -11,7 +11,19 @@ import { FAULT_HIGH_MA, FAULT_LOW_MA, NOMINAL_HIGH_MA, NOMINAL_LOW_MA } from "..
  * tallet står stille.
  */
 
-const komma = (v: number, d: number) => v.toFixed(d).replace(".", ",");
+/**
+ * Dansk talformat med tusindtalsseparator — "6.403", ikke "6403". Én
+ * formatter pr. antal decimaler, så den ikke bygges forfra hver frame.
+ */
+const FORMAT = new Map<number, Intl.NumberFormat>();
+const komma = (v: number, d: number) => {
+  let f = FORMAT.get(d);
+  if (!f) {
+    f = new Intl.NumberFormat("da-DK", { minimumFractionDigits: d, maximumFractionDigits: d });
+    FORMAT.set(d, f);
+  }
+  return f.format(v);
+};
 
 // ---------------------------------------------------------------------------
 

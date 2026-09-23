@@ -157,3 +157,50 @@ export const ANALYSE = {
 
 /** Maskiner, der afviger fra deres slags. Nøglet på W-ID. */
 export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec>>>> = {};
+
+// ---------------------------------------------------------------------------
+// Kæden
+
+/**
+ * Kædens kapacitet pr. led. Skøn: kobleren, edge-maskinen og databasen er
+ * ikke valgt endnu, og tallene her er, hvad den slags udstyr typisk kan.
+ *
+ * Kapaciteten er det, der afgør, hvor en flaskehals opstår. Det led, der
+ * har plads til færrest signaler, er det, der rammer loftet først, når
+ * anlægget vokser.
+ */
+export const KAEDE = {
+  /** Kobleren skal nå alle registre i én cyklus. Samme 250 ms som polling. */
+  cyklusMs: 250,
+  /** Modbus TCP læser op til 125 registre pr. forespørgsel. */
+  registreProForespoergsel: 120,
+  msProForespoergsel: 9,
+  /** Et flydende tal fylder to registre. */
+  registreProSignal: 2,
+  /** Hvor mange gange i sekundet hvert signal gemmes. */
+  proeverPrS: 4,
+  /** Rækker pr. sekund, edge kan tage imod og sende videre. */
+  edgeKapacitet: 2000,
+  /** Rækker pr. sekund, databasen kan skrive i normal drift. */
+  dbKapacitet: 900,
+  /** Rækker, edge kan holde på, mens databasen halter. Derefter tabes data. */
+  buffer: 60_000,
+};
+
+/**
+ * Flaskehalsen i demoen: databasen skriver langsommere en periode. Det er
+ * den mest almindelige flaskehals i en kæde som den her — indeks, der
+ * genopbygges, eller en backup, der tager diskens tid.
+ */
+export const FLASKEHALS = {
+  /** Første episode så lang tid efter start. */
+  foersteS: 90,
+  /** Derefter én episode så ofte. */
+  hverS: 180,
+  varighedS: 55,
+  /** Databasens kapacitet under episoden, som andel af normalt. */
+  kapacitetAndel: 0.2,
+  aarsag: "Indeks genopbygges",
+  /** Over så mange sekunders forsinkelse melder Kædevagten. */
+  forsinkelseAlarmS: 15,
+};
