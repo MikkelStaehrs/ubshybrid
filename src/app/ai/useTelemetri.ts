@@ -305,8 +305,10 @@ export function useTelemetri(opts: {
         if (rest <= 0) { b = s.skridt(d, simNu); break; }
         const sker = s.frem(d, simNu);
         // Sker der noget midt i et hurtigt spring, stopper springet dér —
-        // ellers var det overstået, før nogen nåede at se det.
-        if (sker && ((v === "auto" && g === SIMULERING.hurtig) || (motor === "claude" && g > 1))) {
+        // ellers var det overstået, før nogen nåede at se det. Og får en
+        // agent noget at tænke over, går tiden i virkelig tid fra dét øjeblik.
+        const taenker = motor === "claude" && s.antalOpgaver() > 0;
+        if ((sker && v === "auto" && g === SIMULERING.hurtig) || (taenker && g > 1)) {
           sidsteUro = simNu;
           g = SIMULERING.langsom;
           b = s.skridt(0, simNu);

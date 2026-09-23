@@ -580,6 +580,8 @@ export interface Simulator {
    * med deres skabelon. En handling, opgaven ikke tilbød, bliver reglernes.
    */
   svar(id: number, svar: Svar | null): void;
+  /** Hvor mange opgaver, der venter på et svar. */
+  antalOpgaver(): number;
 }
 
 /**
@@ -1959,5 +1961,6 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     skridt: (dtMs, nu) => gaa(dtMs, nu, true)!,
     frem: (dtMs, nu) => { gaa(dtMs, nu, false); return uroNu; },
     svar: besvar,
+    antalOpgaver: () => aabneOpgaver.size,
   };
 }

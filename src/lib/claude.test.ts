@@ -88,6 +88,8 @@ describe("det, Claude får at vide", () => {
     assert.match(p, /Koordinerer agenterne/);
     assert.match(p, /Opfind ingen tal/);
     assert.match(p, /Driftsagent: stopper og starter spor efter faste regler/);
+    // En agent uden noget at vælge melder — den beder ikke om beslutninger, der ikke findes.
+    assert.match(p, /Står der kun "ingen", melder du det, du ser/);
   });
 
   it("situationens tal, samtalen og de tilladte handlinger står i beskeden", () => {
