@@ -1,5 +1,5 @@
 "use client";
-import { Html, Line } from "@react-three/drei";
+import { Html, Line, PerformanceMonitor } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
@@ -32,9 +32,19 @@ import type { LineData } from "../../lib/types";
  * Kameraets tur er synsvinkel, ikke data. Den går efter alarmer først.
  */
 
-/** Er frametiden over det her efter opstart, halveres punkterne én gang. */
-const FRAMETID_GRAENSE_MS = 24;
-const MAALEVINDUE_MS = 1400;
+/**
+ * Kvalitetstrin. Scenen starter øverst og skruer ned, hvis maskinen ikke kan
+ * følge med — opløsningen først, så punkterne, så de dyreste effekter. Det
+ * ser næsten ens ud på hvert trin; det er arbejdet pr. frame, der falder.
+ *
+ *   3  op til 1,5x opløsning, alle punkter, alle effekter
+ *   2  1x opløsning
+ *   1  halvt så mange punkter
+ *   0  kun bloom og vignet
+ */
+type Kvalitet = 0 | 1 | 2 | 3;
+const DPR: Record<Kvalitet, number> = { 3: 1.5, 2: 1, 1: 1, 0: 1 };
+
 /** Højst så mange maskiner. Uniform-arrays i shaderen har en fast længde. */
 const MAX_MASKINER = 32;
 
@@ -599,28 +609,23 @@ function Kamera({ layout, fokus, still }: { layout: Layout; fokus: string | null
   return null;
 }
 
-/** Måler frametiden og skruer ned én gang, hvis maskinen ikke kan følge med. */
-function Governor({ onSlow }: { onSlow: () => void }) {
-  const start = useRef(0);
-  const frames = useRef(0);
-  const done = useRef(false);
-  useFrame(() => {
-    if (done.current) return;
-    const now = performance.now();
-    if (start.current === 0) { start.current = now; return; }
-    frames.current++;
-    const elapsed = now - start.current;
-    if (elapsed < MAALEVINDUE_MS) return;
-    done.current = true;
-    if (elapsed / frames.current > FRAMETID_GRAENSE_MS) onSlow();
-  });
-  return null;
-}
-
-function Effekter() {
+/**
+ * Efterbehandlingen. Ingen multisampling: bloom blødgør kanterne alligevel,
+ * og 4x udglatning på en skærm i høj opløsning kostede mere end alt andet i
+ * scenen tilsammen.
+ */
+function Effekter({ kvalitet }: { kvalitet: Kvalitet }) {
   const aberration = useMemo(() => new Vector2(0.0007, 0.0005), []);
+  if (kvalitet === 0) {
+    return (
+      <EffectComposer multisampling={0}>
+        <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.2} luminanceSmoothing={0.35} radius={0.6} />
+        <Vignette offset={0.22} darkness={0.82} />
+      </EffectComposer>
+    );
+  }
   return (
-    <EffectComposer multisampling={4}>
+    <EffectComposer multisampling={0}>
       <Bloom mipmapBlur intensity={1.25} luminanceThreshold={0.16} luminanceSmoothing={0.35} radius={0.72} />
       <ChromaticAberration offset={aberration} radialModulation modulationOffset={0.35} blendFunction={BlendFunction.NORMAL} />
       <Noise opacity={0.045} premultiply blendFunction={BlendFunction.SCREEN} />
@@ -642,8 +647,8 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
   /** Kædevagten kører. Skanningen løber. */
   skanning: boolean;
 }) {
-  const [budget, setBudget] = useState(PUNKT_BUDGET);
-  const halved = useRef(false);
+  const [kvalitet, setKvalitet] = useState<Kvalitet>(3);
+  const budget = kvalitet <= 1 ? Math.round(PUNKT_BUDGET / 2) : PUNKT_BUDGET;
   const layout = useMemo(() => layoutLine(data), [data]);
   const cloud = useMemo(() => buildHologram(data, ot, budget), [data, ot, budget]);
   const ids = useMemo(() => cloud.machines.map((m) => m.id), [cloud]);
@@ -695,8 +700,8 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
   return (
     <div className="holo" aria-hidden>
       <Canvas
-        dpr={[1, 1.75]}
-        gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
+        dpr={[1, DPR[kvalitet]]}
+        gl={{ antialias: false, powerPreference: "high-performance", stencil: false, depth: true }}
         camera={{ fov: 34, near: 0.5, far: 500, position: [layout.center[0], 40, 80] }}
       >
         <color attach="background" args={["#020504"]} />
@@ -714,16 +719,14 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
           return <Maerkat key={m.id} m={m} pos={[pm.pos[0], top + 3, pm.pos[2]]} fokus={m.id === fokus} scene={scene} sim={billede.simuleret} />;
         })}
         <Kamera layout={layout} fokus={fokus} still={still} />
-        <Effekter />
-        {!still && (
-          <Governor
-            onSlow={() => {
-              if (halved.current) return;
-              halved.current = true;
-              setBudget((b) => Math.round(b / 2));
-            }}
-          />
-        )}
+        <Effekter kvalitet={kvalitet} />
+        {/* Skruer kun ned, aldrig op igen: en scene, der vipper frem og
+            tilbage mellem to trin, ser værre ud end én, der ligger lavt. */}
+        <PerformanceMonitor
+          flipflops={1}
+          onDecline={() => setKvalitet((k) => (k > 0 ? ((k - 1) as Kvalitet) : k))}
+          onFallback={() => setKvalitet(0)}
+        />
       </Canvas>
     </div>
   );

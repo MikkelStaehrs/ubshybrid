@@ -15,39 +15,63 @@ const komma = (v: number, d: number) => v.toFixed(d).replace(".", ",");
 
 // ---------------------------------------------------------------------------
 
+/** Tal, der er på vej fra én værdi til en anden. Én løkke driver dem alle. */
+interface Glid { node: Text; a: number; b: number; start: number; d: number; vist: { v: number | null } }
+const glider = new Map<Text, Glid>();
+let loekke = 0;
+
+function glid(nu: number) {
+  for (const g of glider.values()) {
+    const t = Math.min(1, (nu - g.start) / 260);
+    const x = g.a + (g.b - g.a) * (1 - (1 - t) ** 3);
+    g.node.nodeValue = komma(x, g.d);
+    g.vist.v = x;
+    if (t >= 1) glider.delete(g.node);
+  }
+  loekke = glider.size > 0 ? requestAnimationFrame(glid) : 0;
+}
+
 /**
  * Et tal, der glider mod sin nye værdi i stedet for at hoppe.
  *
- * Glidningen er kort (en takt) og følger værdien — den tæller ikke op fra
- * nul ved første visning. Er værdien null, står der en streg.
+ * Glidningen er kort og følger værdien — den tæller ikke op fra nul ved
+ * første visning. Er værdien null, står der en streg.
+ *
+ * React tegner tallet én gang. Derefter skrives det direkte i tekstnoden af
+ * én fælles animationsløkke, så et tal, der ændrer sig, ikke får hele
+ * siden til at blive tegnet om hver frame.
  */
 export function Tal({ v, d = 1, className }: { v: number | null; d?: number; className?: string }) {
-  const [vist, setVist] = useState(v);
-  const fra = useRef(v);
-  const raf = useRef(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  // Det, der står lige nu — også midt i en glidning.
+  const vist = useRef<{ v: number | null }>({ v });
+  // React skal aldrig røre teksten efter første gang. Samme streng hver
+  // gang, så den ikke overskriver det, løkken har skrevet.
+  const foerste = useRef(v === null ? "—" : komma(v, d));
 
   useEffect(() => {
-    cancelAnimationFrame(raf.current);
+    const node = ref.current?.firstChild;
+    if (!(node instanceof Text)) return;
+    const fra = vist.current.v;
     // Ved ro springer tallet direkte til sin nye værdi. Det er stadig et tal,
     // der ændrer sig — bare uden glidning.
     const ro = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (ro || v === null || fra.current === null) { fra.current = v; setVist(v); return; }
-    const start = performance.now();
-    const a = fra.current;
-    const b = v;
-    const trin = (nu: number) => {
-      const t = Math.min(1, (nu - start) / 260);
-      const e = 1 - (1 - t) ** 3;
-      const x = a + (b - a) * e;
-      fra.current = x;
-      setVist(x);
-      if (t < 1) raf.current = requestAnimationFrame(trin);
-    };
-    raf.current = requestAnimationFrame(trin);
-    return () => cancelAnimationFrame(raf.current);
-  }, [v]);
+    if (ro || v === null || fra === null) {
+      glider.delete(node);
+      node.nodeValue = v === null ? "—" : komma(v, d);
+      vist.current.v = v;
+      return;
+    }
+    glider.set(node, { node, a: fra, b: v, start: performance.now(), d, vist: vist.current });
+    if (!loekke) loekke = requestAnimationFrame(glid);
+  }, [v, d]);
 
-  return <span className={className}>{vist === null ? "—" : komma(vist, d)}</span>;
+  useEffect(() => () => {
+    const node = ref.current?.firstChild;
+    if (node instanceof Text) glider.delete(node);
+  }, []);
+
+  return <span ref={ref} className={className}>{foerste.current}</span>;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +125,9 @@ export function Maaler({ v, min, max, zoner, enhed, d = 1, tone, label }: {
         })}
         {v !== null && (
           <>
+            <path d={bue(0, Math.max(0.001, a))} className="m-fyld-glod" />
             <path d={bue(0, Math.max(0.001, a))} className="m-fyld" />
+            <circle cx={nx} cy={ny} r={6} className="m-spids-glod" />
             <circle cx={nx} cy={ny} r={3.2} className="m-spids" />
           </>
         )}
@@ -267,7 +293,9 @@ export function Bjaelke({ v, max, graense, alarm }: {
   const p = v === null ? 0 : Math.max(0, Math.min(1, v / max)) * 100;
   return (
     <span className={`m-bjaelke${alarm ? " is-alarm" : ""}${v === null ? " is-tom" : ""}`}>
-      <span className="m-bjaelke-fyld" style={{ width: `${p}%` }} />
+      {/* scaleX frem for bredde: en bredde, der ændrer sig, tvinger browseren
+          til at regne layout om for hver frame, en transform gør ikke. */}
+      <span className="m-bjaelke-fyld" style={{ transform: `scaleX(${p / 100})` }} />
       {graense !== undefined && <span className="m-bjaelke-graense" style={{ left: `${(graense / max) * 100}%` }} />}
     </span>
   );

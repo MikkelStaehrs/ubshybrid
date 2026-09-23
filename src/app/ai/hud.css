@@ -89,14 +89,15 @@
 }
 
 /* Skanlinjer som tekstur. De bevæger sig ikke — en bevægelig skanning ville
-   ligne aktivitet, og det er den ikke. */
+   ligne aktivitet, og det er den ikke. Almindelig gennemsigtighed, ikke en
+   blandingstilstand: en blanding oven på et lærred, der ændrer sig hver
+   frame, tvinger hele skærmen til at blive blandet om hver gang. */
 .hud-skanlinjer {
   position: fixed;
   inset: 0;
   z-index: 4;
   pointer-events: none;
-  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.16) 2px 3px);
-  mix-blend-mode: multiply;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.12) 2px 3px);
 }
 
 .ai-hud > *:not(.holo):not(.hud-skanlinjer):not(.hud-opstart) { position: relative; z-index: 2; min-width: 0; min-height: 0; }
@@ -368,8 +369,10 @@
 .m-zone.z-lav, .m-zone.z-hoej { stroke: var(--hud-test); }
 .m-streg { stroke: var(--hud-dim); stroke-width: 0.8; }
 .m-streg.is-lang { stroke: var(--hud-muted); stroke-width: 1.1; }
-.m-fyld { fill: none; stroke: var(--t-lys); stroke-width: 7; filter: drop-shadow(0 0 4px var(--t-lys)); }
-.m-spids { fill: #fff; filter: drop-shadow(0 0 5px var(--t-lys)); }
+.m-fyld { fill: none; stroke: var(--t-lys); stroke-width: 7; }
+.m-fyld-glod { fill: none; stroke: var(--t-lys); stroke-width: 14; opacity: 0.16; }
+.m-spids { fill: #fff; }
+.m-spids-glod { fill: var(--t-lys); opacity: 0.35; }
 .m-tal {
   position: absolute;
   inset: 0;
@@ -395,7 +398,7 @@
 .m-kurve.is-tom { border-bottom: 1px dashed var(--hud-line-2); }
 .m-linje { fill: none; stroke: var(--t-lys); stroke-width: 1.4; }
 .m-flade { fill: var(--t-lys); opacity: 0.08; }
-.m-prik { fill: var(--t-lys); filter: drop-shadow(0 0 3px var(--t-lys)); }
+.m-prik { fill: var(--t-lys); }
 .m-graense { stroke: var(--hud-brud); stroke-width: 0.6; stroke-dasharray: 2 3; opacity: 0.55; }
 
 /* Oscilloskopet: fosforgrøn på sort, sløjfens grænser trukket op. */
@@ -447,8 +450,15 @@
 .m-fordeling.is-alarm .m-klasse.d-0 { color: var(--hud-brud); }
 
 .m-bjaelke { position: relative; display: block; height: 3px; background: var(--hud-moerk); }
-.m-bjaelke-fyld { display: block; height: 100%; background: var(--hud-drift-lys); transition: width 0.4s ease-out; }
-.m-bjaelke.is-alarm .m-bjaelke-fyld { background: var(--hud-brud); box-shadow: 0 0 6px var(--hud-brud); }
+.m-bjaelke-fyld {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--hud-drift-lys);
+  transform-origin: left center;
+  transition: transform 0.3s ease-out;
+}
+.m-bjaelke.is-alarm .m-bjaelke-fyld { background: var(--hud-brud); }
 .m-bjaelke-graense { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--hud-brud); opacity: 0.7; }
 
 /* --- Paneler ---------------------------------------------------------------- */
@@ -525,7 +535,8 @@
 .hc-ring { width: 26px; height: 26px; display: block; overflow: visible; }
 .hc-track { fill: none; stroke: var(--hud-moerk); stroke-width: 2; }
 .hc-arc { fill: none; stroke: var(--c); stroke-width: 2; }
-.hc-kerne { fill: var(--c); filter: drop-shadow(0 0 4px var(--c)); animation: kerne 2.4s ease-in-out infinite; }
+.hc-kerne { fill: var(--c); animation: kerne 2.4s ease-in-out infinite; }
+.hc-kerne-glod { fill: var(--c); opacity: 0.22; }
 @keyframes kerne { 50% { opacity: 0.45; } }
 .hud-core.is-idea .hc-track { stroke-dasharray: 3 3; }
 .hud-core.is-idea .hc-arc { stroke: var(--hud-moerk); }
@@ -724,7 +735,7 @@
 .cc { display: block; }
 .cc-svg { display: block; width: 100%; height: auto; overflow: visible; }
 
-.cc-glow { fill: var(--t-lys); opacity: 0.08; filter: blur(16px); }
+.cc-glow { opacity: 0.12; }
 .cc-node.tone-moerk .cc-glow { opacity: 0; }
 .cc-glow.is-pulse { will-change: opacity; animation: cc-breathe 2.2s ease-in-out infinite; }
 @keyframes cc-breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.48; } }
@@ -753,7 +764,8 @@
 .cc-seg.is-ghost .cc-track { stroke-dasharray: 3 7; opacity: 0.5; }
 .cc-spark { will-change: transform; animation: cc-run 1.8s linear infinite; }
 @keyframes cc-run { from { transform: translateX(0); } to { transform: translateX(var(--len)); } }
-.cc-head { fill: #fff; filter: drop-shadow(0 0 4px var(--t-lys)); }
+.cc-head { fill: #fff; }
+.cc-head-glod { fill: var(--t-lys); opacity: 0.3; }
 .cc-tail { stroke: var(--t-lys); stroke-width: 3; stroke-linecap: round; opacity: 0.45; }
 .cc-ring {
   fill: none;

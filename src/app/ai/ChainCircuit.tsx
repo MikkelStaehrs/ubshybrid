@@ -97,7 +97,33 @@ function layoutNodes(model: HudModel, kaede: TelemetriBillede["kaede"]): Node[] 
  */
 function Glow({ x, y, tone, pulse }: { x: number; y: number; tone: string; pulse: boolean }) {
   return (
-    <circle className={`cc-glow tone-${tone}${pulse ? " is-pulse" : ""}`} cx={x} cy={y} r={58} />
+    <circle
+      className={`cc-glow tone-${tone}${pulse ? " is-pulse" : ""}`}
+      cx={x}
+      cy={y}
+      r={70}
+      fill={`url(#cc-glod-${tone})`}
+    />
+  );
+}
+
+/**
+ * Glødens gradienter, én pr. tone. En gradient tegnes én gang; et
+ * sløringsfilter skulle regnes om, hver gang gløden ændrede styrke.
+ */
+const GLOD: Record<string, string> = {
+  drift: "#6fe0c2", test: "#ffc766", brud: "#ff6f5c", moerk: "#25332f",
+};
+function GlodDefs() {
+  return (
+    <defs>
+      {Object.entries(GLOD).map(([tone, farve]) => (
+        <radialGradient key={tone} id={`cc-glod-${tone}`}>
+          <stop offset="0%" stopColor={farve} stopOpacity={0.9} />
+          <stop offset="100%" stopColor={farve} stopOpacity={0} />
+        </radialGradient>
+      ))}
+    </defs>
   );
 }
 
@@ -123,6 +149,7 @@ function Segment({ from, to, y, link, ghost }: {
            streg med aftagende alfa, ikke en stak elementer. */
         <g className="cc-spark" style={{ ["--len" as string]: `${to - from}px` }}>
           <line x1={from - 30} y1={y} x2={from} y2={y} className="cc-tail" />
+          <circle cx={from} cy={y} r={9} className="cc-head-glod" />
           <circle cx={from} cy={y} r={3.6} className="cc-head" />
         </g>
       )}
@@ -235,6 +262,7 @@ export function ChainCircuit({ model, reading, kaede = null, sim }: {
   return (
     <div className="cc">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaFor(model)} className="cc-svg">
+        <GlodDefs />
         {/* Segmenterne tegnes først, så knuderne ligger ovenpå. */}
         {nodes.slice(0, -1).map((n, i) => {
           const link = n.link;

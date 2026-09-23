@@ -394,7 +394,12 @@ function Core({ a }: { a: HudAgent }) {
       <svg viewBox="0 0 32 32" className="hc-ring" aria-hidden>
         <circle cx="16" cy="16" r={R} className="hc-track" />
         <circle cx="16" cy="16" r={R} className="hc-arc" strokeDasharray={`${andel * OMKREDS} ${OMKREDS}`} transform="rotate(-90 16 16)" />
-        {a.state === "paa-plads" && <circle cx="16" cy="16" r="4" className="hc-kerne" />}
+        {a.state === "paa-plads" && (
+          <>
+            <circle cx="16" cy="16" r="7" className="hc-kerne-glod" />
+            <circle cx="16" cy="16" r="4" className="hc-kerne" />
+          </>
+        )}
       </svg>
       <div className="hc-body">
         <span className="hc-name">{a.name}</span>
