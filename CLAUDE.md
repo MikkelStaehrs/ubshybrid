@@ -227,6 +227,19 @@ demoen kommer de fra `ORDRE` i `data/fremskrivning.ts`, hedder `X-…` som de
 opdigtede tags og bærer et SIM-mærke — et ordrenummer, der lignede et
 rigtigt, kunne blive slået op.
 
+Ordren har også estimeret kg og **Box** — kørte kasser ud af ordrens. I
+demoen tælles de af strømmen ind (`gennemloeb`, procent·sekunder, lagt
+sammen i simulatoren) gange 100 %-punktet, delt med kassernes snitvægt, i
+`kasserKoert()`. Står linjen, står tælleren; den tæller aldrig forbi ordren,
+og uden 100 %-punkt eller strøm står der en streg, ikke et nul. En
+sensorfejl er et hul i summen, ikke et gæt.
+
+**Hændelserne kan læses som en log.** "Hele loggen" åbner et vindue med alt,
+der er sket, siden siden åbnede (højst `LOG_MAKS`), nyeste først og med hele
+teksten. Der kan filtreres på niveau, på AI og på ét sted. Billedet husker
+kun de seneste; `samlLog()` lægger dem sammen, hver hændelse én gang.
+Vinduet er grænseflade: det viser intet, anlægget ikke selv har meldt.
+
 **Partiklerne i maskinerne bevæger sig kun, når maskinen kører**, og med dens
 fart (`maskinFart()`): løftet op gennem elevatorerne, på langs gennem
 maskinerne. Ved vi ikke, om den kører — som i den rigtige visning i dag —
@@ -261,7 +274,10 @@ dem over; talte de med, forudsatte fremskrivningen kort, ingen skal bruge.
 **Tallene er simulerede, og det står på dem.** Temperatur, fugt, hastighed,
 omdrejninger, FV0–FV3 og BIGF/BIGH/NOTS kommer fra simulatoren i
 `src/lib/telemetri.ts`, som læser sine antagelser fra `data/fremskrivning.ts`.
-Ret antagelserne dér — ikke i koden. Simulatoren er seedet og testet for
+Ret antagelserne dér — ikke i koden. Kanalerne og flowet tager et eksakt
+skridt, ikke en tilnærmelse: udsvinget er det samme, uanset hvor tit siden
+tikker, så en bærbar, der hakker, ikke rammer grænser, som en, der ikke
+gør, aldrig ramte. Det har en test. Simulatoren er seedet og testet for
 fysik: værdier holder sig inden for deres grænser, en stoppet elevator har
 ingen fart, en motor køler mod hallen og ikke under den, en maskine i
 indkøring melder ikke "for langsom", og en sensorfejl er aldrig et stop.
@@ -489,9 +505,11 @@ har sagt tallet.
 - **Hvor BIGF, BIGH og FV kommer fra, er ikke afklaret.** Demoen antager ét
   analyseudstyr på feltbussen pr. kastebord. Er det laboratoriets prøver, er
   det et `dataset` og ikke et signal.
-- **Ordren har ingen kilde.** Ordre nr., genetik og varietet skal komme fra
-  ordresystemet. Hvilket, hvordan og i hvilket format er ikke afklaret; det
-  ved driften.
+- **Ordren har ingen kilde.** Ordre nr., genetik, varietet, estimeret kg og
+  kasser skal komme fra ordresystemet. Hvilket, hvordan og i hvilket format
+  er ikke afklaret; det ved driften. Demoen læser kasserne som dem, der
+  tippes i vippestolene, og tæller dem af strømmen ind — i virkeligheden
+  kunne en tæller på vippestolene gøre det bedre.
 - **Driftsagenten kan ikke stoppe noget i dag.** Der findes ingen vej fra en
   agent tilbage til styringen. En skrivning til PLC'en er en
   sikkerhedsbeslutning — interlocks, hvem der kan tilsidesætte, hvad der

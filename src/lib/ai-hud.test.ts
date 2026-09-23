@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import { AGENT_ENGINE_LABEL, agentsFor, lineOpsFor } from "./agents";
 import { SMÅBELØB_UNDER } from "./agent-cost";
 import sliberi from "../../data/lines/sliberi.json";
-import { chainToneOf, hudAgentState, hudLinks, hudModel, hudState, ledNavn, tallyMedTelemetri, type HudLink } from "./ai-hud";
+import {
+  chainToneOf, hudAgentState, hudLinks, hudModel, hudState, kasserKoert, ledNavn, tallyMedTelemetri,
+  type HudLink,
+} from "./ai-hud";
 import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
 import { layoutLine } from "./layout";
 import { layoutOt, otLayerFor, sensorType } from "./ot";
@@ -207,7 +210,13 @@ describe("kompositionen har noget at vise i hver zone", () => {
 
 describe("ordren", () => {
   it("står tom i den rigtige visning — der er ingen forbindelse til ordresystemet", () => {
-    assert.deepEqual(m.ordre, { ordreNr: null, genetik: null, varietet: null, opdigtet: false });
+    assert.deepEqual(m.ordre, {
+      ordreNr: null, genetik: null, varietet: null,
+      estimeretKg: null, kasser: null, koertKgVedStart: null,
+      opdigtet: false,
+    });
+    // Og uden ordre er der ingen kasser at tælle — heller ikke med strøm.
+    assert.equal(kasserKoert(m.ordre, 1, 360_000), null);
   });
 
   it("er opdigtet i demoen, og det kan ses", () => {
@@ -219,6 +228,39 @@ describe("ordren", () => {
     }
     // Og demoen smitter ikke af på den rigtige model.
     assert.equal(hudModel("sliberi")!.ordre.ordreNr, null);
+  });
+
+  describe("kasserne", () => {
+    const ordre = { estimeretKg: 12_000, kasser: 24, koertKgVedStart: 4_300 };
+    // En time ved 100 % er 360.000 procent·sekunder.
+    const time = 100 * 3600;
+
+    it("tæller det kørte i hele kasser", () => {
+      // 4.300 kg ved start, 500 kg pr. kasse: otte hele.
+      assert.equal(kasserKoert(ordre, 1, 0), 8);
+      // En time ved 1 t/hr lægger 1.000 kg til: 5.300 kg, ti kasser.
+      assert.equal(kasserKoert(ordre, 1, time), 10);
+    });
+
+    it("følger strømmen og går aldrig baglæns", () => {
+      // Står linjen, vokser gennemløbet ikke, og så står tælleren.
+      let forrige = -1;
+      for (let g = 0; g <= time * 10; g += time / 7) {
+        const n = kasserKoert(ordre, 1, g)!;
+        assert.ok(n >= forrige, `${n} efter ${forrige}`);
+        forrige = n;
+      }
+    });
+
+    it("tæller aldrig forbi ordren", () => {
+      assert.equal(kasserKoert(ordre, 1, time * 100), 24);
+    });
+
+    it("er intet tal uden 100 %-punkt eller strøm", () => {
+      // Et nul ville påstå, at intet var kørt. Det ved vi ikke.
+      assert.equal(kasserKoert(ordre, null, time), null);
+      assert.equal(kasserKoert(ordre, 1, null), null);
+    });
   });
 });
 

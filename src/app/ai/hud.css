@@ -100,7 +100,7 @@
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.12) 2px 3px);
 }
 
-.ai-hud > *:not(.holo):not(.hud-skanlinjer):not(.hud-opstart) { position: relative; z-index: 2; min-width: 0; min-height: 0; }
+.ai-hud > *:not(.holo):not(.hud-skanlinjer):not(.hud-opstart):not(.hud-logvindue):not(.hud-logslor) { position: relative; z-index: 2; min-width: 0; min-height: 0; }
 
 /* --- Zoner ------------------------------------------------------------------ */
 .hud-top { grid-area: top; }
@@ -552,6 +552,8 @@
 }
 /* Samme udtryk som W/HR's "Ikke udfyldt": et felt, nogen skal udfylde. */
 .hp-ordre dd.is-tom { font-family: var(--font-ui); font-size: 11px; color: var(--hud-test-lys); }
+.hp-ordre > .is-bred { grid-column: span 2; }
+.hp-ordre .m-bjaelke { margin-top: 5px; }
 
 /* Grænsen ved en kanals navn: båndet, den skal holde sig inden for. */
 .hp-graense {
@@ -642,6 +644,90 @@
 .hp-haendelser li.n-alarm { border-left-color: var(--hud-brud); background: rgba(255, 111, 92, 0.05); }
 .hp-haendelser li.n-alarm .hh-tekst { color: var(--hud-brud); }
 .hp-haendelser li.n-info { border-left-color: var(--hud-drift); }
+
+/* En lille knap i et panelhoved — samme udtryk som skiftene i toppen. */
+.hp-hoejre { display: inline-flex; align-items: center; gap: 8px; }
+.hp-knap {
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--hud-line-2);
+  background: transparent;
+  color: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.hp-knap:hover, .hp-knap:focus-visible { border-color: var(--hud-drift-lys); color: var(--hud-ink); outline: none; }
+
+/* --- Loggen ---------------------------------------------------------------
+   Grænseflade: den glider ind, når nogen beder om den. Sløret bag den
+   dæmper scenen, så det er tydeligt, at man læser og ikke ser live. */
+.hud-logslor {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.5);
+}
+.hud-logvindue {
+  position: fixed;
+  z-index: 41;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(640px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  background: rgba(3, 7, 6, 0.97);
+  border: 1px solid var(--hud-line-2);
+  animation: log-ind 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes log-ind { from { opacity: 0; transform: translateX(24px); } }
+.hl-head { display: flex; align-items: center; gap: 10px; }
+.hl-antal { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); }
+.hl-filtre { display: flex; flex-wrap: wrap; gap: 6px; }
+.hl-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--hud-line);
+  background: transparent;
+  color: var(--hud-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hl-filter span { color: var(--hud-dim); }
+.hl-filter.is-valgt { border-color: var(--hud-drift-lys); color: var(--hud-ink); }
+.hl-filter.is-valgt span { color: var(--hud-muted); }
+.hl-filter.is-hvor { text-transform: none; }
+.hl-filter:focus-visible { outline: 1px solid var(--hud-drift-lys); outline-offset: 1px; }
+/* Listen er til at læse: hele teksten, ingen indglidning for hver række,
+   når filteret skifter. */
+.hl-liste { flex: 1; min-height: 0; overflow-y: auto; gap: 2px; align-content: start; }
+.hl-liste li { grid-template-columns: 64px 118px 1fr; font-size: 11px; animation: none; }
+.hl-liste .hh-tekst { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.hl-hvor {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hl-hvor:hover, .hl-hvor:focus-visible { color: var(--hud-drift-lys); outline: none; text-decoration: underline; }
+@media (max-width: 560px) {
+  .hl-liste li { grid-template-columns: 58px 1fr; }
+  .hl-liste .hh-tekst { grid-column: 1 / -1; }
+}
 
 /* --- Agentens mærke ---------------------------------------------------------
    Hver beslutning, Driftsagenten træffer, bærer "AI". Det er ikke en farve,

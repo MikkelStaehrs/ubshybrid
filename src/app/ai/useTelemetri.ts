@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Layout } from "../../lib/layout";
 import type { LiveSourceKind } from "../../lib/live-source";
-import { simulator, tomtBillede, type TelemetriBillede } from "../../lib/telemetri";
+import { samlLog, simulator, tomtBillede, type Haendelse, type TelemetriBillede } from "../../lib/telemetri";
 import { useLiveSignals } from "../../lib/useLiveSignals";
 
 /** Fire gange i sekundet: tal og kurver glider i stedet for at hoppe. */
@@ -16,6 +16,8 @@ export type Historik = Map<string, (number | null)[]>;
 export interface Telemetri {
   billede: TelemetriBillede;
   historik: Historik;
+  /** Alt, der er sket, siden siden åbnede. Nyeste først. */
+  log: Haendelse[];
 }
 
 function gem(h: Historik, noegle: string, v: number | null) {
@@ -64,6 +66,7 @@ export function useTelemetri(opts: {
 
   // --- Fremskrivningen --------------------------------------------------------
   const historik = useRef<Historik>(new Map());
+  const log = useRef<Haendelse[]>([]);
   const [sim, setSim] = useState<TelemetriBillede | null>(null);
 
   useEffect(() => {
@@ -79,11 +82,14 @@ export function useTelemetri(opts: {
     // Forvarm et minut, så kurverne har noget at vise fra første billede.
     const nu = Date.now();
     let b: TelemetriBillede | null = null;
+    let l: Haendelse[] = [];
     for (let i = HISTORIK; i > 0; i--) {
       b = s.skridt(TAKT_MS, nu - i * TAKT_MS);
       arkiver(h, b);
+      l = samlLog(l, b.haendelser);
     }
     historik.current = h;
+    log.current = l;
     setSim(b);
 
     let sidst = Date.now();
@@ -92,12 +98,13 @@ export function useTelemetri(opts: {
       const nyt = s.skridt(t - sidst, t);
       sidst = t;
       arkiver(historik.current, nyt);
+      log.current = samlLog(log.current, nyt.haendelser);
       setSim(nyt);
     }, TAKT_MS);
     return () => clearInterval(id);
   }, [fremskrevet, layout, flaskehals, ophobning]);
 
-  if (fremskrevet && sim) return { billede: sim, historik: historik.current };
+  if (fremskrevet && sim) return { billede: sim, historik: historik.current, log: log.current };
 
   // Den rigtige visning: tomt billede med det flow, LiveSource har.
   const v = flowSignal ? live.values.get(flowSignal) : undefined;
@@ -111,5 +118,5 @@ export function useTelemetri(opts: {
   const samples = flowSignal ? live.history.get(flowSignal) ?? [] : [];
   h.set("flow", samples.slice(-HISTORIK).map((s) => s.value));
   h.set("flowMa", samples.slice(-HISTORIK).map((s) => (Number.isFinite(s.raw) ? s.raw : null)));
-  return { billede, historik: h };
+  return { billede, historik: h, log: billede.haendelser };
 }

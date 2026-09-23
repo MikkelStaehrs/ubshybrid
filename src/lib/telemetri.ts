@@ -124,6 +124,13 @@ export interface TelemetriBillede {
   flowPct: number | null;
   /** Det rå signal bag procenten. Oscilloskopet tegner det. */
   flowMa: number | null;
+  /**
+   * Strømmen ind lagt sammen over tid, i procent·sekunder. Med 100 %-punktet
+   * bliver det til kilo. En sensorfejl springes over frem for at blive
+   * brolagt. null uden simulator — i den rigtige visning er der intet at
+   * lægge sammen her.
+   */
+  gennemloeb: number | null;
   /** Analyseprøven fra hvert kastebord, i tegningens rækkefølge. */
   analyse: Analyse[];
   /** Kædens egne tal. null når kæden ikke står. */
@@ -187,6 +194,26 @@ export function analyseFor(m: Pick<PlacedMachine, "wIds">): number[] {
 
 const kastebordeI = (layout: Layout) =>
   layout.machines.filter((m) => m.kind !== "person" && KASTEBORD.test(m.name));
+
+/** Så mange hændelser husker loggen, man kan læse igennem. */
+export const LOG_MAKS = 500;
+
+const logNoegle = (h: Haendelse) => `${h.t}|${h.hvor}|${h.tekst}`;
+
+/**
+ * Læg et billedes hændelser oven i loggen.
+ *
+ * Billedet husker kun de seneste; loggen husker, hvad der er sket, siden
+ * siden åbnede. Hver hændelse står én gang, nyeste først. Den gamle liste
+ * røres ikke — kommer der intet nyt, er det den samme liste, der kommer
+ * tilbage, så fladen ikke tegner om for ingenting.
+ */
+export function samlLog(log: Haendelse[], nye: Haendelse[], maks = LOG_MAKS): Haendelse[] {
+  const kendt = new Set(log.map(logNoegle));
+  const tilgang = nye.filter((h) => !kendt.has(logNoegle(h)));
+  if (tilgang.length === 0) return log;
+  return [...tilgang, ...log].sort((a, b) => b.t - a.t).slice(0, maks);
+}
 
 /** "E-743" for elevatorer, navnet for resten. Vippestolene er én gruppe. */
 export function kortNavn(m: Pick<PlacedMachine, "kind" | "name" | "wIds">): string {
@@ -265,6 +292,7 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
     hal: HAL.map((spec) => ({ spec, value: null, alarm: false })),
     flowPct,
     flowMa: flowPct === null ? null : maFromPercent(flowPct),
+    gennemloeb: null,
     analyse: kastebordeI(layout).map((m) => ({
       id: m.id, kort: kortNavn(m), lane: m.lane ?? null, andele: null, alarm: false, proeveT: null,
     })),
@@ -435,6 +463,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
   const koererNu = (s: MaskinTilstand) => s.stopTil === null && !styret(s);
 
   let flow = SIM.flowNominal;
+  let gennemloeb = 0;
   let sensorfejlTil: number | null = null;
   // Bordene tager ikke prøve i samme sekund. De er forskudt, så en ny prøve
   // lander med jævne mellemrum i stedet for fire på én gang.
@@ -467,9 +496,12 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
 
   function opdater(k: KanalTilstand, maal: number, dt: number, stoej: boolean) {
     const theta = k.spec.traeghed ?? 0.1;
-    // Udsvinget er valgt, så processen i ro har spredningen fra specifikationen.
-    const sigma = k.spec.spredning * Math.sqrt(2 * theta);
-    k.x += theta * (maal - k.x) * dt + (stoej ? sigma * Math.sqrt(dt) * gauss(r) : 0);
+    // Den eksakte løsning over et skridt, ikke en tilnærmelse: processen i
+    // ro har spredningen fra specifikationen, uanset hvor langt der er mellem
+    // to skridt. Med en tilnærmelse slog kanalerne større ud på en bærbar,
+    // der hakker — og ramte grænser, de aldrig ramte på en, der ikke gør.
+    const a = Math.exp(-theta * dt);
+    k.x = maal + (k.x - maal) * a + (stoej ? k.spec.spredning * Math.sqrt(1 - a * a) * gauss(r) : 0);
     k.x = klem(k.x, k.spec.min, k.spec.max);
   }
 
@@ -592,7 +624,10 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     const aabne = lanes.filter((l) => !spor.get(l)!.stoppet).length;
     const maal = indgangStaar ? 0 : SIM.flowNominal * (aabne / Math.max(1, lanes.length));
     const theta = indgangStaar ? 0.6 : 0.15;
-    flow += theta * (maal - flow) * dt + (indgangStaar ? 0 : SIM.flowSpredning * Math.sqrt(2 * theta) * Math.sqrt(dt) * gauss(r));
+    // Samme eksakte skridt som kanalerne, så flowet heller ikke slår større
+    // ud, når der går længe mellem to skridt.
+    const af = Math.exp(-theta * dt);
+    flow = maal + (flow - maal) * af + (indgangStaar ? 0 : SIM.flowSpredning * Math.sqrt(1 - af * af) * gauss(r));
     flow = klem(flow, 0, 150);
 
     // --- Bufferne foran maskinerne i sporene --------------------------------
@@ -635,6 +670,8 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       skriv({ t: nu, hvor: "FT-743", tekst: "Signal tilbage", niveau: "info" });
     }
     const fejl = sensorfejlTil !== null;
+    // Kun det, måleren så. Et hul i målingen er et hul i summen.
+    if (!fejl) gennemloeb += flow * dt;
 
     // --- Analysen: en ny prøve ad gangen, ikke en glidende kurve -----------
     // Et bord, der står, sender intet frø forbi analysen. Så står den seneste
@@ -852,6 +889,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       }),
       hal: hal.map((k) => ({ spec: k.spec, value: k.x, alarm: k.alarm })),
       flowPct: fejl ? null : flow,
+      gennemloeb,
       // Ved sensorfejl er det rå signal uden for sløjfen — det er fejlen.
       flowMa: fejl ? 3.2 + r() * 0.2 : maFromPercent(flow),
       analyse,

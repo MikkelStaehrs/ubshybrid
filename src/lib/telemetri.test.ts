@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import sliberi from "../../data/lines/sliberi.json";
 import { layoutLine } from "./layout";
 import { FAULT_LOW_MA } from "./live-source";
-import { graense, kanalerFor, maskinFart, simulator, tomtBillede, INDKOERING_S, SIM, type TelemetriBillede } from "./telemetri";
+import {
+  graense, kanalerFor, maskinFart, samlLog, simulator, tomtBillede, INDKOERING_S, SIM,
+  type Haendelse, type TelemetriBillede,
+} from "./telemetri";
 import type { LineData } from "./types";
 
 const layout = layoutLine(sliberi as LineData);
@@ -239,6 +242,86 @@ describe("grænserne", () => {
     assert.equal(graense({ decimaler: 1 }), null);
   });
 });
+
+describe("udsvinget", () => {
+  /** Spredningen på KB-2S's dæk over en halv time uden stop, ved et givet skridt. */
+  const spredning = (dtMs: number) => {
+    const sim = simulator(layout, { stopHverS: 1e9 });
+    const v: number[] = [];
+    for (let t = 0; t < 30 * 60_000; t += dtMs) {
+      const b = sim.skridt(dtMs, T0 + t);
+      if (t < 60_000) continue;
+      const m = b.maskiner.find((x) => x.kort === "KB-2S")!;
+      if (m.koerer) v.push(m.kanaler.find((k) => k.spec.id === "dæk")!.value!);
+    }
+    const snit = v.reduce((a, b) => a + b, 0) / v.length;
+    return Math.sqrt(v.reduce((a, b) => a + (b - snit) ** 2, 0) / v.length);
+  };
+
+  it("er det samme, uanset hvor tit der tages skridt", () => {
+    // En bærbar, der hakker, tager færre og længere skridt. Slog kanalerne
+    // større ud af det, ville de ramme grænser, de ellers aldrig ramte.
+    const jaevn = spredning(250);
+    const hakker = spredning(2000);
+    assert.ok(Math.abs(hakker / jaevn - 1) < 0.15, `${hakker} mod ${jaevn}`);
+  });
+});
+
+describe("gennemløbet", () => {
+  it("vokser kun, og aldrig mens måleren er i fejl", () => {
+    // Totalen springer et hul over frem for at brolægge det.
+    let fejl = 0;
+    for (let i = 1; i < forloeb.length; i++) {
+      const [a, b] = [forloeb[i - 1], forloeb[i]];
+      assert.ok(b.gennemloeb! >= a.gennemloeb!, `gennemløbet faldt ved ${i}`);
+      if (b.flowPct === null) {
+        fejl++;
+        assert.equal(b.gennemloeb, a.gennemloeb, "der blev lagt til under en sensorfejl");
+      }
+    }
+    assert.ok(fejl > 0, "forløbet havde ingen sensorfejl at prøve reglen på");
+  });
+
+  it("findes ikke i den rigtige visning", () => {
+    assert.equal(tomtBillede(layout, T0, 50).gennemloeb, null);
+  });
+});
+
+describe("loggen", () => {
+  const h = (t: number, tekst = "x"): Haendelse => ({ t, hvor: "E-743", tekst, niveau: "info" });
+
+  it("husker hver hændelse én gang, nyeste først", () => {
+    const log = samlLog(samlLog([], [h(2), h(1)]), [h(3), h(2)]);
+    assert.deepEqual(log.map((x) => x.t), [3, 2, 1]);
+  });
+
+  it("giver den samme liste tilbage, når intet er nyt", () => {
+    // Så tegner fladen ikke loggen om fire gange i sekundet for ingenting.
+    const log = samlLog([], [h(2), h(1)]);
+    assert.equal(samlLog(log, [h(2)]), log);
+  });
+
+  it("har et loft, og det er de ældste, der går", () => {
+    const log = samlLog([], [h(3), h(2), h(1)], 2);
+    assert.deepEqual(log.map((x) => x.t), [3, 2]);
+  });
+
+  it("husker mere end billedet", () => {
+    // Billedet har de seneste; loggen det, der er sket, siden siden åbnede.
+    let log: Haendelse[] = [];
+    for (const b of tvungetForloeb()) log = samlLog(log, b.haendelser);
+    assert.ok(log.length > SIM.logLaengde, `loggen har kun ${log.length}`);
+    assert.ok(log.some((x) => /Buffer fuld/.test(x.tekst)));
+  });
+});
+
+/** Et kvarter med flaskehalsen fremme: mange hændelser. */
+function tvungetForloeb(): TelemetriBillede[] {
+  const sim = simulator(layout, { tvungenFlaskehals: true });
+  const ud: TelemetriBillede[] = [];
+  for (let n = 0; n < 4 * 60 * 15; n++) ud.push(sim.skridt(DT, T0 + n * DT));
+  return ud;
+}
 
 describe("kæden tæller hvert signal", () => {
   it("kanalerne, hallen, flowet og ét driftssignal pr. maskine", () => {

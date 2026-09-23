@@ -230,6 +230,15 @@ export const ORDRE = {
   ordreNr: "X-24-0917",
   genetik: "X-G12",
   varietet: "X-V03",
+  /** Ordrens estimerede vægt. */
+  estimeretKg: 12_000,
+  /**
+   * Kasser i ordren. Læst som kasserne, der tippes i vippestolene — så de
+   * tælles af strømmen ind i linjen, og de vejer i snit det samme.
+   */
+  kasser: 24,
+  /** Så meget af ordren er kørt, når siden åbnes. Resten følger strømmen. */
+  koertKgVedStart: 4_300,
 };
 
 // ---------------------------------------------------------------------------

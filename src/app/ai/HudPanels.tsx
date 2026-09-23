@@ -2,7 +2,7 @@
 import { ANALYSE, FLASKEHALS, KASTEBORD } from "../../../data/fremskrivning";
 import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
-import { ledNavn, type HudAgent, type HudLink, type HudModel, type HudOrdre, type LinkTone } from "../../lib/ai-hud";
+import { kasserKoert, ledNavn, type HudAgent, type HudLink, type HudModel, type HudOrdre, type LinkTone } from "../../lib/ai-hud";
 import {
   flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
@@ -21,7 +21,7 @@ import { TAKT_MS, type Historik } from "./useTelemetri";
  * Et tomt felt står som "Afventer signal", aldrig som et nul.
  */
 
-const klok = (t: number) =>
+export const klok = (t: number) =>
   new Date(t).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 /** Et panel med hjørnebeslag. `nr` styrer rækkefølgen, de tændes i ved opstart. */
@@ -59,19 +59,33 @@ const Afventer = ({ tekst = "Afventer signal" }: { tekst?: string }) => (
  * den rigtige visning står felterne tomme — og i demoen er de opdigtede og
  * mærket.
  */
-export function OrdrePanel({ ordre, nr, still }: { ordre: HudOrdre; nr: number; still?: boolean }) {
-  const felter = [
+export function OrdrePanel({ ordre, nominal, gennemloeb, nr, still }: {
+  ordre: HudOrdre;
+  /** 100 %-punktet i t/hr. Uden det kan strømmen ikke blive til kasser. */
+  nominal: number | null;
+  gennemloeb: number | null;
+  nr: number;
+  still?: boolean;
+}) {
+  const koert = kasserKoert(ordre, nominal, gennemloeb);
+  const felter: { label: string; value: string | null; bred?: boolean }[] = [
     { label: "Ordre nr.", value: ordre.ordreNr },
     { label: "Genetik", value: ordre.genetik },
     { label: "Varietet", value: ordre.varietet },
+    { label: "Est. kg", value: ordre.estimeretKg === null ? null : ordre.estimeretKg.toLocaleString("da-DK") },
+    // Kørte kasser ud af ordrens. Kendes ordren, men ikke strømmen, står
+    // der en streg — ikke et nul.
+    { label: "Box", value: ordre.kasser === null ? null : `${koert ?? "–"} / ${ordre.kasser}`, bred: true },
   ];
   return (
     <Panel label="Ordre" nr={nr} still={still} right={ordre.opdigtet ? <Sim /> : undefined}>
       <dl className="hp-ordre">
         {felter.map((f) => (
-          <div key={f.label}>
+          <div key={f.label} className={f.bred ? "is-bred" : undefined}>
             <dt>{f.label}</dt>
             <dd className={f.value ? undefined : "is-tom"}>{f.value ?? "Ikke udfyldt"}</dd>
+            {/* Bjælken kun, når tallet kendes: en tom bjælke ligner et nul. */}
+            {f.bred && ordre.kasser !== null && koert !== null && <Bjaelke v={koert} max={ordre.kasser} />}
           </div>
         ))}
       </dl>
@@ -489,16 +503,29 @@ export function FokusPanel({ m, historik, sim }: { m: MaskinLaesning | null; his
 // ---------------------------------------------------------------------------
 // Hændelserne
 
-export function Haendelser({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
+export function Haendelser({ billede, nr, still, onAaben }: {
+  billede: TelemetriBillede;
+  nr: number;
+  still?: boolean;
+  /** Åbn loggen, man kan læse igennem. */
+  onAaben: () => void;
+}) {
   return (
     <Panel
       label="Hændelser"
       nr={nr}
       still={still}
       className="hp-log"
-      right={billede.simuleret ? <Sim /> : <span className="hp-count fm-num">{billede.haendelser.length}</span>}
+      right={
+        <span className="hp-hoejre">
+          {billede.simuleret ? <Sim /> : <span className="hp-count fm-num">{billede.haendelser.length}</span>}
+          <button type="button" className="hp-knap" onClick={onAaben} aria-haspopup="dialog">Hele loggen</button>
+        </span>
+      }
     >
-      {billede.haendelser.length === 0 ? <Afventer tekst="Ingen signaler at melde fra" /> : (
+      {billede.haendelser.length === 0 ? (
+        <Afventer tekst={billede.simuleret ? "Ingen hændelser endnu" : "Ingen signaler at melde fra"} />
+      ) : (
         <ol className="hp-haendelser">
           {billede.haendelser.slice(0, 14).map((h) => (
             <li key={`${h.t}-${h.hvor}-${h.tekst}`} className={`n-${h.niveau}`}>

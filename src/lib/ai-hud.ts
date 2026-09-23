@@ -176,13 +176,42 @@ export interface HudOrdre {
   ordreNr: string | null;
   genetik: string | null;
   varietet: string | null;
+  estimeretKg: number | null;
+  /** Kasser i ordren. */
+  kasser: number | null;
+  /** Så meget var kørt, da siden åbnede. Resten lægger strømmen til. */
+  koertKgVedStart: number | null;
   /** Værdierne er demoens, ikke ordresystemets. Fladen skal mærke dem. */
   opdigtet: boolean;
 }
 
 function ordreFor(fremskrevet: boolean): HudOrdre {
   if (fremskrevet) return { ...ORDRE, opdigtet: true };
-  return { ordreNr: null, genetik: null, varietet: null, opdigtet: false };
+  return {
+    ordreNr: null, genetik: null, varietet: null,
+    estimeretKg: null, kasser: null, koertKgVedStart: null,
+    opdigtet: false,
+  };
+}
+
+/**
+ * Kasser kørt i ordren: det kørte, delt med kassernes snitvægt.
+ *
+ * Det kørte er det, der var kørt, da siden åbnede, plus strømmen ind siden —
+ * `gennemloeb` er procent·sekunder, og 100 %-punktet gør det til tons i
+ * timen. Står linjen, står tælleren. Den tæller aldrig forbi ordren, og uden
+ * ordre, 100 %-punkt eller strøm er der intet tal at vise.
+ */
+export function kasserKoert(
+  ordre: Pick<HudOrdre, "estimeretKg" | "kasser" | "koertKgVedStart">,
+  nominalTPrT: number | null,
+  gennemloeb: number | null,
+): number | null {
+  const { estimeretKg, kasser, koertKgVedStart } = ordre;
+  if (estimeretKg === null || kasser === null || koertKgVedStart === null) return null;
+  if (nominalTPrT === null || gennemloeb === null || kasser <= 0) return null;
+  const kg = koertKgVedStart + (gennemloeb / 100) * nominalTPrT * 1000 / 3600;
+  return Math.min(kasser, Math.floor(kg / (estimeretKg / kasser)));
 }
 
 export interface HudModel {

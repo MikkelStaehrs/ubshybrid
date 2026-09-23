@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tallyMedTelemetri, type HudModel } from "../../lib/ai-hud";
 import { SITE } from "../../lib/context";
 import { rateFrom } from "../../lib/flow";
@@ -16,6 +16,7 @@ import {
   KvalitetPanel, OrdrePanel, Overskrift, Readout,
 } from "./HudPanels";
 import { Afkod } from "./Instrumenter";
+import { LogVindue } from "./LogVindue";
 import { useTelemetri } from "./useTelemetri";
 import "./hud.css";
 
@@ -50,7 +51,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   const still = useReducedMotion();
   const layout = useMemo(() => layoutLine(line), [line]);
   const flowSignal = model.links.find((l) => l.instrument.signalId)?.instrument.signalId;
-  const { billede, historik } = useTelemetri({
+  const { billede, historik, log } = useTelemetri({
     layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning,
   });
   const nu = useUr();
@@ -66,6 +67,8 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   // skal hvert instrument, der viser dem, sige det.
   const sim = billede.simuleret || liveSource === "mock";
   const iFokus = fokus ? billede.maskiner.find((m) => m.id === fokus) ?? null : null;
+  const [logAaben, setLogAaben] = useState(false);
+  const lukLog = useCallback(() => setLogAaben(false), []);
 
   return (
     <main
@@ -103,7 +106,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       </header>
 
       <div className="hud-left">
-        <OrdrePanel ordre={model.ordre} nr={1} still={still} />
+        <OrdrePanel ordre={model.ordre} nominal={model.flow.nominal} gennemloeb={billede.gennemloeb} nr={1} still={still} />
         <FlowPanel model={model} billede={billede} historik={historik} sim={sim} nr={2} still={still} />
         <DriftPanel billede={billede} historik={historik} nr={3} still={still} />
         <KlimaPanel billede={billede} historik={historik} nr={4} still={still} />
@@ -138,8 +141,10 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       </footer>
 
       <div className="hud-events">
-        <Haendelser billede={billede} nr={9} still={still} />
+        <Haendelser billede={billede} nr={9} still={still} onAaben={() => setLogAaben(true)} />
       </div>
+
+      {logAaben && <LogVindue log={log} sim={billede.simuleret} onLuk={lukLog} />}
 
       {boot && <Opstart model={model} liveSource={liveSource} />}
     </main>
