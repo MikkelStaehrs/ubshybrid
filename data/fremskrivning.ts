@@ -1,7 +1,7 @@
 // Fremskrivningens antagelser: hvad et menneske ville aflæse på hver maskine.
 //
 // Håndholdt fil, og hvert tal i den er et SKØN. Ingen af kanalerne findes i
-// anlægget i dag — de beskriver, hvad fremskrivningen på /ai?visning=fremtid
+// anlægget i dag — de beskriver, hvad fremskrivningen på /ai/demo
 // simulerer, så skærmen kan vise tal, der ligner det, driften ville kigge
 // efter. Ret dem frit: de er her, fordi driften kender dem bedre end koden.
 //

@@ -192,7 +192,7 @@ hører det til i dokumentvisningen. Også det er en test.
 
 ### Fremskrivningen
 
-`/ai?visning=fremtid` viser anlægget, som det ville se ud med signalerne
+`/ai/demo` viser anlægget, som det ville se ud med signalerne
 inde. Det er den eneste flade i repoet, hvor tallene ikke kommer fra
 anlægget, og reglerne om den er derfor snævre.
 

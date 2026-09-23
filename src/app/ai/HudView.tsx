@@ -93,7 +93,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid }: {
         <Ur nu={nu} />
         <Puls billede={billede} sim={sim} />
         <h1><Afkod tekst={model.fremskrevet ? "AI-overblik · fremskrevet" : "AI-overblik"} forsinkelse={150} still={still} /></h1>
-        {!model.fremskrevet && <Link href="/ai?visning=fremtid" className="hud-switch">Med signaler inde</Link>}
+        {!model.fremskrevet && <Link href="/ai/demo" className="hud-switch">Med signaler inde</Link>}
         <Link href="/ai?visning=dokument" className="hud-switch">Dokumentvisning</Link>
       </header>
 
