@@ -478,6 +478,36 @@
 .hp-run.run-staar { color: var(--hud-muted); }
 .hp-run.run-fejl { color: var(--hud-brud); box-shadow: 0 0 14px rgba(255, 111, 92, 0.2) inset; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.4; } }
+/* W/HR: vægt pr. time, det store tal ved siden af måleren. */
+.hp-whr { display: grid; gap: 1px; }
+.hp-whr-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--hud-muted);
+}
+.hp-whr-tal {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 1.9vw, 32px);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-ink);
+}
+.hp-whr-tal i { font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); margin-left: 4px; }
+/* Et skøn er ikke en måling og ikke en aftale. Det står på tallet. */
+.hp-skoen {
+  padding: 0 4px;
+  border: 1px dashed var(--hud-test);
+  color: var(--hud-test-lys);
+  font-size: 7.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
 .hp-kv { margin: 0; display: grid; gap: 5px; }
 .hp-kv > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--hud-line); padding-bottom: 3px; }
 .hp-kv dt { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-muted); }
@@ -790,6 +820,7 @@
 .cc-node.tone-moerk .cc-rd-value { fill: var(--hud-muted); }
 .cc-live-value { fill: var(--t-lys); font-family: var(--font-mono); font-size: 17px; font-variant-numeric: tabular-nums; }
 .cc-sim { fill: var(--hud-test-lys); font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; letter-spacing: 0.2em; text-anchor: end; }
+.cc-live-whr { fill: var(--hud-ink); font-family: var(--font-mono); font-size: 12px; text-anchor: end; font-variant-numeric: tabular-nums; }
 .cc-slot { fill: none; stroke: var(--hud-moerk); stroke-width: 1; }
 .cc-slot.is-used { fill: var(--t-lys); stroke: var(--t-lys); }
 .cc-waits { fill: var(--hud-dim); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; }

@@ -241,7 +241,10 @@ function Slots({ x, y, slots }: {
 /** Farven på en udnyttelse: grøn med luft, rav tæt på loftet, rød over. */
 const udnyttelsesTone = (u: number) => (u >= 1 ? "brud" : u >= 0.8 ? "test" : "drift");
 
-function Instrument({ n, reading, sim }: { n: Node; reading?: string; sim?: boolean }) {
+/** Målerens aflæsning: procenten, og W/HR når 100 %-punktet findes. */
+export interface Aflaesning { tekst: string; whr?: string }
+
+function Instrument({ n, reading, sim }: { n: Node; reading?: Aflaesning; sim?: boolean }) {
   const tone = n.terminal ? "moerk" : n.link!.tone;
   const y = n.ydelse;
   // Bruddet og flaskehalsen er to forskellige ting. Et brud er et led, der
@@ -275,8 +278,10 @@ function Instrument({ n, reading, sim }: { n: Node; reading?: string; sim?: bool
           mærket — et tal uden mærkat ville ligne noget, kæden havde leveret. */}
       {reading && (
         <>
-          <text x={left} y={FIRST_ROW + 4} className="cc-live-value">{reading}</text>
-          {sim !== false && <text x={right} y={FIRST_ROW + 4} className="cc-sim">SIM</text>}
+          <text x={left} y={FIRST_ROW + 4} className="cc-live-value">{reading.tekst}</text>
+          {reading.whr && <text x={right} y={FIRST_ROW + 4} className="cc-live-whr">{reading.whr}</text>}
+          {/* SIM står i bunden, så den ikke støder ind i W/HR. */}
+          {sim !== false && <text x={right} y={BOX_TOP + BOX_H - 8} className="cc-sim">SIM</text>}
         </>
       )}
 
@@ -334,7 +339,7 @@ function Instrument({ n, reading, sim }: { n: Node; reading?: string; sim?: bool
 
 export function ChainCircuit({ model, reading, kaede = null, sim }: {
   model: HudModel;
-  reading?: string;
+  reading?: Aflaesning;
   kaede?: KaedeTal | null;
   /** Er aflæsningen simuleret? Så mærkes den. */
   sim?: boolean;

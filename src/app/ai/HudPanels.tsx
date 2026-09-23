@@ -4,7 +4,7 @@ import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
 import type { HudAgent, HudLink, HudModel, LinkTone } from "../../lib/ai-hud";
 import {
-  flowLimits, nominalFor, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
+  flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
 import type { MaskinLaesning, TelemetriBillede } from "../../lib/telemetri";
 import { Afkod, Bjaelke, Fordeling, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
@@ -89,6 +89,7 @@ export function Overskrift({ model, billede, still }: {
   }
 
   const alarm = billede.haendelser.find((h) => h.niveau === "alarm" && billede.t - h.t < 20_000);
+  const whr = rateFrom(billede.flowPct, model.flow.nominal);
   const staar = billede.maskiner.filter((m) => m.koerer === false);
 
   if (alarm) {
@@ -116,10 +117,17 @@ export function Overskrift({ model, billede, still }: {
     <div className={`hud-break is-whole tone-${billede.simuleret ? "drift" : model.chainTone}`}>
       <p className="hb-kicker">{billede.simuleret ? "Alle maskiner kører" : "Kæden er hel"}{billede.simuleret && <Sim />}</p>
       <p className="hb-where">
-        {billede.flowPct === null ? "Linjen kører" : <><Tal v={billede.flowPct} d={1} /> %</>}
+        {billede.flowPct === null
+          ? "Linjen kører"
+          : whr !== null
+            ? <><Tal v={whr} d={2} /> {model.flow.rateUnit}</>
+            : <><Tal v={billede.flowPct} d={1} /> %</>}
       </p>
       {billede.flowPct !== null && (
-        <p className="hb-next"><span className="hb-next-label">Flow ved indgang</span></p>
+        <p className="hb-next">
+          <span className="hb-next-label">{whr !== null ? "W/HR ved indgang" : "Flow ved indgang"}</span>
+          {whr !== null && <strong><Tal v={billede.flowPct} d={0} /> %</strong>}
+        </p>
       )}
     </div>
   );
@@ -183,9 +191,8 @@ export function FlowPanel({ model, billede, historik, sim, nr, still }: {
 }) {
   const ops = lineOpsFor(model.lineId);
   const graenser = flowLimits(ops);
-  const signal = model.links.find((l) => l.instrument.signalId)?.instrument.signalId ?? "FT-743";
-  const nominal = nominalFor(ops, signal);
-  const rate = rateFrom(billede.flowPct, nominal);
+  const signal = model.flow.signal ?? "FT-743";
+  const rate = rateFrom(billede.flowPct, model.flow.nominal);
   const tilstand = tilstandAf(historik.get("flow") ?? []);
   const tone = tilstand ? RUN_TONE[tilstand] : "moerk";
 
@@ -204,12 +211,18 @@ export function FlowPanel({ model, billede, historik, sim, nr, still }: {
           <span className={`hp-run run-${tilstand ?? "ukendt"}`}>
             {tilstand ? RUN_STATE_LABEL[tilstand] : "Afventer"}
           </span>
+          {/* W/HR: vægt pr. time. Det tal, driften spørger efter først. */}
+          <div className="hp-whr">
+            <span className="hp-whr-label">
+              W/HR
+              {model.flow.kilde === "skoen" && <span className="hp-skoen" title="100 %-punktet er et skøn, ikke aftalt">Skøn</span>}
+            </span>
+            {rate === null
+              ? <span className="hp-ikke">Ikke udfyldt</span>
+              : <span className="hp-whr-tal"><Tal v={rate} d={2} /><i>{model.flow.rateUnit}</i></span>}
+          </div>
           <dl className="hp-kv">
             <div><dt>Råsignal</dt><dd><Tal v={billede.flowMa} d={2} /> <i>mA</i></dd></div>
-            <div>
-              <dt>Takt</dt>
-              <dd>{rate === null ? <span className="hp-ikke">Ikke udfyldt</span> : <><Tal v={rate} d={1} /> <i>{ops!.rateUnit}</i></>}</dd>
-            </div>
           </dl>
         </div>
       </div>

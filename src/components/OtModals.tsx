@@ -281,7 +281,7 @@ CREATE INDEX ix_ot_maaling_tag_tid
         <h3>Edge — eksempel</h3>
         <pre className="fm-code"><code>{`# Læser ${channel} fra ${c.id} og skriver til MSSQL.
 # Registerkortet står under fanen Signaler.
-TAGS = [{"tag": "${tag}", "wid": "${wid}", "addr": 30001, "enhed": "t/t"}]
+TAGS = [{"tag": "${tag}", "wid": "${wid}", "addr": 30001, "enhed": "t/hr"}]
 
 while True:
     for t in TAGS:

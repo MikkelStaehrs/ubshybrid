@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AGENT_ENGINE_LABEL } from "./agents";
+import { AGENT_ENGINE_LABEL, lineOpsFor } from "./agents";
 import { SMÅBELØB_UNDER } from "./agent-cost";
 import { chainToneOf, hudAgentState, hudModel, hudState, tallyMedTelemetri, type HudLink } from "./ai-hud";
 
@@ -285,5 +285,35 @@ describe("det store tal med telemetri", () => {
     const tilstande = Object.values(m.maskinTilstand);
     assert.equal(tilstande.length, m.tally.total);
     assert.equal(tilstande.filter((s) => s === "test").length, m.tally.test);
+  });
+});
+
+describe("W/HR — vægt pr. time", () => {
+  it("står som 'ikke udfyldt' i den rigtige visning, indtil 100 %-punktet er aftalt", () => {
+    // Demoens skøn må ikke snige sig ind i anlægget, som det står.
+    assert.equal(m.flow.signal, "FT-743");
+    assert.equal(m.flow.nominal, null);
+    assert.equal(m.flow.kilde, null);
+  });
+
+  it("bruger demoens skøn i fremskrivningen — og siger, at det er et skøn", () => {
+    const frem = hudModel("sliberi", { fremskriv: true })!;
+    assert.equal(frem.flow.nominal, 1.0);
+    assert.equal(frem.flow.kilde, "skoen");
+    assert.equal(frem.flow.rateUnit, "t/hr");
+  });
+
+  it("et aftalt tal vinder over skønnet, begge steder", () => {
+    const ops = lineOpsFor("sliberi")!;
+    const foer = ops.flow;
+    try {
+      ops.flow = { nominal: { "FT-743": 1.2 } };
+      for (const model of [hudModel("sliberi")!, hudModel("sliberi", { fremskriv: true })!]) {
+        assert.equal(model.flow.nominal, 1.2);
+        assert.equal(model.flow.kilde, "aftalt");
+      }
+    } finally {
+      ops.flow = foer;
+    }
   });
 });

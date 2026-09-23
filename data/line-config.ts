@@ -10,7 +10,7 @@
 import type { LineOps } from "../src/lib/types";
 
 const sliberi: LineOps = {
-  rateUnit: "t/t",
+  rateUnit: "t/hr",
 
   // Startværdi, ikke en måling. To minutter stilstand er et stop, der er
   // værd at skrive ned på et sliberi — men tallet skal aftales med driften,

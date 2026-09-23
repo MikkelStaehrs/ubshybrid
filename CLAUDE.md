@@ -240,6 +240,14 @@ buffer, data bliver forsinket, og Kædevagten melder det. Bagefter indhenter
 kæden køen. Er data forsinkede, er det overskriften — så er alt andet på
 skærmen forældet. `?flaskehals=1` holder den fremme til et møde.
 
+**W/HR er vægt pr. time**, i `t/hr` — det tal, driften spørger efter først.
+Det findes kun, når 100 %-punktet er kendt. Et aftalt tal i
+`flow.nominal` i `data/line-config.ts` vinder altid. Kun i demoen falder
+modellen tilbage på skønnet i `FLOW_NOMINAL` i `data/fremskrivning.ts`
+("normalt omkring 1 ton i timen"), og så står der "Skøn" på tallet. I den
+rigtige visning står der "Ikke udfyldt", indtil tallet er aftalt. Afgørelsen
+sker ét sted, i `flowFor()` i `src/lib/ai-hud.ts`, og har tests.
+
 **Ingen række forsvinder i regnestykket.** Det, der kommer ind, er skrevet,
 i kø eller — kun når bufferen er fuld — tabt. Regnskabet har en test.
 
@@ -372,7 +380,7 @@ har sagt tallet.
 - **Stopgrænsen på 120 sekunder er valgt, ikke aftalt.** Den skal forbi
   driften, før nogen regner tilgængelighed på den.
 - **100 %-punktet er ikke aftalt.** `flow.nominal` står tom, så kortet viser
-  procent og ingen tons. Tallet — det, der gør procent til t/t — aftales med
+  procent og ingen tons. Tallet — det, der gør procent til t/hr — aftales med
   driften efter test, og det er den eneste kalibrering, der findes.
 - **FS 550 er en trendmåler, ikke en masseflowmåler.** Den siger, om der
   løber mere eller mindre end før, ikke hvor mange tons der passerer. Enhver

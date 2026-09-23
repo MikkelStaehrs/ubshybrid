@@ -415,7 +415,7 @@ export interface FlowOps {
 }
 
 export interface LineOps {
-  /** Enheden takt måles i på denne linje, fx "t/t". */
+  /** Enheden takt måles i på denne linje, fx "t/hr" — vægt pr. time. */
   rateUnit: string;
   /** Hvor længe en maskine skal stå stille, før det tæller som et stop. */
   stopAfterSeconds: number;

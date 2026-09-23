@@ -204,3 +204,17 @@ export const FLASKEHALS = {
   /** Over så mange sekunders forsinkelse melder Kædevagten. */
   forsinkelseAlarmS: 15,
 };
+
+// ---------------------------------------------------------------------------
+// Gennemløbet
+
+/**
+ * Demoens 100 %-punkt pr. flowsignal, i t/hr: hvad linjen normalt skubber
+ * igennem. "Normalt omkring 1 ton i timen" er sagt af driften, men ikke
+ * aftalt som kalibrering efter test. Derfor står det her — i demoens
+ * antagelser — og ikke i line-config.ts, hvor det rigtige tal skal stå, når
+ * det er aftalt. Står der et tal dér, vinder det over det her.
+ */
+export const FLOW_NOMINAL: Record<string, number> = {
+  "FT-743": 1.0,
+};

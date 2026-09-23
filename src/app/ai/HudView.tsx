@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { tallyMedTelemetri, type HudModel } from "../../lib/ai-hud";
 import { SITE } from "../../lib/context";
+import { rateFrom } from "../../lib/flow";
 import { layoutLine } from "../../lib/layout";
 import type { LiveSourceKind } from "../../lib/live-source";
 import type { OtLayout } from "../../lib/ot";
@@ -126,7 +127,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         </div>
         <ChainCircuit
           model={model}
-          reading={billede.flowPct === null ? (billede.flowMa !== null ? "Fejl" : undefined) : `${billede.flowPct.toFixed(1).replace(".", ",")} %`}
+          reading={maalerTekst(billede, model)}
           kaede={billede.kaede}
           sim={sim}
         />
@@ -139,6 +140,14 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       {boot && <Opstart model={model} liveSource={liveSource} />}
     </main>
   );
+}
+
+/** Målerens aflæsning i kæden: procent, og W/HR når 100 %-punktet findes. */
+function maalerTekst(b: TelemetriBillede, model: HudModel): { tekst: string; whr?: string } | undefined {
+  if (b.flowPct === null) return b.flowMa !== null ? { tekst: "Fejl" } : undefined;
+  const tekst = `${b.flowPct.toFixed(1).replace(".", ",")} %`;
+  const whr = rateFrom(b.flowPct, model.flow.nominal);
+  return whr === null ? { tekst } : { tekst, whr: `${whr.toFixed(2).replace(".", ",")} ${model.flow.rateUnit}` };
 }
 
 // ---------------------------------------------------------------------------

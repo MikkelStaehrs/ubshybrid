@@ -5,7 +5,9 @@
 // bevæger sig på skærmen, skal kunne peges tilbage på en tilstand her — og
 // den kommer fra pathState(), signalDelivery() og agentstatus, ikke fra
 // noget, komponenten fandt på.
-import { agentState, agentsFor, decidedAgents, describeScope, type AgentState } from "./agents";
+import { FLOW_NOMINAL } from "../../data/fremskrivning";
+import { agentState, agentsFor, decidedAgents, describeScope, lineOpsFor, type AgentState } from "./agents";
+import { nominalFor } from "./flow";
 import { costOf, totalPerMaaned, SMÅBELØB_UNDER } from "./agent-cost";
 import { firstRunBlocker, pathToProduction, runsFor, type AgentRun } from "./agent-runs";
 import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
@@ -127,6 +129,22 @@ export interface HudAgent {
   gratis: string | null;
 }
 
+/**
+ * Gennemløbet: vægt pr. time (W/HR). Procenten fra måleren bliver først til
+ * tons, når nogen har sagt, hvad 100 % er — og modellen ved, hvem der har.
+ */
+export interface HudFlow {
+  signal: string | null;
+  /** 100 %-punktet i `rateUnit`. null når ingen har sagt det. */
+  nominal: number | null;
+  /**
+   * Hvor tallet kommer fra. "aftalt" står i line-config.ts; "skoen" er
+   * demoens antagelse i data/fremskrivning.ts og skal mærkes som sådan.
+   */
+  kilde: "aftalt" | "skoen" | null;
+  rateUnit: string;
+}
+
 export interface HudModel {
   lineId: string;
   lineName: string;
@@ -134,6 +152,7 @@ export interface HudModel {
   tally: { drift: number; test: number; afventer: number; total: number };
   /** Hver maskines HUD-tilstand, nøglet på maskinens id. Grundlaget for `tally`. */
   maskinTilstand: Record<string, HudState>;
+  flow: HudFlow;
   links: HudLink[];
   /**
    * Kædens samlede tone. Grøn kræver, at hvert led er i drift — `isDone()`
@@ -293,6 +312,21 @@ export function tallyMedTelemetri(
   );
 }
 
+/**
+ * Kalibreringen til W/HR. Et aftalt tal i line-config.ts vinder altid. Kun
+ * i fremskrivningen falder vi tilbage på demoens skøn — i den rigtige
+ * visning står der "Ikke udfyldt", indtil tallet er aftalt.
+ */
+function flowFor(lineId: string, ot: OtLayout | null, fremskrevet: boolean): HudFlow {
+  const ops = lineOpsFor(lineId);
+  const signal = ot?.sensors.find((s) => s.catalogType === "flow")?.id ?? null;
+  const rateUnit = ops?.rateUnit ?? "t/hr";
+  const aftalt = signal ? nominalFor(ops, signal) : null;
+  if (aftalt !== null) return { signal, nominal: aftalt, kilde: "aftalt", rateUnit };
+  const skoen = fremskrevet && signal ? FLOW_NOMINAL[signal] ?? null : null;
+  return { signal, nominal: skoen, kilde: skoen !== null ? "skoen" : null, rateUnit };
+}
+
 export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudModel | null {
   const data = LINES[lineId];
   if (!data) return null;
@@ -379,6 +413,7 @@ export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudMod
     lineName: data.line.name,
     tally,
     maskinTilstand,
+    flow: flowFor(lineId, ot, fremskrevet),
     links,
     chainTone: chainToneOf(links),
     reach: { delivers: links.filter((l) => l.delivers).length, total: links.length },
