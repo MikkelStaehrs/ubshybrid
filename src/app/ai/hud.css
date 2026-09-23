@@ -807,7 +807,27 @@
   background: linear-gradient(to bottom, rgba(2, 5, 4, 0.55), rgba(2, 5, 4, 0.92) 40%);
   box-shadow: 0 -40px 60px -20px rgba(2, 5, 4, 0.8);
 }
-.hud-chain .hc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.hud-chain .hc-head { display: flex; align-items: baseline; gap: 12px; }
+.hud-chain .hc-reach { margin-left: auto; }
+.hc-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+/* Hvad leddet gør, under dets navn. */
+.cc-rolle { fill: var(--hud-muted); font-family: var(--font-ui); font-size: 10.5px; }
+/* Hvad der løber på banen mellem to led. */
+.cc-bane {
+  fill: var(--hud-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-anchor: middle;
+  text-transform: uppercase;
+}
+.cc-seg.is-live .cc-bane { fill: var(--hud-muted); }
 .hc-reach { font-family: var(--font-mono); font-size: 11px; color: var(--hud-ink); }
 
 .cc { display: block; }

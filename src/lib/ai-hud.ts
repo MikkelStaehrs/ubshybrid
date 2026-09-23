@@ -263,7 +263,11 @@ function instrumentFor(
     // Analoge og digitale kanaler hver for sig. Lagt sammen skjulte de et
     // underskud: "17 / 24" så ud som plads, mens 13 driftssignaler ingen
     // kanal havde, fordi de analoge pladser var ledige.
-    const readings: LinkInstrument["readings"] = [{ label: "Skab", value: cabinet.id }];
+    // Skabets nummer står kun, når skabet findes. Venter IO-kortet på skabet,
+    // står nummeret allerede i ventelinjen, og pladserne skal have luften.
+    const readings: LinkInstrument["readings"] = isDone(cabinet.status)
+      ? [{ label: "Skab", value: cabinet.id }]
+      : [];
     for (const u of report.uses) {
       if (u.total === 0 && u.needed === 0) continue;
       readings.push({ label: u.kind.toUpperCase(), value: `${u.used} / ${u.total}` });

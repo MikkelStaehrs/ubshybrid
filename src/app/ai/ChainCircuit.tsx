@@ -26,16 +26,39 @@ import type { KaedeLed, KaedeTal } from "../../lib/telemetri";
 // Båndet er bredt og lavt: det ligger på tværs i bunden af skærmen. Formatet
 // er valgt, så svg'en kan skalere med fuld bredde uden at blive brevkasset.
 const W = 1800;
-const H = 200;
+const H = 210;
 /** Knudens halve bredde. Segmenterne går fra kant til kant. */
 const NODE = 92;
 /** Luft inden for knudens kant, så tal ikke rører stregen. */
 const PAD = 10;
 
 const BOX_TOP = 24;
-const BOX_H = 158;
-/** Første aflæsning sidder under overskriften og dens skillestreg. */
-const FIRST_ROW = BOX_TOP + 62;
+const BOX_H = 166;
+/** Første aflæsning sidder under overskriften, rollen og skillestregen. */
+const FIRST_ROW = BOX_TOP + 66;
+
+/**
+ * Hvad hvert led gør, i højst fire ord. Kæden er vejen, et tal tager fra
+ * måleren til AI'en — og den er ikke til at forstå, hvis man skal kende
+ * "kobler" og "edge" i forvejen.
+ */
+const ROLLE: Record<string, string> = {
+  sensor: "Måler materialet",
+  io: "Strøm bliver til tal",
+  kobler: "Henter tallene",
+  edge: "Samler og sender",
+  mssql: "Gemmer alt",
+  agenter: "Læser og handler",
+};
+
+/** Hvad der løber på banen ud af hvert led. */
+const PAA_BANEN: Record<string, string> = {
+  sensor: "4–20 mA",
+  io: "Register",
+  kobler: "Modbus TCP",
+  edge: "Rækker",
+  mssql: "SQL",
+};
 const ROW_H = 17;
 
 /**
@@ -176,7 +199,7 @@ function GlodDefs() {
  */
 const RAEKKER_PR_BLOK = 500;
 
-function Segment({ from, to, y, link, ghost, koe, traeg }: {
+function Segment({ from, to, y, link, ghost, koe, traeg, bane }: {
   from: number;
   to: number;
   y: number;
@@ -186,12 +209,15 @@ function Segment({ from, to, y, link, ghost, koe, traeg }: {
   koe: number;
   /** Hvor meget langsommere rækkerne kommer igennem end normalt. 1 er normalt. */
   traeg: number;
+  /** Hvad der løber på banen, i få ord. */
+  bane?: string;
 }) {
   const live = link.delivers;
   const blokke = Math.min(9, Math.ceil(koe / RAEKKER_PR_BLOK));
   return (
     <g className={`cc-seg tone-${link.tone}${live ? " is-live" : ""}${ghost ? " is-ghost" : ""}${blokke ? " has-koe" : ""}`}>
       <line x1={from} y1={y} x2={to} y2={y} className="cc-track" />
+      {bane && <text x={(from + to) / 2} y={y - 9} className="cc-bane">{bane}</text>}
       {Array.from({ length: blokke }, (_, i) => (
         <rect key={i} x={to - 10 - i * 9} y={y - 4} width={7} height={8} className="cc-koe" />
       ))}
@@ -218,8 +244,8 @@ function Slots({ x, y, slots }: {
   y: number;
   slots: { name: string; used: boolean }[];
 }) {
-  // Mange pladser får flere på en række, så gitteret bliver i kassen.
-  const PER_ROW = slots.length > 24 ? 16 : 12;
+  // Seksten på en række, så gitteret holder sig fri af teksten under det.
+  const PER_ROW = 16;
   const PITCH = (NODE * 2 - PAD * 2) / PER_ROW;
   return (
     <g className="cc-slots">
@@ -269,11 +295,12 @@ function Instrument({ n, reading, sim }: { n: Node; reading?: Aflaesning; sim?: 
       <Glow x={n.x} y={BOX_TOP + BOX_H / 2} tone={tone} pulse={broken} />
       <rect x={n.x - NODE} y={BOX_TOP} width={NODE * 2} height={BOX_H} className="cc-box" />
 
-      <text x={left} y={BOX_TOP + 26} className="cc-label">{short(n.label)}</text>
+      <text x={left} y={BOX_TOP + 24} className="cc-label">{short(n.label)}</text>
       {n.link && (
-        <text x={right} y={BOX_TOP + 26} className="cc-status">{n.link.statusLabel}</text>
+        <text x={right} y={BOX_TOP + 24} className="cc-status">{n.link.statusLabel}</text>
       )}
-      <line x1={left} y1={BOX_TOP + 38} x2={right} y2={BOX_TOP + 38} className="cc-rule" />
+      <text x={left} y={BOX_TOP + 39} className="cc-rolle">{ROLLE[n.link?.id ?? "agenter"]}</text>
+      <line x1={left} y1={BOX_TOP + 47} x2={right} y2={BOX_TOP + 47} className="cc-rule" />
 
       {/* Aflæsningen fra måleren. Den kommer fra simulatoren, så den er
           mærket — et tal uden mærkat ville ligne noget, kæden havde leveret. */}
@@ -325,9 +352,9 @@ function Instrument({ n, reading, sim }: { n: Node; reading?: Aflaesning; sim?: 
 
       {venter && (
         <>
-          <text x={left} y={BOX_TOP + BOX_H - 34} className="cc-rd-label">Venter</text>
+          <text x={left} y={BOX_TOP + BOX_H - 30} className="cc-rd-label">Venter</text>
           {ombryd(venter, 29).map((linje, i) => (
-            <text key={i} x={left} y={BOX_TOP + BOX_H - 21 + i * 12} className="cc-waits">{linje}</text>
+            <text key={i} x={left} y={BOX_TOP + BOX_H - 18 + i * 12} className="cc-waits">{linje}</text>
           ))}
         </>
       )}
@@ -380,6 +407,7 @@ export function ChainCircuit({ model, reading, kaede = null, sim }: {
               ghost={brudAt >= 0 && i >= brudAt}
               koe={iKoe}
               traeg={Math.max(1, traeg)}
+              bane={PAA_BANEN[link.id]}
             />
           );
         })}
@@ -431,5 +459,5 @@ function ariaFor(m: HudModel): string {
   const tail = m.broken
     ? `Kæden stopper ved ${m.broken.label}.${m.broken.next ? ` Afventer ${m.broken.next}.` : ""}`
     : "Hele kæden leverer.";
-  return `Signalkæden fra måler til agenter. ${parts.join(". ")}. ${tail}`;
+  return `Signalkæden: vejen et tal tager fra måleren til AI'en. ${parts.join(". ")}. ${tail}`;
 }

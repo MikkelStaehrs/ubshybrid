@@ -190,6 +190,12 @@ En test scanner modellens synlige strenge for dem.
 er to linjer: hvor kæden stopper, og hvad den afventer. Skal noget uddybes,
 hører det til i dokumentvisningen. Også det er en test.
 
+Én undtagelse, sagt ja til: **signalkæden**. Hvert led har en rolle på højst
+fire ord under sit navn ("Gemmer alt"), og hver bane siger, hvad der løber
+på den ("Modbus TCP"). Uden dem var kæden ikke til at forstå — det sagde
+den, der skrev reglen. En rolle er en etiket for, *hvad* leddet er, ikke en
+forklaring på *hvorfor*; det sidste hører stadig til i dokumentvisningen.
+
 **Partiklerne i maskinerne bevæger sig kun, når maskinen kører**, og med dens
 fart (`maskinFart()`): løftet op gennem elevatorerne, på langs gennem
 maskinerne. Ved vi ikke, om den kører — som i den rigtige visning i dag —

@@ -125,6 +125,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       <footer className="hud-chain" style={{ ["--i" as string]: 7 }}>
         <div className="hc-head">
           <span className="hp-label">Signalkæden</span>
+          <span className="hc-sub">Fra måler til AI</span>
           <span className="hc-reach fm-num">{model.reach.delivers} / {model.reach.total}</span>
         </div>
         <ChainCircuit
