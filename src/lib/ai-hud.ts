@@ -15,10 +15,10 @@ import { machineState } from "./hologram";
 import { layoutLine } from "./layout";
 import { LINES } from "./lines";
 import {
-  channelReport, isDone, layoutOt, otLayerFor, pathState, registerMap,
-  type OtLayout,
+  channelReport, isDone, layoutOt, otLayerFor, pathState, registerMap, sensorType, weakest,
+  type OtLayout, type PathStepState,
 } from "./ot";
-import type { AgentEngine, OtStatus } from "./types";
+import type { AgentEngine, OtPathStep, OtStatus } from "./types";
 
 /**
  * HUD'en kender tre tilstande og ikke flere.
@@ -87,10 +87,18 @@ export interface LinkInstrument {
   waits?: string;
   /** Sensorens tag, så fladen kan slå en aflæsning op. Kun på måleren. */
   signalId?: string;
+  /**
+   * Målerne efter slags, flest først: "Temperatur 17". Sat, når der er mere
+   * end én måler — så er leddet ikke én måler, men alle.
+   */
+  maalere?: { label: string; antal: number }[];
 }
 
 export interface HudLink {
+  /** HUD'ens eget id. "din" er IO-kort og kobler. */
   id: string;
+  /** Trinnene i OT-laget, leddet dækker. Ét, bortset fra DIN-skabet. */
+  trin: OtPathStep[];
   label: string;
   status: OtStatus;
   /** Ét af de tre HUD-ord. */
@@ -105,6 +113,11 @@ export interface HudLink {
   next?: string;
   /** Leddets egne tal. */
   instrument: LinkInstrument;
+  /**
+   * Hvad der løber ud af leddet, når det afhænger af målerne. Kun på
+   * sensoren: én flowmåler sender 4–20 mA, et helt anlæg sender flere slags.
+   */
+  bane?: string;
 }
 
 export interface HudAgent {
@@ -215,12 +228,22 @@ function nextStepAt(ot: OtLayout, stepId: string): string | undefined {
 }
 
 /**
- * Kæden som helhed.
+ * Kæden, som den står på skærmen.
  *
- * Er der et brud, er tonen bruddets. Er kæden hel, afgør det svageste led
- * farven: ét led i test gør hele kæden til test. Grøn er forbeholdt en kæde,
- * hvor hvert eneste led er i drift.
+ * OT-laget har seks trin, og de er uændrede — de bærer indkøb og
+ * afhængigheder, og dokumentvisningen viser dem. På en skærm i et
+ * mødelokale er "kobler" og "edge" ord, man skal have forklaret. IO-kortet og
+ * kobleren sidder på den samme DIN-skinne i det samme skab, så de er ét led:
+ * DIN-skabet. Edge er et program på en server i racket — det hedder Server.
+ * Det er det eneste sted, trinnene bliver til led.
  */
+const HUD_LED: { id: string; label: string; trin: OtPathStep[] }[] = [
+  { id: "sensor", label: "Sensor", trin: ["sensor"] },
+  { id: "din", label: "DIN-skab", trin: ["io", "kobler"] },
+  { id: "edge", label: "Server", trin: ["edge"] },
+  { id: "mssql", label: "MSSQL", trin: ["mssql"] },
+];
+
 /**
  * Leddets egne tal, hentet hvor de allerede står.
  *
@@ -236,6 +259,26 @@ function instrumentFor(
   const sensor = ot.sensors[0];
   const cabinet = ot.cabinets[0];
   const waits = blockedBy[0];
+
+  // Mange målere: leddet er dem alle, talt efter slags. Én: leddet er den,
+  // med model, kanal og registeradresse.
+  if (stepId === "sensor" && sensor && ot.sensors.length > 1) {
+    const antal = new Map<string, number>();
+    for (const s of ot.sensors) {
+      const label = sensorType(s.catalogType ?? "")?.kort ?? s.type;
+      antal.set(label, (antal.get(label) ?? 0) + 1);
+    }
+    const maalere = [...antal]
+      .map(([label, n]) => ({ label, antal: n }))
+      .sort((a, b) => b.antal - a.antal || a.label.localeCompare(b.label, "da"));
+    // Ingen aflæsning øverst: leddet er ikke én måler længere, og flowet
+    // har sit eget panel.
+    return {
+      readings: [{ label: "Målere", value: String(ot.sensors.length) }],
+      maalere,
+      waits,
+    };
+  }
 
   if (stepId === "sensor" && sensor) {
     const report = cabinet ? channelReport(cabinet, ot.sensors, 1) : null;
@@ -263,11 +306,8 @@ function instrumentFor(
     // Analoge og digitale kanaler hver for sig. Lagt sammen skjulte de et
     // underskud: "17 / 24" så ud som plads, mens 13 driftssignaler ingen
     // kanal havde, fordi de analoge pladser var ledige.
-    // Skabets nummer står kun, når skabet findes. Venter IO-kortet på skabet,
-    // står nummeret allerede i ventelinjen, og pladserne skal have luften.
-    const readings: LinkInstrument["readings"] = isDone(cabinet.status)
-      ? [{ label: "Skab", value: cabinet.id }]
-      : [];
+    // Skabet står i leddets navn, og pladserne skal have luften.
+    const readings: LinkInstrument["readings"] = [];
     for (const u of report.uses) {
       if (u.total === 0 && u.needed === 0) continue;
       readings.push({ label: u.kind.toUpperCase(), value: `${u.used} / ${u.total}` });
@@ -286,6 +326,15 @@ function instrumentFor(
   }
 
   return { readings: [], waits };
+}
+
+/** Signalarterne, målerne sender ind i skabet, i få ord. */
+const SIGNAL_ORD: Record<string, string> = {
+  "4-20 mA": "4–20 mA", "0-10 V": "0–10 V", digital: "Digital", feltbus: "Feltbus",
+};
+function baneFra(ot: OtLayout): string | undefined {
+  const arter = [...new Set(ot.sensors.map((s) => SIGNAL_ORD[s.signal] ?? s.signal))];
+  return arter.length > 0 ? arter.join(" · ") : undefined;
 }
 
 export function chainToneOf(links: HudLink[]): LinkTone {
@@ -346,6 +395,59 @@ function flowFor(lineId: string, ot: OtLayout | null, fremskrevet: boolean): Hud
   return { signal, nominal: skoen, kilde: skoen !== null ? "skoen" : null, rateUnit };
 }
 
+/**
+ * Navnet på skærmen for et trin eller et af kædens egne led — "kobler"
+ * bliver "DIN-skab". Alt, der skal nævne et led, spørger her, så de ord,
+ * HUD_LED oversætter væk, ikke smutter ind ad en anden dør.
+ */
+export function ledNavn(links: Pick<HudLink, "trin" | "label">[], id: string): string {
+  return links.find((l) => (l.trin as string[]).includes(id))?.label ?? "Kæden";
+}
+
+/**
+ * Kædens led, udledt af OT-laget. Eksporteret for testens skyld: reglen om,
+ * at DIN-skabet ikke er stærkere end sit svageste trin, skal kunne prøves på
+ * et lag, hvor netop det er tilfældet.
+ */
+export function hudLinks(ot: OtLayout): HudLink[] {
+  const links: HudLink[] = [];
+  if (!ot.cabinets[0]) return links;
+  const sensor = ot.sensors[0];
+  // Dashboardet er for mennesker. Kæden, agenterne venter på, ender i MSSQL.
+  const chain = new Map<OtPathStep, PathStepState>(
+    pathState(ot.infrastructure, ot.cabinets[0], sensor).map((s) => [s.id, s]),
+  );
+  let alreadyBroken = false;
+  for (const led of HUD_LED) {
+    const trin = led.trin.map((id) => chain.get(id)!);
+    // Et led, der dækker flere trin, er ikke stærkere end det svageste —
+    // og det venter på det, det første trin, der ikke leverer, venter på.
+    const status = weakest(trin.map((s) => s.status));
+    const delivers = trin.every((s) => isDone(s.status));
+    const broken = !delivers && !alreadyBroken;
+    if (broken) alreadyBroken = true;
+    const hager = trin.find((s) => !isDone(s.status));
+    const venter = trin.flatMap((s) => s.blockedBy.map((n) => n.name));
+    links.push({
+      id: led.id,
+      trin: led.trin,
+      label: led.label,
+      status,
+      state: hudState(status),
+      statusLabel: HUD_STATE_LABEL[hudState(status)],
+      tone: toneOf(status, delivers, broken),
+      delivers,
+      broken,
+      next: broken && hager ? nextStepAt(ot, hager.id) : undefined,
+      // DIN-skabets tal er IO-kortets. Kobleren har ingen ud over sin
+      // ydelse, og den kommer fra telemetrien.
+      instrument: instrumentFor(led.trin[0], ot, delivers ? [] : [...new Set(venter)]),
+      bane: led.id === "sensor" ? baneFra(ot) : undefined,
+    });
+  }
+  return links;
+}
+
 export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudModel | null {
   const data = LINES[lineId];
   if (!data) return null;
@@ -363,35 +465,7 @@ export function hudModel(lineId: string, opts?: { fremskriv?: boolean }): HudMod
   }
   const states = agenter.map((a) => agentState(a, layout, ot));
 
-  const links: HudLink[] = [];
-  if (ot && ot.cabinets[0]) {
-    const sensor = ot.sensors[0];
-    // Dashboardet er for mennesker. Kæden, agenterne venter på, ender i MSSQL.
-    const chain = pathState(ot.infrastructure, ot.cabinets[0], sensor)
-      .filter((s) => s.id !== "dashboard");
-    let alreadyBroken = false;
-    for (const s of chain) {
-      const delivers = isDone(s.status);
-      const broken = !delivers && !alreadyBroken;
-      if (broken) alreadyBroken = true;
-      links.push({
-        id: s.id,
-        label: s.label,
-        status: s.status,
-        state: hudState(s.status),
-        statusLabel: HUD_STATE_LABEL[hudState(s.status)],
-        tone: toneOf(s.status, delivers, broken),
-        delivers,
-        broken,
-        next: broken ? nextStepAt(ot, s.id) : undefined,
-        instrument: instrumentFor(
-          s.id,
-          ot,
-          delivers ? [] : s.blockedBy.map((n) => n.name),
-        ),
-      });
-    }
-  }
+  const links = ot ? hudLinks(ot) : [];
 
   const agents: HudAgent[] = states.map((st) => {
     const steps = pathToProduction(st, ot);

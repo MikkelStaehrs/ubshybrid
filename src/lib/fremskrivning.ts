@@ -7,13 +7,19 @@
 // pathState(), signalDelivery() og agentstatus ved ikke, at de er i en
 // fremskrivning, og de får ingen særbehandling.
 //
-// Signalerne gribes ikke ud af luften. De kommer fra agenternes egne inputs:
-// beder en agent om et driftssignal pr. maskine i sit scope, så sætter
-// fremskrivningen netop det på netop de maskiner. Den viser altså ikke en
-// drøm, men det anlæg, de besluttede agenter allerede har bedt om.
+// Signalerne gribes ikke ud af luften. De kommer to steder fra:
+//   - Agenternes egne inputs. Beder en agent om et driftssignal pr. maskine
+//     i sit scope, sætter fremskrivningen netop det på netop de maskiner.
+//   - Demoens kanaler i data/fremskrivning.ts. Viser demoen en temperatur på
+//     en elevator, skal der sidde en måler, der kan levere den — ellers stod
+//     der et tal på skærmen, ingen kanal kunne bære.
+// Den viser altså ikke en drøm, men det anlæg, de besluttede agenter og
+// demoens egne tal allerede forudsætter.
+import { HAL } from "../../data/fremskrivning";
 import { machinesInScope } from "./agents";
 import type { Layout } from "./layout";
 import { channelReport, sensorType } from "./ot";
+import { kanalerFor } from "./telemetri";
 import type { Agent, OtCabinet, OtHardware, OtLayer, OtSensor, OtSignal } from "./types";
 
 /** Kanaler pr. IO-kort, som de kort, styklisten allerede har. */
@@ -50,9 +56,14 @@ function ekstraKort(cabinet: OtCabinet, sensorer: OtSensor[]): OtHardware[] {
   return kort;
 }
 
-/** Katalogets signalart til den, OT-laget regner kanaler efter. */
+/**
+ * Katalogets signalart til den, OT-laget regner kanaler efter. IO-Link og
+ * Modbus går på feltbussen og fylder ingen kanal.
+ */
 function signalOf(kind: string | undefined): OtSignal {
-  return kind === "DI" ? "digital" : "4-20 mA";
+  if (kind === "DI") return "digital";
+  if (kind === "Modbus" || kind === "IO-Link") return "feltbus";
+  return "4-20 mA";
 }
 
 /**
@@ -62,9 +73,31 @@ function signalOf(kind: string | undefined): OtSignal {
  * skal ikke kunne forveksles med et, nogen har tildelt. X står for, at det
  * ikke er aftalt.
  */
-function tagFor(catalogType: string, wId: string): string {
+function tagFor(catalogType: string, wId: string, brugt: Set<string>): string {
   const kort = catalogType.slice(0, 1).toUpperCase();
-  return `X${kort}-${wId}`;
+  // To typer kan dele forbogstav. Så får den anden et nummer, frem for at
+  // to målere får samme tag.
+  let tag = `X${kort}-${wId}`;
+  for (let n = 2; brugt.has(tag); n++) tag = `X${kort}${n}-${wId}`;
+  brugt.add(tag);
+  return tag;
+}
+
+/** Én fremskrevet måler. Samme form, hvor den end kommer fra. */
+function fremskrevetSensor(catalogType: string, id: string, machineId: string, cabinetId: string): OtSensor {
+  const kind = sensorType(catalogType);
+  return {
+    id,
+    type: kind?.label ?? catalogType,
+    catalogType,
+    // Ingen model er valgt. Det skal kunne ses, også her.
+    model: "Ikke valgt",
+    signal: signalOf(kind?.signal),
+    machineId,
+    cabinetId,
+    phase: 1,
+    status: "active",
+  };
 }
 
 /**
@@ -76,37 +109,44 @@ function tagFor(catalogType: string, wId: string): string {
  * ikke et signal. Et `chainStep` er kæden, som rejses for sig.
  */
 function ekstraSensorer(layer: OtLayer, layout: Layout, agents: Agent[]): OtSensor[] {
-  const cabinetId = layer.cabinets[0]?.id;
-  if (!cabinetId) return [];
+  const cabinet = layer.cabinets[0];
+  if (!cabinet) return [];
 
   const findes = new Set(layer.sensors.map((s) => `${s.catalogType}@${s.machineId}`));
+  const brugt = new Set(layer.sensors.map((s) => s.id));
   const ekstra: OtSensor[] = [];
+  const saet = (catalogType: string, wId: string) => {
+    const nøgle = `${catalogType}@${wId}`;
+    if (findes.has(nøgle)) return;
+    findes.add(nøgle);
+    ekstra.push(fremskrevetSensor(catalogType, tagFor(catalogType, wId, brugt), wId, cabinet.id));
+  };
 
+  // Det, agenterne beder om.
   for (const agent of agents) {
     if (agent.beslutning === "ide") continue;
     for (const input of agent.inputs) {
       if (!input.type) continue;
-      const kind = sensorType(input.type);
       for (const m of machinesInScope(agent, layout)) {
-        for (const wId of m.wIds) {
-          const nøgle = `${input.type}@${wId}`;
-          if (findes.has(nøgle)) continue;
-          findes.add(nøgle);
-          ekstra.push({
-            id: tagFor(input.type, wId),
-            type: kind?.label ?? input.type,
-            catalogType: input.type,
-            // Ingen model er valgt. Det skal kunne ses, også her.
-            model: "Ikke valgt",
-            signal: signalOf(kind?.signal),
-            machineId: wId,
-            cabinetId,
-            phase: 1,
-            status: "active",
-          });
-        }
+        for (const wId of m.wIds) saet(input.type, wId);
       }
     }
+  }
+
+  // Målerne bag demoens tal. Én måler pr. slags pr. maskine: et
+  // analyseudstyr, der melder både BIGF, BIGH og NOTS, er ét udstyr.
+  for (const m of layout.machines) {
+    if (m.kind === "person" || m.wIds.length === 0) continue;
+    for (const k of kanalerFor(m)) saet(k.maaler, m.wIds[0]);
+  }
+
+  // Hallen er ikke en maskine. Dens målere hænger ved skabet, og de får
+  // deres eget tag, så de ikke forveksles med maskinen, skabet står ved.
+  for (const k of HAL) {
+    const id = `X${k.maaler.slice(0, 1).toUpperCase()}-HAL`;
+    if (brugt.has(id)) continue;
+    brugt.add(id);
+    ekstra.push(fremskrevetSensor(k.maaler, id, cabinet.nearMachine, cabinet.id));
   }
   return ekstra;
 }
@@ -115,7 +155,7 @@ function ekstraSensorer(layer: OtLayer, layout: Layout, agents: Agent[]): OtSens
  * OT-laget som det ville være, hvis alt besluttet stod og virkede.
  *
  * Fire greb, og ikke flere:
- *   1. De signaler, agenterne beder om, findes.
+ *   1. De signaler, agenterne beder om og demoens tal forudsætter, findes.
  *   2. Alle signaler er i drift frem for i test eller på tegnebrættet.
  *   3. Skabet står, og kæden ud af hallen er rejst.
  *   4. Skabet har de IO-kort, signalerne kræver — mærket som forudsat.

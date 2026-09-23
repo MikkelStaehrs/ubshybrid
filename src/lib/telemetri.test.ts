@@ -138,8 +138,9 @@ describe("regler, der går igen fra resten af kortet", () => {
   it("analysens fire klasser summer til hundrede", () => {
     for (const b of forloeb.filter((_, i) => i % 200 === 0)) {
       for (const a of b.analyse) {
-        const sum = a.andele!.reduce((x, y) => x + y, 0);
-        assert.ok(Math.abs(sum - 100) < 1e-9, `spor ${a.lane}: ${sum}`);
+        if (!a.andele) continue;
+        const sum = a.andele.reduce((x, y) => x + y, 0);
+        assert.ok(Math.abs(sum - 100) < 1e-9, `${a.kort}: ${sum}`);
       }
     }
   });
@@ -148,6 +149,67 @@ describe("regler, der går igen fra resten af kortet", () => {
     const slut = forloeb[forloeb.length - 1];
     assert.ok(slut.oppetidPct !== null);
     assert.ok(slut.oppetidPct! > 0 && slut.oppetidPct! <= 100);
+  });
+});
+
+describe("analysen og kastebordene", () => {
+  /** Gennemsnittet af en størrelse over hele forløbet, pr. maskine. */
+  const snit = (kort: string, hent: (b: TelemetriBillede) => number | null | undefined) => {
+    const v = forloeb.map(hent).filter((x): x is number => typeof x === "number");
+    assert.ok(v.length > 0, `${kort} har ingen tal`);
+    return v.reduce((a, b) => a + b, 0) / v.length;
+  };
+  const fv = (kort: string, i: number) => snit(kort, (b) => b.analyse.find((a) => a.kort === kort)?.andele?.[i]);
+  const kanal = (kort: string, id: string) =>
+    snit(kort, (b) => b.maskiner.find((m) => m.kort === kort)?.kanaler.find((k) => k.spec.id === id)?.value);
+
+  it("tager prøve fra hvert kastebord, ikke fra sporet", () => {
+    const kb = layout.machines.filter((m) => /^kb[-\s]/i.test(m.name)).map((m) => m.name).sort();
+    assert.deepEqual(forloeb[0].analyse.map((a) => a.kort).sort(), kb);
+  });
+
+  it("FV0 og FV1 dominerer", () => {
+    for (const a of forloeb[0].analyse) {
+      const [f0, f1, f2, f3] = [0, 1, 2, 3].map((i) => fv(a.kort, i));
+      assert.ok(f0 + f1 > 70, `${a.kort}: FV0+FV1 er ${f0 + f1}`);
+      assert.ok(Math.min(f0, f1) > Math.max(f2, f3), `${a.kort}: ${[f0, f1, f2, f3]}`);
+    }
+  });
+
+  it("andet bord i sporet har markant mindre FV3, BIGF og BIGH — og nærmest ingen NOTS", () => {
+    for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
+      assert.ok(fv(andet, 3) < fv(foerste, 3) * 0.5, `FV3 ${andet} mod ${foerste}`);
+      assert.ok(kanal(andet, "bigf") < kanal(foerste, "bigf") * 0.75, `BIGF ${andet}`);
+      assert.ok(kanal(andet, "bigh") < kanal(foerste, "bigh") * 0.6, `BIGH ${andet}`);
+      assert.ok(kanal(andet, "nots") < 1, `NOTS ${andet} er ${kanal(andet, "nots")}`);
+      assert.ok(kanal(andet, "nots") < kanal(foerste, "nots") * 0.2, `NOTS ${andet}`);
+    }
+  });
+
+  it("et bord, der står, tager ingen ny prøve", () => {
+    // Der løber intet frø forbi analysen. En ny prøve ville være opdigtet.
+    const sim = simulator(layout, { planlagteStop: [{ wid: "636", fraS: 100, varighedS: 150 }], stopHverS: 1e9 });
+    const t: (number | null)[] = [];
+    for (let i = 0; i < 4 * 260; i++) {
+      const b = sim.skridt(DT, T0 + i * DT);
+      const m = b.maskiner.find((x) => x.wIds.includes("636"))!;
+      if (m.koerer === false) t.push(b.analyse.find((a) => a.id === m.id)!.proeveT);
+    }
+    assert.ok(t.length > 4 * 60, "bordet stod ikke længe nok til at prøve reglen");
+    assert.equal(new Set(t).size, 1, "der kom en prøve, mens bordet stod");
+  });
+
+  it("kun FV3 melder — det er den, bordene renser ud", () => {
+    const alarmer = forloeb.flatMap((b) => b.haendelser).filter((h) => h.tekst.startsWith("FV"));
+    for (const h of alarmer) assert.match(h.tekst, /^FV3 /);
+  });
+});
+
+describe("kæden tæller hvert signal", () => {
+  it("kanalerne, hallen, flowet og ét driftssignal pr. maskine", () => {
+    const b = forloeb[forloeb.length - 1];
+    const forventet = b.maskiner.reduce((n, m) => n + m.kanaler.length + m.wIds.length, 0) + b.hal.length + 1;
+    assert.equal(b.kaede!.signaler, forventet);
   });
 });
 
@@ -318,6 +380,14 @@ describe("en flaskehals, der ikke går over", () => {
     assert.ok(slut.haendelser.some((h) => /Buffer fuld/.test(h.tekst) && h.niveau === "alarm"));
   });
 
+  it("loggen siger Server og DIN-skab — ikke edge og kobler", () => {
+    // Kæden på skærmen har de navne. En log, der siger noget andet, ville
+    // tale om led, man ikke kan finde.
+    for (const h of [...tvunget, ...forloeb].flatMap((b) => b.haendelser)) {
+      assert.doesNotMatch(`${h.hvor} ${h.tekst}`, /kobler|edge/i, `${h.hvor}: ${h.tekst}`);
+    }
+  });
+
   it("holder regnskabet også, når data tabes", () => {
     const k = tvunget[tvunget.length - 1].kaede!;
     assert.ok(Math.abs(k.modtaget - k.skrevetIalt - k.koe - k.tabt) < 1.5);
@@ -427,7 +497,7 @@ describe("Driftsagenten, når den ikke kan se", () => {
 
 describe("partiklernes fart", () => {
   const spec = (id: string, nominal: number) =>
-    ({ id, label: id, unit: "", nominal, spredning: 0, min: 0, max: 99, decimaler: 0 });
+    ({ id, label: id, unit: "", maaler: "speed", nominal, spredning: 0, min: 0, max: 99, decimaler: 0 });
 
   it("står stille, når vi ikke ved, om maskinen kører", () => {
     // Den rigtige visning i dag: ingen driftssignaler, ingen bevægelse.

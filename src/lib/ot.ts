@@ -211,8 +211,9 @@ function capacityAt(c: OtCabinet, phase: OtPhase) {
  */
 export function channelReport(c: OtCabinet, sensors: OtSensor[], phase: OtPhase): CabinetReport {
   const { total, cards, upcoming } = capacityAt(c, phase);
+  // Feltbus-målere taler selv på netværket og fylder ingen kanal.
   const mine = sensors
-    .filter((s) => s.cabinetId === c.id && s.phase <= phase)
+    .filter((s) => s.cabinetId === c.id && s.phase <= phase && s.signal !== "feltbus")
     .sort((a, b) => a.phase - b.phase || a.id.localeCompare(b.id, "da"));
 
   const channel = new Map<string, string | null>();

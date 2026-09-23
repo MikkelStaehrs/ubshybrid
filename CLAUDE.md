@@ -196,6 +196,21 @@ på den ("Modbus TCP"). Uden dem var kæden ikke til at forstå — det sagde
 den, der skrev reglen. En rolle er en etiket for, *hvad* leddet er, ikke en
 forklaring på *hvorfor*; det sidste hører stadig til i dokumentvisningen.
 
+**Kæden på skærmen har fire led, ikke seks.** Sensor, DIN-skab, Server og
+MSSQL. OT-laget har stadig sine seks trin — de bærer indkøb og
+afhængigheder og står uændret i dokumentvisningen. Men "kobler" og "edge"
+er ord, man skal have forklaret, før kæden kan læses. IO-kortet og kobleren
+sidder på den samme DIN-skinne i det samme skab, så de er ét led; edge er et
+program på en server i racket, så det hedder Server. Oversættelsen sker ét
+sted, i `HUD_LED` i `src/lib/ai-hud.ts`. DIN-skabet er ikke stærkere end
+sit svageste trin: leverer kobleren ikke, leverer skabet ikke. Reglen har
+en test, og en anden test holder de to ord væk fra skærmen.
+
+**Sensoren er alle målerne, når der er flere.** Én måler står med model,
+kanal og registeradresse. Er der mange — som i demoen — tæller leddet dem
+efter slags med katalogets ord (`kort` i `data/ot-sensor-types.ts`):
+"Temperatur 18", "Fugt 1". Sensordata er ikke kun flow.
+
 **Partiklerne i maskinerne bevæger sig kun, når maskinen kører**, og med dens
 fart (`maskinFart()`): løftet op gennem elevatorerne, på langs gennem
 maskinerne. Ved vi ikke, om den kører — som i den rigtige visning i dag —
@@ -214,10 +229,18 @@ skabet og kæden står. Derefter regner `pathState()`, `signalDelivery()` og
 agentstatus som altid — de ved ikke, at de er i en fremskrivning, og de får
 ingen særbehandling. Går en regel i stykker, går den i stykker begge steder.
 
-**Strukturen opfindes ikke.** De ekstra signaler gribes ikke ud af luften: de
-kommer fra agenternes egne `type`-inputs, så fremskrivningen viser det
-anlæg, de besluttede agenter allerede har bedt om. Et `signalId` peger på en
-bestemt måler og kan ikke opfindes. En idé bliver ikke slået til.
+**Strukturen opfindes ikke.** De ekstra signaler gribes ikke ud af luften. De
+kommer to steder fra: agenternes egne `type`-inputs, og demoens kanaler.
+Hver kanal i `data/fremskrivning.ts` siger med `maaler`, hvilken slags måler
+der leverer den, og fremskrivningen sætter netop den måler på netop den
+maskine. Viser demoen en temperatur, sidder der altså en temperaturmåler
+bag den, med en kanal i skabet og en plads i kæden — ellers stod der et tal
+på skærmen, ingen kanal kunne bære. Et `signalId` peger på en bestemt måler
+og kan ikke opfindes. En idé bliver ikke slået til.
+
+**Feltbus fylder ingen kanal.** En frekvensomformer eller et analyseudstyr
+taler selv på netværket (`signal: "feltbus"`). `channelReport()` springer
+dem over; talte de med, forudsatte fremskrivningen kort, ingen skal bruge.
 
 **Tallene er simulerede, og det står på dem.** Temperatur, fugt, hastighed,
 omdrejninger, FV0–FV3 og BIGF/BIGH/NOTS kommer fra simulatoren i
@@ -302,7 +325,7 @@ de må ikke kunne forveksles med et tag, nogen har tildelt.
 **Den forudsætter det, planen kræver — og siger det.** Beder de besluttede
 agenter om flere signaler, end skabet har kanaler til, lægger fremskrivningen
 de IO-kort til, der skal til. De hedder `X-IO-…`, har modellen "Ikke valgt"
-og står som "Forudsat" på IO-kortets instrument. Uden dem ville signaler stå
+og står som "Forudsat" på DIN-skabets instrument. Uden dem ville signaler stå
 som "på plads", der aldrig kunne læses. IO-kortet viser analoge og digitale
 kanaler hver for sig: lagt sammen skjulte de et underskud.
 
@@ -386,6 +409,10 @@ I `data/ot-layer.ts` under `sensors`. Husk `catalogType` — uden den kan en
 agent ikke vide, at den slags signal, den mangler, allerede sidder på
 maskinen. Kanal og registeradresse udledes; skriv dem ikke.
 
+En ny slags måler hører i `data/ot-sensor-types.ts` med et `kort` ord til
+HUD'en. En ny kanal i demoen skal have sin `maaler`; uden den vil typen
+ikke kompilere, og en test tjekker, at måleren står i kataloget.
+
 Flowsignaler skalerer alle ens: 4–20 mA er 0–150 % af nominel kapacitet.
 Skal et signal have et andet spænd, hører det på sensoren — ikke som en
 undtagelse i `live-source.ts`. Uanset hvad: **skriv en test for grænserne**
@@ -436,10 +463,16 @@ har sagt tallet.
   total udledt af den er et estimat og skal blive ved med at hedde det.
 - **Hysteresen og de fem/to procent er valgt, ikke målt.** De skal forbi
   driften sammen med stopgrænsen.
-- **Fremskrivningens kanaler er gæt.** FV0–FV3 er læst som fire klasser, der
-  summer til 100 %; BIGF/BIGH/NOTS som andele af den tunge side. Begge dele,
-  og alle driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
+- **Fremskrivningens kanaler er gæt.** FV0–FV3 er læst som fire klasser i en
+  prøve fra hvert kastebord, der summer til 100 %, hvor FV0 og FV1 dominerer
+  og FV3 er det, bordene renser ud; BIGF/BIGH/NOTS som andele af den tunge
+  side. At andet bord i sporet har markant mindre af det hele og nærmest
+  ingen NOTS, er sagt af driften — tallene for det er valgt. Alt det, og
+  alle driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
   driften, før nogen tager tallene for pålydende.
+- **Hvor BIGF, BIGH og FV kommer fra, er ikke afklaret.** Demoen antager ét
+  analyseudstyr på feltbussen pr. kastebord. Er det laboratoriets prøver, er
+  det et `dataset` og ikke et signal.
 - **Driftsagenten kan ikke stoppe noget i dag.** Der findes ingen vej fra en
   agent tilbage til styringen. En skrivning til PLC'en er en
   sikkerhedsbeslutning — interlocks, hvem der kan tilsidesætte, hvad der

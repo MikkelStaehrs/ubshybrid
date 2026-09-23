@@ -9,17 +9,27 @@
 // hvad en slags maskine har — ikke en bestemt maskine. Skal én maskine afvige,
 // så skriv det i `afvigelser` på W-ID.
 //
+// Hver kanal siger, hvilken slags måler der leverer den (`maaler`, en nøgle i
+// sensorkataloget). Fremskrivningen sætter netop de målere i OT-laget, så et
+// tal på skærmen altid har en måler bag sig, en kanal i skabet og en plads i
+// kæden. Står der en kanal her uden måler, kan den ikke komme igennem.
+//
 // Åbne spørgsmål til driften, besvaret med et gæt indtil videre:
-//   - FV0–FV3 er læst som fire kvalitetsklasser i en analyseprøve, der
-//     summer til 100 %. Er de noget andet, skal `ANALYSE` laves om.
+//   - FV0–FV3 er læst som fire klasser i en analyseprøve fra hvert kastebord,
+//     der summer til 100 %. FV0 og FV1 dominerer; FV3 er det, kastebordene
+//     renser ud. Er de noget andet, skal `ANALYSE` laves om.
 //   - BIGF, BIGH og NOTS er læst som andele af prøven fra den tunge side af
 //     kastebordet. Er det mængder (kg/t), skal enheden skiftes.
+//   - Andet kastebord i hvert spor (KB-3NN, KB-2SS) får det, første har
+//     renset: markant mindre FV3, BIGF og BIGH, og nærmest ingen NOTS.
 //   - Der er ingen bånd som selvstændige maskiner på linjen. Transporten
 //     ligger i kanterne mellem maskinerne og vises som materialestrøm.
 
 export interface KanalSpec {
   /** Stabil nøgle, fx "hastighed". */
   id: string;
+  /** Måleren, der leverer tallet — en nøgle i data/ot-sensor-types.ts. */
+  maaler: string;
   /** Højst to ord. HUD-reglen gælder også her. */
   label: string;
   unit: string;
@@ -54,16 +64,19 @@ export interface KanalGruppe {
 }
 
 const motortemperatur: KanalSpec = {
-  id: "motortemp", label: "Motor", unit: "°C",
+  id: "motortemp", label: "Motor", unit: "°C", maaler: "temperature",
   nominal: 46, spredning: 2.5, min: 10, max: 95, alarmHoej: 70,
   decimaler: 1, hvile: 24, traeghed: 0.02,
 };
 
 const vibration: KanalSpec = {
-  id: "vibration", label: "Vibration", unit: "mm/s",
+  id: "vibration", label: "Vibration", unit: "mm/s", maaler: "vibration",
   nominal: 2.2, spredning: 0.35, min: 0, max: 12, alarmHoej: 4.5,
   decimaler: 2, hvile: 0, traeghed: 0.4,
 };
+
+/** Kastebordene, på navn. Ét sted, så panelet og simulatoren er enige. */
+export const KASTEBORD = /^kb[-\s]/i;
 
 /**
  * Kanalerne pr. maskinslags. Den første gruppe, der passer, vinder — så de
@@ -71,12 +84,13 @@ const vibration: KanalSpec = {
  */
 export const KANALER: KanalGruppe[] = [
   {
-    navn: /kb[-\s]/i,
+    navn: KASTEBORD,
     kanaler: [
-      // Tunge side af kastebordet: hvad ender der, som ikke burde.
-      { id: "bigf", label: "BIGF", unit: "%", nominal: 68, spredning: 2.2, min: 0, max: 100, decimaler: 1, traeghed: 0.08 },
-      { id: "bigh", label: "BIGH", unit: "%", nominal: 21, spredning: 1.6, min: 0, max: 100, decimaler: 1, traeghed: 0.08 },
-      { id: "nots", label: "NOTS", unit: "%", nominal: 4.2, spredning: 0.9, min: 0, max: 100, alarmHoej: 8, decimaler: 1, traeghed: 0.06 },
+      // Tunge side af kastebordet: hvad ender der, som ikke burde. Tallene
+      // er første bord i sporet; det andet står i AFVIGELSER.
+      { id: "bigf", label: "BIGF", unit: "%", maaler: "analyzer", nominal: 68, spredning: 2.2, min: 0, max: 100, decimaler: 1, traeghed: 0.08 },
+      { id: "bigh", label: "BIGH", unit: "%", maaler: "analyzer", nominal: 21, spredning: 1.6, min: 0, max: 100, decimaler: 1, traeghed: 0.08 },
+      { id: "nots", label: "NOTS", unit: "%", maaler: "analyzer", nominal: 4.2, spredning: 0.9, min: 0, max: 100, alarmHoej: 8, decimaler: 1, traeghed: 0.06 },
       // Et rystebord ryster med vilje. Grænsen er ikke vibrationens.
       { ...vibration, id: "dæk", label: "Dæk", nominal: 5.8, spredning: 0.3, alarmHoej: 8.5 },
     ],
@@ -84,16 +98,17 @@ export const KANALER: KanalGruppe[] = [
   {
     navn: /jet\s?pe[ae]ler/i,
     kanaler: [
-      { id: "rpm", label: "Omdrejninger", unit: "o/min", nominal: 1450, spredning: 12, min: 0, max: 1800, alarmLav: 1300, decimaler: 0, hvile: 0, traeghed: 0.35 },
+      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 1450, spredning: 12, min: 0, max: 1800, alarmLav: 1300, decimaler: 0, hvile: 0, traeghed: 0.35 },
       // Slibningen varmer frøet. Bliver det for varmt, tager spireevnen skade.
-      { id: "froetemp", label: "Frø", unit: "°C", nominal: 31, spredning: 1.1, min: 10, max: 60, alarmHoej: 38, decimaler: 1, hvile: 22, traeghed: 0.03 },
-      { id: "stroem", label: "Strøm", unit: "A", nominal: 18.5, spredning: 0.8, min: 0, max: 40, alarmHoej: 26, decimaler: 1, hvile: 0, traeghed: 0.3 },
+      { id: "froetemp", label: "Frø", unit: "°C", maaler: "temperature", nominal: 31, spredning: 1.1, min: 10, max: 60, alarmHoej: 38, decimaler: 1, hvile: 22, traeghed: 0.03 },
+      // Strømmen kommer fra frekvensomformeren, ikke fra en måler i skabet.
+      { id: "stroem", label: "Strøm", unit: "A", maaler: "drive", nominal: 18.5, spredning: 0.8, min: 0, max: 40, alarmHoej: 26, decimaler: 1, hvile: 0, traeghed: 0.3 },
     ],
   },
   {
     navn: /tri[øo]r/i,
     kanaler: [
-      { id: "rpm", label: "Omdrejninger", unit: "o/min", nominal: 42, spredning: 0.6, min: 0, max: 60, alarmLav: 36, decimaler: 1, hvile: 0, traeghed: 0.3 },
+      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 42, spredning: 0.6, min: 0, max: 60, alarmLav: 36, decimaler: 1, hvile: 0, traeghed: 0.3 },
       motortemperatur,
     ],
   },
@@ -101,13 +116,14 @@ export const KANALER: KanalGruppe[] = [
     navn: /alfa/i,
     kanaler: [
       { ...vibration, id: "dæk", label: "Dæk", nominal: 6.4, spredning: 0.4, alarmHoej: 9 },
-      { id: "luft", label: "Luft", unit: "%", nominal: 72, spredning: 1.5, min: 0, max: 100, decimaler: 0, hvile: 0, traeghed: 0.25 },
+      // Blæserens ydelse, som omformeren melder den.
+      { id: "luft", label: "Luft", unit: "%", maaler: "drive", nominal: 72, spredning: 1.5, min: 0, max: 100, decimaler: 0, hvile: 0, traeghed: 0.25 },
     ],
   },
   {
     navn: /carter/i,
     kanaler: [
-      { id: "rpm", label: "Omdrejninger", unit: "o/min", nominal: 38, spredning: 0.5, min: 0, max: 55, alarmLav: 32, decimaler: 1, hvile: 0, traeghed: 0.3 },
+      { id: "rpm", label: "Omdrejninger", unit: "o/min", maaler: "speed", nominal: 38, spredning: 0.5, min: 0, max: 55, alarmLav: 32, decimaler: 1, hvile: 0, traeghed: 0.3 },
       motortemperatur,
     ],
   },
@@ -118,7 +134,7 @@ export const KANALER: KanalGruppe[] = [
   {
     kind: "elevator",
     kanaler: [
-      { id: "hastighed", label: "Hastighed", unit: "m/s", nominal: 2.4, spredning: 0.03, min: 0, max: 3.5, alarmLav: 2.0, decimaler: 2, hvile: 0, traeghed: 0.5 },
+      { id: "hastighed", label: "Hastighed", unit: "m/s", maaler: "speed", nominal: 2.4, spredning: 0.03, min: 0, max: 3.5, alarmLav: 2.0, decimaler: 2, hvile: 0, traeghed: 0.5 },
       motortemperatur,
       vibration,
     ],
@@ -126,37 +142,63 @@ export const KANALER: KanalGruppe[] = [
   {
     kind: "distributor",
     kanaler: [
-      { id: "andelN", label: "Andel N", unit: "%", nominal: 50, spredning: 1.2, min: 0, max: 100, decimaler: 1, traeghed: 0.1 },
+      { id: "andelN", label: "Andel N", unit: "%", maaler: "position", nominal: 50, spredning: 1.2, min: 0, max: 100, decimaler: 1, traeghed: 0.1 },
     ],
   },
   {
     navn: /påslag/i,
     kanaler: [
-      { id: "niveau", label: "Niveau", unit: "%", nominal: 58, spredning: 9, min: 0, max: 100, alarmLav: 10, decimaler: 0, traeghed: 0.05 },
+      { id: "niveau", label: "Niveau", unit: "%", maaler: "level-radar", nominal: 58, spredning: 9, min: 0, max: 100, alarmLav: 10, decimaler: 0, traeghed: 0.05 },
     ],
   },
 ];
 
 /** Hallen selv. Ikke en maskine, men det første, en driftsleder spørger om. */
 export const HAL: KanalSpec[] = [
-  { id: "temp", label: "Temperatur", unit: "°C", nominal: 20.8, spredning: 0.5, min: -10, max: 45, alarmHoej: 28, decimaler: 1, traeghed: 0.01 },
-  { id: "fugt", label: "Luftfugtighed", unit: "% RH", nominal: 52, spredning: 2.5, min: 0, max: 100, alarmHoej: 65, decimaler: 0, traeghed: 0.02 },
+  { id: "temp", label: "Temperatur", unit: "°C", maaler: "temperature", nominal: 20.8, spredning: 0.5, min: -10, max: 45, alarmHoej: 28, decimaler: 1, traeghed: 0.01 },
+  { id: "fugt", label: "Luftfugtighed", unit: "% RH", maaler: "humidity", nominal: 52, spredning: 2.5, min: 0, max: 100, alarmHoej: 65, decimaler: 0, traeghed: 0.02 },
 ];
 
 /**
- * Analyseprøven fra hvert spor. Fire klasser, der summer til 100 %.
+ * Analyseprøven fra hvert kastebord. Fire klasser, der summer til 100 %.
  * Rækkefølgen er FV0 … FV3.
+ *
+ * FV0 og FV1 dominerer. FV3 er det, kastebordene skal rense ud — derfor er
+ * det FV3, der melder, og derfor har andet bord i sporet langt mindre af den.
  */
 export const ANALYSE = {
   klasser: ["FV0", "FV1", "FV2", "FV3"] as const,
-  andele: [4, 11, 33, 52],
-  spredning: 1.4,
-  /** Over den her andel FV0 er prøven værd at se på. */
-  alarmFV0: 8,
+  /** Første kastebord i sporet. */
+  andele: [46, 33, 13, 8],
+  /** Andet kastebord i sporet: det har fået, hvad det første har renset. */
+  afvigelser: {
+    "746": [53, 37, 7.5, 2.5], // KB-3NN
+    "745": [52, 38, 7.5, 2.5], // KB-2SS
+  } as Record<string, number[]>,
+  /**
+   * Frø i én prøve. Udsvinget fra prøve til prøve er det, en prøve af den
+   * størrelse giver — en klasse på 2 % svinger mindre end en på 46 %.
+   */
+  froePrProeve: 400,
+  /** Over den her andel FV3 er prøven værd at se på. */
+  alarmFV3: 12,
 };
 
 /** Maskiner, der afviger fra deres slags. Nøglet på W-ID. */
-export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec>>>> = {};
+export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec>>>> = {
+  // Andet kastebord i hvert spor. Der er markant mindre at fange, og NOTS er
+  // næsten væk — ses den her, har første bord ikke gjort sit arbejde.
+  "746": {
+    bigf: { nominal: 38, spredning: 1.6 },
+    bigh: { nominal: 8, spredning: 0.8 },
+    nots: { nominal: 0.3, spredning: 0.12, alarmHoej: 1.5 },
+  },
+  "745": {
+    bigf: { nominal: 39, spredning: 1.6 },
+    bigh: { nominal: 8.5, spredning: 0.8 },
+    nots: { nominal: 0.3, spredning: 0.12, alarmHoej: 1.5 },
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Kæden

@@ -1,13 +1,13 @@
 "use client";
-import { ANALYSE, FLASKEHALS } from "../../../data/fremskrivning";
+import { ANALYSE, FLASKEHALS, KASTEBORD } from "../../../data/fremskrivning";
 import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
-import type { HudAgent, HudLink, HudModel, LinkTone } from "../../lib/ai-hud";
+import { ledNavn, type HudAgent, type HudLink, type HudModel, type LinkTone } from "../../lib/ai-hud";
 import {
   flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
 import type { MaskinLaesning, TelemetriBillede } from "../../lib/telemetri";
-import { Afkod, Bjaelke, Fordeling, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
+import { Afkod, Bjaelke, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
 import { TAKT_MS, type Historik } from "./useTelemetri";
 
 /**
@@ -75,7 +75,7 @@ export function Overskrift({ model, billede, still }: {
   if (k?.flaskehals && k.forsinkelseS > FLASKEHALS.forsinkelseAlarmS) {
     return (
       <div className="hud-break tone-brud">
-        <p className="hb-kicker"><span className="hb-dot" aria-hidden />Flaskehals · {k.flaskehals.toUpperCase()}{billede.simuleret && <Sim />}</p>
+        <p className="hb-kicker"><span className="hb-dot" aria-hidden />Flaskehals · {ledNavn(model.links, k.flaskehals).toUpperCase()}{billede.simuleret && <Sim />}</p>
         <p className="hb-where">Data <Tal v={k.forsinkelseS} d={0} /> s bagud</p>
         <p className="hb-next">
           <span className="hb-next-label">Kø</span>
@@ -335,8 +335,14 @@ export function KlimaPanel({ billede, historik, nr, still }: {
 // ---------------------------------------------------------------------------
 // Kvaliteten
 
+/**
+ * FV-fordelingen fra hvert kastebord. Tallene står over et bånd, så man
+ * både kan læse dem og se, hvem der dominerer. Kun FV3 melder: det er den,
+ * bordene skal rense ud.
+ */
 export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
-  const sidst = billede.analyse.find((a) => a.proeveT !== null)?.proeveT ?? null;
+  const tider = billede.analyse.map((a) => a.proeveT).filter((t): t is number => t !== null);
+  const sidst = tider.length > 0 ? Math.max(...tider) : null;
   return (
     <Panel
       label="Analyse · FV"
@@ -345,15 +351,32 @@ export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBilled
       right={billede.simuleret ? <Sim /> : undefined}
     >
       {billede.analyse.every((a) => a.andele === null) ? <Afventer /> : (
-        <>
-          {billede.analyse.map((a) => (
-            <div key={a.lane} className="hp-analyse">
-              <span className="hp-spor">Spor {a.lane}</span>
-              <Fordeling andele={a.andele} navne={ANALYSE.klasser} alarm={a.alarm} />
-            </div>
-          ))}
-          {sidst && <p className="hp-note">Prøve {klok(sidst)}</p>}
-        </>
+        <div className="hp-fv">
+          <div className="hp-fv-hoved">
+            <span />
+            {ANALYSE.klasser.map((k) => <span key={k}>{k}</span>)}
+          </div>
+          {billede.analyse.map((a) => {
+            const m = billede.maskiner.find((x) => x.id === a.id);
+            const tilstand = m?.styret ? " is-styret" : m?.koerer === false ? " is-stop" : "";
+            return (
+              <div key={a.id} className={`hp-fv-rk${a.alarm ? " is-alarm" : ""}${tilstand}`}>
+                <span className="hp-kb-navn">{a.kort}</span>
+                {ANALYSE.klasser.map((k, i) => (
+                  <span key={k} className={`hp-fv-tal d-${i}`}>
+                    {a.andele ? <Tal v={a.andele[i]} d={1} /> : "–"}
+                  </span>
+                ))}
+                <span className="hp-fv-baand">
+                  {a.andele?.map((p, i) => (
+                    <span key={ANALYSE.klasser[i]} className={`m-del d-${i}`} style={{ width: `${p}%` }} />
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+          {sidst && <p className="hp-note">Seneste prøve {klok(sidst)}</p>}
+        </div>
       )}
     </Panel>
   );
@@ -361,7 +384,7 @@ export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBilled
 
 /** De fire kasteborde og det, der ender på deres tunge side. */
 export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
-  const kb = billede.maskiner.filter((m) => /^kb[-\s]/i.test(m.navn));
+  const kb = billede.maskiner.filter((m) => KASTEBORD.test(m.navn));
   const har = kb.some((m) => m.kanaler.some((k) => k.value !== null));
   return (
     <Panel label="Kasteborde · tung side" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>

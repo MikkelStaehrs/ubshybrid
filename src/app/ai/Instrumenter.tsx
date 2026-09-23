@@ -267,34 +267,6 @@ export function Oscilloskop({ serie }: { serie: (number | null)[] }) {
 // ---------------------------------------------------------------------------
 
 /** Fire klasser, der summer til hundrede, som ét bånd. */
-export function Fordeling({ andele, navne, alarm }: {
-  andele: number[] | null;
-  navne: readonly string[];
-  alarm?: boolean;
-}) {
-  if (!andele) {
-    return <div className="m-fordeling is-tom"><span>Afventer signal</span></div>;
-  }
-  return (
-    <div className={`m-fordeling${alarm ? " is-alarm" : ""}`}>
-      <div className="m-bånd">
-        {andele.map((p, i) => (
-          <span key={navne[i]} className={`m-del d-${i}`} style={{ width: `${p}%` }} />
-        ))}
-      </div>
-      <div className="m-akse">
-        {andele.map((p, i) => (
-          <span key={navne[i]} className={`m-klasse d-${i}`}>
-            <b>{navne[i]}</b>
-            <Tal v={p} d={1} />
-            <i>%</i>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** En vandret bjælke med en valgfri alarmgrænse tegnet ind. */
 export function Bjaelke({ v, max, graense, alarm }: {
   v: number | null;

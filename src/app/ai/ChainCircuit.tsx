@@ -39,23 +39,23 @@ const FIRST_ROW = BOX_TOP + 66;
 
 /**
  * Hvad hvert led gør, i højst fire ord. Kæden er vejen, et tal tager fra
- * måleren til AI'en — og den er ikke til at forstå, hvis man skal kende
- * "kobler" og "edge" i forvejen.
+ * måleren til AI'en — og den skal kunne forstås uden at kende ord som
+ * "kobler" og "edge" i forvejen. Derfor hedder leddene DIN-skab og Server.
  */
 const ROLLE: Record<string, string> = {
   sensor: "Måler materialet",
-  io: "Strøm bliver til tal",
-  kobler: "Henter tallene",
-  edge: "Samler og sender",
+  din: "Gør signaler til tal",
+  edge: "Henter fra skabet",
   mssql: "Gemmer alt",
   agenter: "Læser og handler",
 };
+/** Sensoren, når den ikke er én måler, men hele anlæggets. */
+const ROLLE_MANGE = "Måler hele anlægget";
 
-/** Hvad der løber på banen ud af hvert led. */
+/** Hvad der løber på banen ud af hvert led. Sensorens står på leddet selv. */
 const PAA_BANEN: Record<string, string> = {
   sensor: "4–20 mA",
-  io: "Register",
-  kobler: "Modbus TCP",
+  din: "Modbus TCP",
   edge: "Rækker",
   mssql: "SQL",
 };
@@ -121,16 +121,22 @@ function kaedeTal(id: string, k: KaedeTal | null): Node["readings"] {
   return [];
 }
 
+/** Kædens egne led hører til det HUD-led, der dækker deres trin. */
+const daekker = (link: HudLink | undefined, ledId: string | null | undefined) =>
+  !!link && !!ledId && (link.trin as string[]).includes(ledId);
+
 function layoutNodes(model: HudModel, kaede: KaedeTal | null): Node[] {
   const all: Omit<Node, "x">[] = [
     ...model.links.map((link) => {
-      const ekstra = kaedeTal(link.id, kaede);
-      const led = kaede?.led.find((l) => l.id === link.id);
+      const led = kaede?.led.find((l) => daekker(link, l.id));
+      // DIN-skabet har kanalerne at vise. Kobleren i det nøjes med sin
+      // udnyttelse — pladsen går til kanalpladserne.
+      const ekstra = link.id === "din" ? [] : kaedeTal(link.id, kaede);
       return {
         label: link.label,
         link,
         readings: [...link.instrument.readings, ...ekstra] as Node["readings"],
-        sim: ekstra.length > 0,
+        sim: ekstra.length > 0 || !!led,
         ydelse: led && kaede
           ? {
               led,
@@ -245,22 +251,53 @@ function Slots({ x, y, slots }: {
   slots: { name: string; used: boolean }[];
 }) {
   // Seksten på en række, så gitteret holder sig fri af teksten under det.
-  const PER_ROW = 16;
+  // Har skabet mange kort, bliver pladserne mindre frem for at gitteret
+  // bliver højere — det er mængden, der er pointen, ikke den enkelte plads.
+  const PER_ROW = slots.length > 32 ? 32 : 16;
   const PITCH = (NODE * 2 - PAD * 2) / PER_ROW;
+  // Små pladser rykker lidt op, så der er luft til udnyttelsen under dem.
+  const top = PER_ROW > 16 ? y - 4 : y;
   return (
     <g className="cc-slots">
       {slots.map((s, i) => (
         <rect
           key={s.name}
           x={x - NODE + PAD + (i % PER_ROW) * PITCH}
-          y={y + Math.floor(i / PER_ROW) * PITCH}
-          width={PITCH - (PER_ROW > 12 ? 3 : 4)}
-          height={PITCH - (PER_ROW > 12 ? 3 : 4)}
+          y={top + Math.floor(i / PER_ROW) * PITCH}
+          width={PITCH - (PER_ROW > 16 ? 1.6 : 3)}
+          height={PITCH - (PER_ROW > 16 ? 1.6 : 3)}
           className={s.used ? "cc-slot is-used" : "cc-slot"}
         >
           <title>{`${s.name}: ${s.used ? "optaget" : "ledig"}`}</title>
         </rect>
       ))}
+    </g>
+  );
+}
+
+/**
+ * Målerne efter slags, i to kolonner. Er der flere slags, end der er plads
+ * til, samles resten i én celle — antallet skal stadig passe.
+ */
+function Maalere({ x, y, maalere }: { x: number; y: number; maalere: { label: string; antal: number }[] }) {
+  const PLADS = 10;
+  const vis = maalere.length > PLADS
+    ? [...maalere.slice(0, PLADS - 1), { label: "Øvrige", antal: maalere.slice(PLADS - 1).reduce((n, m) => n + m.antal, 0) }]
+    : maalere;
+  const left = x - NODE + PAD;
+  const bredde = (NODE * 2 - PAD * 2 - 10) / 2;
+  return (
+    <g className="cc-maalere">
+      {vis.map((m, i) => {
+        const cx = left + (i % 2) * (bredde + 10);
+        const cy = y + Math.floor(i / 2) * ROW_H;
+        return (
+          <g key={m.label}>
+            <text x={cx} y={cy} className="cc-maaler">{m.label}</text>
+            <text x={cx + bredde} y={cy} className="cc-rd-value">{m.antal}</text>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -295,11 +332,13 @@ function Instrument({ n, reading, sim }: { n: Node; reading?: Aflaesning; sim?: 
       <Glow x={n.x} y={BOX_TOP + BOX_H / 2} tone={tone} pulse={broken} />
       <rect x={n.x - NODE} y={BOX_TOP} width={NODE * 2} height={BOX_H} className="cc-box" />
 
-      <text x={left} y={BOX_TOP + 24} className="cc-label">{short(n.label)}</text>
+      <text x={left} y={BOX_TOP + 24} className="cc-label">{n.label}</text>
       {n.link && (
         <text x={right} y={BOX_TOP + 24} className="cc-status">{n.link.statusLabel}</text>
       )}
-      <text x={left} y={BOX_TOP + 39} className="cc-rolle">{ROLLE[n.link?.id ?? "agenter"]}</text>
+      <text x={left} y={BOX_TOP + 39} className="cc-rolle">
+        {inst?.maalere ? ROLLE_MANGE : ROLLE[n.link?.id ?? "agenter"]}
+      </text>
       <line x1={left} y1={BOX_TOP + 47} x2={right} y2={BOX_TOP + 47} className="cc-rule" />
 
       {/* Aflæsningen fra måleren. Den kommer fra simulatoren, så den er
@@ -350,6 +389,8 @@ function Instrument({ n, reading, sim }: { n: Node; reading?: Aflaesning; sim?: 
         <Slots x={n.x} y={slotsTop} slots={inst.slots} />
       )}
 
+      {inst?.maalere && <Maalere x={n.x} y={slotsTop + 4} maalere={inst.maalere} />}
+
       {venter && (
         <>
           <text x={left} y={BOX_TOP + BOX_H - 30} className="cc-rd-label">Venter</text>
@@ -392,9 +433,9 @@ export function ChainCircuit({ model, reading, kaede = null, sim }: {
           // Køen står foran flaskehalsen. Pulserne ind i den og ud af den
           // går langsommere — rækkerne kommer ikke hurtigere igennem, end
           // databasen kan skrive dem.
-          const naeste = nodes[i + 1].link?.id;
-          const iKoe = kaede && naeste && kaede.flaskehals === naeste ? kaede.koe : 0;
-          const traeg = kaede && (naeste === kaede.flaskehals || link.id === kaede.flaskehals)
+          const naeste = nodes[i + 1].link;
+          const iKoe = kaede && daekker(naeste, kaede.flaskehals) ? kaede.koe : 0;
+          const traeg = kaede && (daekker(naeste, kaede.flaskehals) || daekker(link, kaede.flaskehals))
             ? Math.min(4, kaede.raekkerPrS / Math.max(1, kaede.dbKapacitet) * (kaede.koe > 0 ? 1.6 : 1))
             : 1;
           return (
@@ -407,7 +448,7 @@ export function ChainCircuit({ model, reading, kaede = null, sim }: {
               ghost={brudAt >= 0 && i >= brudAt}
               koe={iKoe}
               traeg={Math.max(1, traeg)}
-              bane={PAA_BANEN[link.id]}
+              bane={link.bane ?? PAA_BANEN[link.id]}
             />
           );
         })}
@@ -446,12 +487,6 @@ function ombryd(tekst: string, bredde: number): string[] {
   if (linjer.length <= 2) return linjer;
   const anden = linjer.slice(1).join(" ");
   return [linjer[0], anden.length > bredde ? `${anden.slice(0, bredde - 1)}…` : anden];
-}
-
-/** Kortere navne i kasserne — den fulde tekst står i aria-labelen. */
-function short(label: string): string {
-  if (label === "Feltbus-kobler") return "Kobler";
-  return label;
 }
 
 function ariaFor(m: HudModel): string {

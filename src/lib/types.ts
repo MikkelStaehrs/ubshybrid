@@ -172,7 +172,12 @@ export type OtStatus = "active" | "test" | "ordered" | "planned" | "missing" | "
 export type OtPhase = 1 | 2 | 3;
 
 /** Signaltype afgør hvilken slags kanal i skabet komponenten optager. */
-export type OtSignal = "4-20 mA" | "0-10 V" | "digital";
+/**
+ * Hvordan signalet kommer ind. "feltbus" er målere, der selv taler på
+ * netværket — en frekvensomformer, et analyseudstyr. De fylder ingen kanal
+ * på IO-kortene.
+ */
+export type OtSignal = "4-20 mA" | "0-10 V" | "digital" | "feltbus";
 
 export interface OtNetwork {
   /** Switch sensorskabet hænger på. */
@@ -306,6 +311,8 @@ export interface OtSensorType {
   /** Stabil nøgle, fx "flow". */
   type: string;
   label: string;
+  /** Ét ord til HUD'en. Se data/ot-sensor-types.ts. */
+  kort: string;
   signal: OtSignalKind;
   /**
    * Nogle typer fås i to udgaver — en vibrationssensor kan være analog eller

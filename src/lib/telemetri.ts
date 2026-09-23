@@ -16,7 +16,7 @@
 // seedet tilfældighed. Samme seed og samme skridt giver de samme tal, og
 // det er det, der gør den testbar.
 import {
-  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, TILLOEB, VARME,
+  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, KASTEBORD, TILLOEB, VARME,
   type KanalSpec,
 } from "../../data/fremskrivning";
 import { maFromPercent } from "./live-source";
@@ -124,7 +124,8 @@ export interface TelemetriBillede {
   flowPct: number | null;
   /** Det rå signal bag procenten. Oscilloskopet tegner det. */
   flowMa: number | null;
-  analyse: { lane: string; andele: number[] | null; alarm: boolean; proeveT: number | null }[];
+  /** Analyseprøven fra hvert kastebord, i tegningens rækkefølge. */
+  analyse: Analyse[];
   /** Kædens egne tal. null når kæden ikke står. */
   kaede: KaedeTal | null;
   /** Nyeste først. */
@@ -136,6 +137,18 @@ export interface TelemetriBillede {
   koerende: number;
   /** Driftsagenten. null når der ingen er — altså i den rigtige visning i dag. */
   ai: AiTilstand | null;
+}
+
+/** Den seneste prøve fra ét kastebord. */
+export interface Analyse {
+  /** Maskinens id — det samme som i `maskiner`. */
+  id: string;
+  kort: string;
+  lane: string | null;
+  /** FV0 … FV3 i procent. null før første prøve. */
+  andele: number[] | null;
+  alarm: boolean;
+  proeveT: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +179,14 @@ export function maskinFart(m: Pick<MaskinLaesning, "koerer" | "kanaler">): numbe
   if (k && k.value !== null && k.spec.nominal > 0) return Math.min(1.5, Math.max(0, k.value / k.spec.nominal));
   return m.koerer ? 1 : 0;
 }
+
+/** FV-andelene for ét kastebord: dets egne, hvis det afviger. */
+export function analyseFor(m: Pick<PlacedMachine, "wIds">): number[] {
+  return m.wIds.map((w) => ANALYSE.afvigelser[w]).find(Boolean) ?? ANALYSE.andele;
+}
+
+const kastebordeI = (layout: Layout) =>
+  layout.machines.filter((m) => m.kind !== "person" && KASTEBORD.test(m.name));
 
 /** "E-743" for elevatorer, navnet for resten. Vippestolene er én gruppe. */
 export function kortNavn(m: Pick<PlacedMachine, "kind" | "name" | "wIds">): string {
@@ -226,7 +247,9 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
     hal: HAL.map((spec) => ({ spec, value: null, alarm: false })),
     flowPct,
     flowMa: flowPct === null ? null : maFromPercent(flowPct),
-    analyse: ["N", "S"].map((lane) => ({ lane, andele: null, alarm: false, proeveT: null })),
+    analyse: kastebordeI(layout).map((m) => ({
+      id: m.id, kort: kortNavn(m), lane: m.lane ?? null, andele: null, alarm: false, proeveT: null,
+    })),
     kaede: null,
     haendelser: [],
     oppetidPct: null,
@@ -275,7 +298,7 @@ export const SIM = {
   /** Middeltid mellem to udfald på flowmåleren. */
   sensorfejlHverS: 420,
   sensorfejlVarighedS: 9,
-  /** En ny analyseprøve pr. spor. */
+  /** En ny analyseprøve fra hvert kastebord. */
   analyseHverS: 30,
   flowNominal: 92,
   flowSpredning: 5,
@@ -395,8 +418,15 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
 
   let flow = SIM.flowNominal;
   let sensorfejlTil: number | null = null;
-  let analyse = ["N", "S"].map((lane) => ({ lane, andele: [...ANALYSE.andele], alarm: false, proeveT: null as number | null }));
-  let naesteAnalyse = 0;
+  // Bordene tager ikke prøve i samme sekund. De er forskudt, så en ny prøve
+  // lander med jævne mellemrum i stedet for fire på én gang.
+  const borde = kastebordeI(layout);
+  let analyse: Analyse[] = borde.map((m) => ({
+    id: m.id, kort: kortNavn(m), lane: m.lane ?? null,
+    andele: null, alarm: false, proeveT: null,
+  }));
+  const naesteAnalyse = borde.map((_, i) => (i * SIM.analyseHverS * 1000) / Math.max(1, borde.length));
+  let analyseStart: number | null = null;
   // Kæden. Tælleren til visning starter et sted, regnskabet starter i nul.
   const skrevetStart = 1_184_000;
   let modtaget = 0;
@@ -589,23 +619,35 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     const fejl = sensorfejlTil !== null;
 
     // --- Analysen: en ny prøve ad gangen, ikke en glidende kurve -----------
-    if (nu >= naesteAnalyse) {
-      naesteAnalyse = nu + SIM.analyseHverS * 1000;
-      analyse = analyse.map((a) => {
-        const raa = ANALYSE.andele.map((p) => Math.max(0.2, p + gauss(r) * ANALYSE.spredning));
-        const sum = raa.reduce((x, y) => x + y, 0);
-        const andele = raa.map((p) => (p / sum) * 100);
-        const alarm = andele[0] > ANALYSE.alarmFV0;
-        if (alarm && !a.alarm) skriv({ t: nu, hvor: `Spor ${a.lane}`, tekst: `FV0 ${andele[0].toFixed(1).replace(".", ",")} %`, niveau: "alarm" });
-        return { lane: a.lane, andele, alarm, proeveT: nu };
+    // Et bord, der står, sender intet frø forbi analysen. Så står den seneste
+    // prøve, til bordet kører igen — der kommer ikke en ny af ingenting.
+    if (analyseStart === null) analyseStart = nu;
+    analyse = analyse.map((a, i) => {
+      if (nu - analyseStart! < naesteAnalyse[i]) return a;
+      const bord = maskiner.find((s) => s.m.id === a.id);
+      if (!bord || !koererNu(bord)) return a;
+      naesteAnalyse[i] += SIM.analyseHverS * 1000;
+      // Udsvinget er det, en prøve af den størrelse giver: binomialt.
+      const n = ANALYSE.froePrProeve;
+      const raa = analyseFor(bord.m).map((p) => {
+        const q = p / 100;
+        return Math.max(0, p + gauss(r) * Math.sqrt((q * (1 - q)) / n) * 100);
       });
-    }
+      const sum = raa.reduce((x, y) => x + y, 0);
+      const andele = raa.map((p) => (p / sum) * 100);
+      const alarm = andele[3] > ANALYSE.alarmFV3;
+      if (alarm && !a.alarm) skriv({ t: nu, hvor: a.kort, tekst: `FV3 ${andele[3].toFixed(1).replace(".", ",")} %`, niveau: "alarm" });
+      return { ...a, andele, alarm, proeveT: nu };
+    });
 
     // --- Kæden --------------------------------------------------------------
     // Hvert signal gemmes fire gange i sekundet. Rækkerne går gennem
     // kobleren og edge og skal skrives i databasen. Kan databasen ikke
     // følge med, hober de sig op i edge's buffer; er bufferen fuld, tabes de.
-    const signaler = maskiner.reduce((n, s) => n + s.kanaler.length, 0) + hal.length + 1;
+    // Signalerne er kanalerne, hallen, flowet og ét driftssignal pr. maskine —
+    // det, agenterne beder om. Samme målere, som fremskrivningen sætter i
+    // OT-laget; her tælles tallene, de sender, ikke kasserne.
+    const signaler = maskiner.reduce((n, s) => n + s.kanaler.length + s.m.wIds.length, 0) + hal.length + 1;
     const raekkerPrS = signaler * KAEDE.proeverPrS;
     const forespoergsler = Math.ceil((signaler * KAEDE.registreProSignal) / KAEDE.registreProForespoergsel);
     const pollMs = forespoergsler * KAEDE.msProForespoergsel + Math.round(Math.abs(gauss(r)) * 2);
@@ -632,7 +674,8 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     skrevetIalt += skrives;
     koe += ind - skrives;
     if (koe > KAEDE.buffer) {
-      if (tabt === 0) skriv({ t: nu, hvor: "Edge", tekst: "Buffer fuld · data tabes", niveau: "alarm" });
+      // Loggen nævner leddet ved skærmens navn. Edge hedder Server på HUD'en.
+      if (tabt === 0) skriv({ t: nu, hvor: "Server", tekst: "Buffer fuld · data tabes", niveau: "alarm" });
       tabt += koe - KAEDE.buffer;
       koe = KAEDE.buffer;
     }

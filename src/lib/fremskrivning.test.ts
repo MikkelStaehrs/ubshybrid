@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import sliberi from "../../data/lines/sliberi.json";
+import { HAL, KANALER } from "../../data/fremskrivning";
 import { agentsFor, machinesInScope } from "./agents";
 import { hudModel } from "./ai-hud";
 import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
 import { layoutLine } from "./layout";
-import { channelReport, otLayerFor } from "./ot";
+import { channelReport, otLayerFor, sensorType } from "./ot";
+import { kanalerFor } from "./telemetri";
 import type { LineData } from "./types";
 
 const layout = layoutLine(sliberi as LineData);
@@ -23,7 +25,7 @@ describe("fremskrivningen smitter ikke af på virkeligheden", () => {
     assert.deepEqual(igen.tally, { drift: 0, test: 1, afventer: 25, total: 26 });
     assert.deepEqual(igen.tally, som_det_staar.tally);
     assert.equal(igen.chainTone, "brud");
-    assert.equal(igen.broken?.label, "IO-kort");
+    assert.equal(igen.broken?.label, "DIN-skab");
   });
 
   it("rørerne ikke det rå OT-lag", () => {
@@ -42,20 +44,68 @@ describe("fremskrivningen smitter ikke af på virkeligheden", () => {
 });
 
 describe("fremskrivningen opfinder ikke tal", () => {
-  it("de ekstra signaler er dem, agenterne selv har bedt om", () => {
+  it("de ekstra signaler er dem, agenterne beder om, og dem demoens tal kræver", () => {
     const lag = fremskrivLayer(raa, layout, agenter);
     const ekstra = lag.sensors.filter((s) => !raa.sensors.some((r) => r.id === s.id));
     assert.ok(ekstra.length > 0, "der skulle komme signaler til");
 
-    // Hver eneste af dem svarer til et type-input på en besluttet agent.
+    // Hver eneste af dem svarer til et type-input på en besluttet agent —
+    // eller til en kanal, demoen viser et tal for på netop den maskine.
     const ønsket = new Set(
       agenter
         .filter((a) => a.beslutning !== "ide")
         .flatMap((a) => a.inputs.map((i) => i.type).filter(Boolean)),
     );
     for (const s of ekstra) {
-      assert.ok(ønsket.has(s.catalogType), `${s.id} er ikke bedt om af nogen agent`);
+      const m = layout.machines.find((x) => x.wIds[0] === s.machineId);
+      const kanal = !!m && kanalerFor(m).some((k) => k.maaler === s.catalogType);
+      const hal = s.id.endsWith("-HAL") && HAL.some((k) => k.maaler === s.catalogType);
+      assert.ok(ønsket.has(s.catalogType) || kanal || hal, `${s.id} er hverken bedt om eller vist`);
     }
+  });
+
+  it("hvert tal i demoen har en måler bag sig", () => {
+    // Viser demoen en temperatur på en elevator, sidder der en temperatur-
+    // måler på den i OT-laget — ellers stod der et tal, ingen kanal kunne bære.
+    const lag = fremskrivLayer(raa, layout, agenter);
+    for (const m of layout.machines) {
+      for (const k of kanalerFor(m)) {
+        assert.ok(
+          lag.sensors.some((s) => s.catalogType === k.maaler && s.machineId === m.wIds[0]),
+          `${m.name}: ${k.label} har ingen ${k.maaler}-måler`,
+        );
+      }
+    }
+    for (const k of HAL) {
+      assert.ok(lag.sensors.some((s) => s.catalogType === k.maaler && s.id.endsWith("-HAL")), `hallens ${k.label}`);
+    }
+  });
+
+  it("hver måler, demoen nævner, findes i sensorkataloget", () => {
+    // Uden katalogets signalart kan kanalregnskabet ikke vide, om måleren
+    // skal have en kanal — og HUD'en har ikke et ord for den.
+    for (const g of KANALER) {
+      for (const k of g.kanaler) assert.ok(sensorType(k.maaler), `${k.id}: ${k.maaler} står ikke i kataloget`);
+    }
+    for (const k of HAL) assert.ok(sensorType(k.maaler), `hal ${k.id}: ${k.maaler}`);
+  });
+
+  it("feltbus-målere fylder ingen kanal", () => {
+    // En frekvensomformer eller et analyseudstyr taler selv på netværket.
+    // Talte de med, ville fremskrivningen forudsætte kort, ingen skal bruge.
+    const lag = fremskrivLayer(raa, layout, agenter);
+    const bus = lag.sensors.filter((s) => s.signal === "feltbus");
+    assert.ok(bus.length > 0, "demoen har målere på feltbussen");
+    const rapport = channelReport(lag.cabinets[0], lag.sensors, 1);
+    for (const s of bus) assert.equal(rapport.channel.has(s.id), false, `${s.id} fik en kanal`);
+    const kanaler = rapport.uses.reduce((n, u) => n + u.needed, 0);
+    assert.equal(kanaler, lag.sensors.length - bus.length);
+  });
+
+  it("to målere får aldrig samme tag", () => {
+    const lag = fremskrivLayer(raa, layout, agenter);
+    const ids = lag.sensors.map((s) => s.id);
+    assert.equal(new Set(ids).size, ids.length);
   });
 
   it("et opdigtet tag kan kendes fra et tildelt", () => {
@@ -110,9 +160,11 @@ describe("fremskrivningen udleder resten som altid", () => {
       if (!a.inputs.some((i) => i.type)) continue;
       for (const m of machinesInScope(a, layout)) daekket.add(m.id);
     }
-    // Maskiner med en rigtig sensor er målt i forvejen.
+    // Maskiner med en rigtig sensor er målt i forvejen, og maskiner med tal
+    // i demoen har de målere, tallene kræver.
     for (const m of layout.machines) {
       if (raa.sensors.some((s) => m.wIds.includes(s.machineId))) daekket.add(m.id);
+      if (kanalerFor(m).length > 0) daekket.add(m.id);
     }
     const maalte = Object.entries(fremskrevet.maskinTilstand).filter(([, s]) => s === "paa-plads").map(([id]) => id);
     assert.deepEqual(new Set(maalte), new Set([...daekket].filter((id) => id in fremskrevet.maskinTilstand)));
@@ -121,13 +173,13 @@ describe("fremskrivningen udleder resten som altid", () => {
   });
 
   it("kanalpladserne tælles af det samme regnskab", () => {
-    const io = fremskrevet.links.find((l) => l.id === "io")!.instrument;
+    const io = fremskrevet.links.find((l) => l.id === "din")!.instrument;
     const optaget = io.slots!.filter((s) => s.used).length;
     const par = new Map(io.readings.map((r) => [r.label, r.value]));
     const brugt = ["AI", "DI"].reduce((n, k) => n + Number((par.get(k) ?? "0 / 0").split(" / ")[0]), 0);
     assert.equal(brugt, optaget);
     // Flere signaler fylder flere pladser. Ellers var regnskabet ikke koblet på.
-    const nu = som_det_staar.links.find((l) => l.id === "io")!.instrument;
+    const nu = som_det_staar.links.find((l) => l.id === "din")!.instrument;
     assert.ok(optaget > nu.slots!.filter((s) => s.used).length);
   });
 
@@ -157,7 +209,7 @@ describe("fremskrivningen udleder resten som altid", () => {
     // Den rigtige stykliste er urørt.
     assert.ok(!raa.cabinets[0].hardware.some((h) => h.id.startsWith("X-")));
     // Og instrumentet siger det.
-    const par = new Map(fremskrevet.links.find((l) => l.id === "io")!.instrument.readings.map((r) => [r.label, r.value]));
+    const par = new Map(fremskrevet.links.find((l) => l.id === "din")!.instrument.readings.map((r) => [r.label, r.value]));
     if (forudsat.length > 0) assert.ok(par.has("Forudsat"), "de forudsatte kort står ikke på instrumentet");
   });
 });

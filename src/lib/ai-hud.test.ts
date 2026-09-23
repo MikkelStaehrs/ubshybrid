@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AGENT_ENGINE_LABEL, agentsFor, lineOpsFor } from "./agents";
 import { SMÅBELØB_UNDER } from "./agent-cost";
-import { chainToneOf, hudAgentState, hudModel, hudState, tallyMedTelemetri, type HudLink } from "./ai-hud";
+import sliberi from "../../data/lines/sliberi.json";
+import { chainToneOf, hudAgentState, hudLinks, hudModel, hudState, ledNavn, tallyMedTelemetri, type HudLink } from "./ai-hud";
+import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
+import { layoutLine } from "./layout";
+import { layoutOt, otLayerFor, sensorType } from "./ot";
+import type { LineData } from "./types";
 
 const m = hudModel("sliberi");
 assert.ok(m, "sliberi burde have en HUD-model");
@@ -10,7 +15,45 @@ assert.ok(m, "sliberi burde have en HUD-model");
 describe("kæden i HUD'en", () => {
   it("går fra måler til database, uden dashboardet", () => {
     // Dashboardet er for mennesker. Agenterne læser fra databasen.
-    assert.deepEqual(m.links.map((l) => l.id), ["sensor", "io", "kobler", "edge", "mssql"]);
+    assert.deepEqual(m.links.map((l) => l.id), ["sensor", "din", "edge", "mssql"]);
+  });
+
+  it("siger DIN-skab og Server — ikke kobler og edge", () => {
+    // De to ord skulle forklares, før kæden kunne læses. IO-kortet og
+    // kobleren sidder i samme skab; edge er et program på en server.
+    const navne = m.links.map((l) => l.label);
+    assert.deepEqual(navne, ["Sensor", "DIN-skab", "Server", "MSSQL"]);
+    for (const n of navne) assert.doesNotMatch(n, /kobler|edge/i, `${n} er et ord, der skal forklares`);
+    assert.deepEqual(m.links.find((l) => l.id === "din")!.trin, ["io", "kobler"]);
+  });
+
+  it("en flaskehals nævnes ved leddets navn, ikke ved trinnets", () => {
+    // Overskriften nævner det led, der ikke kan følge med. Den skal sige
+    // det samme som kæden — ellers kom "KOBLER" ind ad bagdøren.
+    assert.equal(ledNavn(m.links, "kobler"), "DIN-skab");
+    assert.equal(ledNavn(m.links, "edge"), "Server");
+    assert.equal(ledNavn(m.links, "mssql"), "MSSQL");
+    for (const id of ["io", "kobler", "edge", "mssql"]) {
+      assert.doesNotMatch(ledNavn(m.links, id), /kobler|edge/i, id);
+    }
+  });
+
+  it("DIN-skabet leverer kun, når både IO-kortet og kobleren gør", () => {
+    // Skabet står, men uplinket til kobleren mangler: IO-kortet har sine
+    // tal, og ingen kan hente dem. Så er skabet bruddet — ikke leddet efter.
+    const layout = layoutLine(sliberi as LineData);
+    const lag = fremskrivLayer(otLayerFor("sliberi")!, layout, fremskrivAgenter(agentsFor("sliberi")));
+    const ot = layoutOt(lag, layout, "sliberi");
+    const kun = ot.infrastructure.find((n) => n.requiredFor.includes("kobler") && !n.requiredFor.includes("io"))!;
+    const links = hudLinks({
+      ...ot,
+      infrastructure: ot.infrastructure.map((n) => ({ ...n, status: n.id === kun.id ? "planned" as const : "active" as const })),
+    });
+    const din = links.find((l) => l.id === "din")!;
+    assert.equal(din.delivers, false);
+    assert.equal(din.broken, true);
+    assert.equal(din.next, kun.name);
+    assert.equal(links.filter((l) => l.broken).length, 1);
   });
 
   it("markerer præcis ét brud, og det er det første led der svigter", () => {
@@ -165,7 +208,7 @@ describe("kompositionen har noget at vise i hver zone", () => {
 describe("kædens samlede tone", () => {
   /** Et led med kun det, tonen afhænger af. */
   const led = (status: HudLink["status"], broken = false): HudLink => ({
-    id: status, label: status, status,
+    id: status, trin: [], label: status, status,
     state: "afventer", statusLabel: "AFVENTER", tone: "moerk",
     delivers: !broken, broken, instrument: { readings: [] },
   });
@@ -219,8 +262,8 @@ describe("kæden som instrumenter", () => {
     assert.equal(i.signalId, "FT-743");
   });
 
-  it("IO-kortet viser kanalpladser, og præcis én er optaget", () => {
-    const i = led("io").instrument;
+  it("DIN-skabet viser kanalpladser, og præcis én er optaget", () => {
+    const i = led("din").instrument;
     assert.ok(i.slots && i.slots.length > 0, "der skal være pladser at vise");
     const optaget = i.slots!.filter((s) => s.used);
     assert.equal(optaget.length, 1, "kun flowsignalet fylder en plads i dag");
@@ -236,8 +279,35 @@ describe("kæden som instrumenter", () => {
   it("lægger ikke analoge og digitale pladser sammen", () => {
     // Den fejl, reglen kom af: "17 / 24" så ud som plads, mens 13
     // driftssignaler ingen kanal havde — de ledige pladser var analoge.
-    const par = new Map(led("io").instrument.readings.map((r) => [r.label, r.value]));
+    const par = new Map(led("din").instrument.readings.map((r) => [r.label, r.value]));
     assert.ok(!par.has("Pladser"), "en sammenlagt pladstælling skjuler et underskud");
+  });
+
+  it("én måler står med model og kanal; banen siger 4–20 mA", () => {
+    assert.equal(led("sensor").instrument.maalere, undefined);
+    assert.equal(led("sensor").bane, "4–20 mA");
+  });
+
+  it("i demoen er sensoren alle anlæggets målere, talt efter slags", () => {
+    // Sensordata er ikke kun flow. Leddet tæller dem, fremskrivningen satte,
+    // og summen passer med antallet.
+    const f = hudModel("sliberi", { fremskriv: true })!;
+    const i = f.links.find((l) => l.id === "sensor")!.instrument;
+    const slags = new Map((i.maalere ?? []).map((x) => [x.label, x.antal]));
+    for (const s of ["Flow", "Temperatur", "Fugt", "Hastighed", "Vibration", "Kører/står"]) {
+      assert.ok((slags.get(s) ?? 0) > 0, `${s} mangler blandt målerne`);
+    }
+    const ialt = [...slags.values()].reduce((n, x) => n + x, 0);
+    assert.equal(String(ialt), new Map(i.readings.map((r) => [r.label, r.value])).get("Målere"));
+    // Flest først, så det største tal står øverst.
+    const antal = (i.maalere ?? []).map((x) => x.antal);
+    assert.deepEqual(antal, [...antal].sort((a, b) => b - a));
+    // Ét ord fra kataloget pr. slags — ikke et internt nøgleord.
+    for (const label of slags.keys()) assert.doesNotMatch(label, /-/, label);
+    // Leddet er ikke én måler længere, så der er ingen aflæsning øverst.
+    assert.equal(i.signalId, undefined);
+    assert.match(f.links.find((l) => l.id === "sensor")!.bane ?? "", /Feltbus/);
+    assert.ok(sensorType("temperature"), "kataloget kender temperatur");
   });
 
   it("hvert led, der ikke leverer, siger hvad det venter på", () => {

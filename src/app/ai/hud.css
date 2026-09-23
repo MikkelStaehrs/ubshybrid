@@ -434,20 +434,14 @@
 .m-ma-lbl.m-ma-fejl { color: var(--hud-brud); }
 
 /* Fordelingen: fire klasser i ét bånd. */
-.m-fordeling { display: grid; gap: 5px; }
-.m-fordeling.is-tom span { font-family: var(--font-mono); font-size: 9.5px; color: var(--hud-dim); letter-spacing: 0.14em; text-transform: uppercase; }
-.m-bånd { display: flex; height: 10px; gap: 2px; }
+/* FV-klasserne. Farve er signal, ikke pynt: klasserne er én farve, der
+   aftager fra FV0 til FV3, og kun en FV3, der melder, bliver rød. */
 .m-del { display: block; height: 100%; transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.m-del.d-0 { background: var(--hud-brud); }
-.m-del.d-1 { background: var(--hud-test); }
-.m-del.d-2 { background: var(--hud-drift); }
-.m-del.d-3 { background: var(--hud-drift-lys); box-shadow: 0 0 10px rgba(111, 224, 194, 0.35); }
-.m-akse { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.m-klasse { display: flex; align-items: baseline; gap: 3px; font-family: var(--font-mono); font-size: 10px; color: var(--hud-ink); }
-.m-klasse b { font-weight: 500; font-size: 8.5px; letter-spacing: 0.1em; color: var(--hud-muted); margin-right: 2px; }
-.m-klasse i { font-size: 8px; color: var(--hud-dim); }
-.m-klasse.d-0 b { color: var(--hud-brud); }
-.m-fordeling.is-alarm .m-klasse.d-0 { color: var(--hud-brud); }
+.m-del.d-0 { background: var(--hud-drift-lys); }
+.m-del.d-1 { background: var(--hud-drift); }
+.m-del.d-2 { background: var(--hud-drift); opacity: 0.5; }
+.m-del.d-3 { background: var(--hud-drift); opacity: 0.25; }
+.is-alarm .m-del.d-3 { background: var(--hud-brud); opacity: 1; }
 
 .m-bjaelke { position: relative; display: block; height: 3px; background: var(--hud-moerk); }
 .m-bjaelke-fyld {
@@ -537,8 +531,16 @@
 .hp-klima-tal i { font-family: var(--font-mono); font-size: 10px; color: var(--hud-muted); margin-left: 3px; }
 .hp-klima-rk.is-alarm .hp-klima-tal { color: var(--hud-brud); }
 
-.hp-analyse { display: grid; gap: 4px; margin-bottom: 8px; }
-.hp-spor { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--hud-muted); }
+.hp-fv { display: grid; gap: 7px; }
+.hp-fv-hoved, .hp-fv-rk { display: grid; grid-template-columns: 62px repeat(4, 1fr); column-gap: 8px; row-gap: 3px; align-items: end; }
+.hp-fv-hoved span { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; color: var(--hud-muted); }
+.hp-fv-tal { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
+.hp-fv-rk.is-alarm .hp-fv-tal.d-3 { color: var(--hud-brud); }
+.hp-fv-baand { grid-column: 2 / -1; display: flex; height: 4px; gap: 2px; }
+.hp-fv-rk.is-stop .hp-kb-navn { color: var(--hud-brud); }
+.hp-fv-rk.is-styret .hp-kb-navn { color: var(--hud-test-lys); }
+.hp-fv-rk.is-stop .hp-fv-tal, .hp-fv-rk.is-stop .hp-fv-baand,
+.hp-fv-rk.is-styret .hp-fv-tal, .hp-fv-rk.is-styret .hp-fv-baand { opacity: 0.45; }
 
 .hp-kb { display: grid; gap: 6px; }
 .hp-kb-hoved, .hp-kb-rk { display: grid; grid-template-columns: 62px repeat(3, 1fr); gap: 8px; align-items: end; }
@@ -852,6 +854,9 @@
 .cc-rd-label { fill: var(--hud-muted); font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; }
 .cc-rd-value { fill: var(--hud-ink); font-family: var(--font-mono); font-size: 11.5px; text-anchor: end; }
 .cc-rd-value.rd-test { fill: var(--hud-test-lys); }
+/* Målernes slags. Brødskrift frem for versaler, så to kolonner kan stå side
+   om side uden at navnene løber ind i tallene. */
+.cc-maaler { fill: var(--hud-muted); font-family: var(--font-ui); font-size: 10.5px; }
 .cc-rd-value.rd-brud { fill: var(--hud-brud); }
 
 /* Udnyttelsen. Grøn med luft, rav tæt på loftet, rød over det. */
