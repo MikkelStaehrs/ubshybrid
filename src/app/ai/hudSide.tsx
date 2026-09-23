@@ -49,6 +49,9 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
   // ?ophobning=1 lader KB-3N gå i stå kort efter, siden er åbnet — så man kan
   // se Driftsagenten gribe ind, uden at vente på et tilfældigt stop.
   const ophobning = fremskriv && params.ophobning === "1";
+  // ?agenter=claude lader de agenter, der i virkeligheden er Claude, tænke
+  // med Claude. Det koster penge pr. kald, så det er et valg i adressen.
+  const motor = fremskriv && params.agenter === "claude" ? "claude" as const : "regler" as const;
   // ?seed=12 giver en anden dag: andre stop, andre episoder, samme regler.
   const seed = fremskriv && typeof params.seed === "string" && /^\d+$/.test(params.seed) ? Number(params.seed) : undefined;
 
@@ -63,6 +66,7 @@ export function hudSide(params: SideParams, fremskriv: boolean) {
       flaskehals={flaskehals}
       ophobning={ophobning}
       seed={seed}
+      motor={motor}
     />
   );
 }

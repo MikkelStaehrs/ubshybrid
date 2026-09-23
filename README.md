@@ -21,6 +21,14 @@ ingen værdier i repoet, og der skal aldrig komme nogen.
 BASIC_AUTH_USER=
 BASIC_AUTH_PASSWORD=
 LIVE_SOURCE=mock
+
+# Kun til simuleringen med rigtige agenter (/ai/demo?agenter=claude).
+ANTHROPIC_API_KEY=
+# Kun hvis nøglen ikke hører til et workspace.
+ANTHROPIC_WORKSPACE_ID=
+# Loft i kroner. Udeladt: 10 pr. kørsel og 50 pr. døgn.
+AGENT_LOFT_KR_KOERSEL=
+AGENT_LOFT_KR_DOEGN=
 ```
 
 På Vercel sættes de samme navne under *Settings → Environment Variables*.

@@ -5,7 +5,7 @@ import { SITE } from "../../lib/context";
 import { klokke, type Besked } from "../../lib/samspil";
 import type { Haendelse } from "../../lib/telemetri";
 import { Sim } from "./HudPanels";
-import { AgentLog, HaendelsesLog } from "./Logge";
+import { AgentLog, AgentMaaler, HaendelsesLog } from "./Logge";
 import { aabnKanal, type SimBesked, type SimStatus } from "./simKanal";
 import "./hud.css";
 
@@ -73,6 +73,7 @@ export function SimLogSide() {
             <span className="hud-sep" aria-hidden />
             <span className="hud-ur fm-num">{klokke(status.t)}</span>
             <span className="hud-gang fm-num">{status.gang === 0 ? "Pause" : `×${status.gang}`}</span>
+            {status.agenter && <AgentMaaler a={status.agenter} />}
             {o && (
               <span className="sl-ordre">
                 <span>Ordre {o.ordreNr}</span>

@@ -7,7 +7,7 @@ import {
   flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
 import type { KanalSpec } from "../../../data/fremskrivning";
-import { klokke, varighed, type Besked } from "../../lib/samspil";
+import { kildeTekst, klokke, varighed, type Besked } from "../../lib/samspil";
 import { graense, type MaskinLaesning, type OrdreStatus, type TelemetriBillede } from "../../lib/telemetri";
 import { Afkod, Bjaelke, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
 import { TAKT_MS, type Historik } from "./useTelemetri";
@@ -653,6 +653,7 @@ export function AgentCores({ model, nr, still, ai = null, sim = false, samtale =
           <span className="hs-fra">{senest.fra}</span>
           <span className="hs-pil" aria-hidden>→</span>
           <span className="hs-til">{senest.til}</span>
+          <span className={`hs-kilde${senest.kilde === "claude" ? " is-claude" : ""}`}>{kildeTekst(senest, false)}</span>
           <Sim />
           <span className="hs-tekst">{senest.tekst}</span>
         </p>

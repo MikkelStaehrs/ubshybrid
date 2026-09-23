@@ -1,8 +1,30 @@
 "use client";
 import { useState } from "react";
-import { MENNESKER, type Besked, type BeskedType } from "../../lib/samspil";
+import { kildeTekst, MENNESKER, stopGrund, type Besked, type BeskedType } from "../../lib/samspil";
 import type { Haendelse } from "../../lib/telemetri";
 import { klok } from "./HudPanels";
+import type { AgentStatus } from "./simKanal";
+
+const kr = (v: number) => v.toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Hvem der tænker, og hvad det har kostet. Med Claude står prisen altid
+ * fremme, og den agent, der tænker lige nu, står ved siden af. Har reglerne
+ * taget over, står det — og hvorfor.
+ */
+export function AgentMaaler({ a }: { a: AgentStatus }) {
+  if (a.motor === "regler") return <span className="hud-motor">Regler · seed {a.seed}</span>;
+  if (a.stoppet) return <span className="hud-motor is-stoppet" title={a.stoppet}>Regler · {stopGrund(a.stoppet)}</span>;
+  return (
+    <span className="hud-motor is-claude">
+      <b>Claude</b>
+      <span className="fm-num">{kr(a.brugtKr)} / {kr(a.loftKr)} kr</span>
+      <span className="fm-num">{a.kald} kald</span>
+      <span className="fm-num">seed {a.seed}</span>
+      {a.venter.length > 0 && <span className="hud-taenker">{a.venter[0]} tænker</span>}
+    </span>
+  );
+}
 
 /**
  * De to logge, som man læser dem: hændelserne og agenterne imellem.
@@ -80,6 +102,15 @@ const TYPE_LABEL: Record<BeskedType, string> = {
   rapport: "Melder",
 };
 
+/** Hvem der tænkte: Claude med sin svartid, eller reglerne. */
+export function Kilde({ b, medTid = true }: { b: Besked; medTid?: boolean }) {
+  return (
+    <span className={`hs-kilde${b.kilde === "claude" ? " is-claude" : ""}`} title={b.model}>
+      {kildeTekst(b, medTid)}
+    </span>
+  );
+}
+
 /**
  * Agenterne imellem. Hver besked: hvem, til hvem, hvad slags — og tallene
  * bag, for en beslutning uden sin begrundelse er ikke til at stole på.
@@ -89,18 +120,22 @@ const TYPE_LABEL: Record<BeskedType, string> = {
 export function AgentLog({ samtale }: { samtale: Besked[] }) {
   const [hvem, setHvem] = useState<string | null>(null);
   const [menneske, setMenneske] = useState(false);
+  const [claude, setClaude] = useState(false);
   const agenter = [...new Set(samtale.map((b) => b.fra))].sort((a, b) => a.localeCompare(b, "da"));
+  const medClaude = samtale.filter((b) => b.kilde === "claude").length;
   const vist = samtale.filter((b) =>
-    (hvem === null || b.fra === hvem || b.til === hvem) && (!menneske || MENNESKER.has(b.til)));
+    (hvem === null || b.fra === hvem || b.til === hvem)
+    && (!menneske || MENNESKER.has(b.til))
+    && (!claude || b.kilde === "claude"));
 
   return (
     <div className="hl-log">
       <div className="hl-filtre" role="group" aria-label="Filter">
         <button
           type="button"
-          className={`hl-filter${hvem === null && !menneske ? " is-valgt" : ""}`}
-          aria-pressed={hvem === null && !menneske}
-          onClick={() => { setHvem(null); setMenneske(false); }}
+          className={`hl-filter${hvem === null && !menneske && !claude ? " is-valgt" : ""}`}
+          aria-pressed={hvem === null && !menneske && !claude}
+          onClick={() => { setHvem(null); setMenneske(false); setClaude(false); }}
         >
           Alle<span className="fm-num">{samtale.length}</span>
         </button>
@@ -112,6 +147,16 @@ export function AgentLog({ samtale }: { samtale: Besked[] }) {
         >
           Til mennesker<span className="fm-num">{samtale.filter((b) => MENNESKER.has(b.til)).length}</span>
         </button>
+        {medClaude > 0 && (
+          <button
+            type="button"
+            className={`hl-filter${claude ? " is-valgt" : ""}`}
+            aria-pressed={claude}
+            onClick={() => setClaude((c) => !c)}
+          >
+            Claude<span className="fm-num">{medClaude}</span>
+          </button>
+        )}
         {agenter.map((a) => (
           <button
             type="button"
@@ -134,6 +179,7 @@ export function AgentLog({ samtale }: { samtale: Besked[] }) {
                 <span className="hs-pil" aria-hidden>→</span>
                 <span className="hs-til">{b.til}</span>
                 <span className="hs-type">{TYPE_LABEL[b.type]}</span>
+                <Kilde b={b} />
               </div>
               <p className="hs-tekst">{b.tekst}</p>
               {b.grund && <p className="hs-grund">{b.grund}</p>}

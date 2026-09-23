@@ -5,7 +5,7 @@
 // forbinder vinduer fra samme adresse på samme maskine, så der skal ingen
 // server til, og intet forlader maskinen.
 import type { Besked } from "../../lib/samspil";
-import type { Haendelse, OrdreStatus, Uro } from "../../lib/telemetri";
+import type { Haendelse, Motor, OrdreStatus, Uro } from "../../lib/telemetri";
 
 export const KANAL = "ubs-simulering";
 
@@ -20,6 +20,24 @@ export interface SimStatus {
   gang: number;
   ordre: OrdreStatus | null;
   uro: Uro[];
+  agenter?: AgentStatus;
+}
+
+/** Hvem der tænker, og hvad det har kostet. */
+export interface AgentStatus {
+  motor: Motor;
+  /** Kald til Claude i denne kørsel, der kostede noget. */
+  kald: number;
+  brugtKr: number;
+  loftKr: number;
+  /** De agenter, der tænker lige nu. */
+  venter: string[];
+  /** Hvorfor reglerne har taget over, hvis de har. */
+  stoppet: string | null;
+  /** Den seneste fejl — et kald, reglerne måtte svare for. */
+  fejl: string | null;
+  /** Kørslens seed. Samme seed giver samme hændelser — ikke samme svar fra Claude. */
+  seed: number;
 }
 
 export type SimBesked =

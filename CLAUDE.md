@@ -348,10 +348,36 @@ siges til et menneske.
 | Driftsagent | Buffere og frøtemperatur | Stopper og starter spor efter faste regler |
 | Operatøragent | Alle de andre | Afvejer, beslutter, fortæller operatøren |
 
-Beskederne er **regler og skabeloner, ikke Claude** (`src/lib/samspil.ts`).
-Der er ikke kaldt et API fra repoet, og samtalen er mærket SIM. Hver
-beslutning og hvert forslag har en begrundelse med tallene bag; det har en
-test.
+Som standard er beskederne **regler og skabeloner** (`src/lib/samspil.ts`),
+mærket SIM og REGEL. Hver beslutning og hvert forslag har en begrundelse med
+tallene bag; det har en test.
+
+### Rigtige agenter: `?agenter=claude`
+
+Med `/ai/demo?agenter=claude` tænker de agenter, der i virkeligheden er
+Claude — Operatøragent, Dataagent og de to linjeagenter — med Claude. Det
+koster penge pr. kald, og derfor er det et valg i adressen.
+
+- **Reglerne afgør, hvornår; Claude afgør, hvad.** Simulatoren opdager, at
+  noget sker, og laver en *opgave*: spørgsmålet, tallene, de handlinger,
+  agenten kan vælge imellem, og hvem den kan skrive til. Det, der afhænger
+  af beslutningen — en genstart, en prøverate — venter på svaret.
+- **Driftsagent og Kædevagt tænker aldrig med Claude.** Et spor skal stoppes
+  inden for to sekunder, og et kald tager flere. Det er arbejdsdelingen
+  mellem sikringen og den vagthavende, og simuleringen viser den.
+- **Mens en agent tænker, går tiden i virkelig tid**, så svartiden er ægte.
+- **Svaret valideres.** En handling, opgaven ikke tilbød, bliver reglernes;
+  en besked til en, opgaven ikke nævnte, falder væk. Svarer Claude ikke,
+  svarer reglerne med deres skabelon. Tre fejl i træk, loftet eller en
+  manglende nøgle: så tager reglerne over for resten af kørslen, og det står
+  på skærmen.
+- **Hver besked er mærket CLAUDE (med svartid) eller REGEL.** Prisen og
+  antallet af kald står i toppen.
+- **Kaldet sker kun på serveren**, i `src/lib/claude.ts` via `/api/agent`.
+  Nøglen forlader aldrig serveren og skrives aldrig ud. Loftet håndhæves dér:
+  `AGENT_LOFT_KR_KOERSEL` (10 kr) og `AGENT_LOFT_KR_DOEGN` (50 kr).
+- **Hver kørsel er en ny dag** med et tilfældigt seed, der står på skærmen.
+  Samme seed giver de samme hændelser — ikke de samme svar.
 
 - **At skrue linjen ned for databasens skyld afvises med regnestykket.**
   Rækkerne kommer fra antallet af signaler, ikke fra tons — færre tons giver
@@ -594,5 +620,12 @@ har sagt tallet.
 - **Den tværgående agent venter på linje nr. 2.** Der er ikke noget at gå på
   tværs af endnu.
 - **Fase 4 er et Python-script på serveren**, der henter `/api/context`,
-  kalder Claude API og skriver en rapport. Intet af det findes endnu — der er
-  ikke kaldt et API fra dette repo.
+  kalder Claude API og skriver en rapport. Det findes ikke endnu. Det eneste
+  sted, repoet kalder Claude, er simuleringens `/api/agent`.
+- **Modellerne og priserne i `src/lib/claude.ts` skal tjekkes** mod
+  Anthropics prisliste. De bruges til loftet og tallet på skærmen; kontoens
+  eget beløbsloft hos Anthropic er det sidste værn.
+- **Budgettet i `/api/agent` bor i serverens hukommelse** og nulstilles ved
+  genstart. På Vercel er det pr. instans. Det er et loft, ikke et regnskab.
+- **`/api/agent` deler login med mennesker**, som `/api/context`. Den kan
+  bruge penge, så den skal have sit eget token, før den åbnes for andre.

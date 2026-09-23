@@ -4,7 +4,7 @@ import sliberi from "../../data/lines/sliberi.json";
 import { DRIFTSAGENT, FLASKEHALS, FLOW_NOMINAL, ORDRE, PROEVERATE, SIMULERING } from "../../data/fremskrivning";
 import { layoutLine } from "./layout";
 import {
-  ordreRapport, planMed, prognose, vaelgPlan, varighed,
+  kildeTekst, ordreRapport, planMed, prognose, stopGrund, vaelgPlan, varighed,
   type Besked, type Gruppe,
 } from "./samspil";
 import { samlLog, samlSamtale, simulator, type Haendelse, type TelemetriBillede, type Uro } from "./telemetri";
@@ -266,6 +266,28 @@ describe("tal og tider i beskederne", () => {
     const s = samlSamtale(samlSamtale([], [b(2), b(1)]), [b(3), b(2)]);
     assert.deepEqual(s.map((x) => x.nr), [3, 2, 1]);
     assert.equal(samlSamtale(s, [b(3)]), s);
+  });
+});
+
+describe("mærkerne på skærmen", () => {
+  it("hvem der tænkte, står ens overalt", () => {
+    assert.equal(kildeTekst({ kilde: "claude", ms: 3400 }), "Claude · 3,4 s");
+    assert.equal(kildeTekst({ kilde: "claude", ms: 3400 }, false), "Claude");
+    assert.equal(kildeTekst({ kilde: "regel" }), "Regel");
+    assert.equal(kildeTekst({}), "Regel");
+  });
+
+  it("hvorfor reglerne tog over, i højst to ord — aldrig API'ets fejlbesked", () => {
+    for (const [tekst, kort] of [
+      ["Loftet for kørslen er nået", "Loft nået"],
+      ["Loftet for i dag er nået", "Loft nået"],
+      ["Ingen API-nøgle på serveren", "Ingen nøgle"],
+      ["Kunne ikke nå serveren", "Ingen forbindelse"],
+      ["Claude svarede 400: This API key is not scoped to a workspace …", "Claude svarer ikke"],
+    ]) {
+      assert.equal(stopGrund(tekst), kort);
+      assert.ok(kort.split(" ").length <= 3);
+    }
   });
 });
 

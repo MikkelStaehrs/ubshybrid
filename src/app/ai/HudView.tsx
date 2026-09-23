@@ -8,7 +8,7 @@ import { rateFrom } from "../../lib/flow";
 import { layoutLine } from "../../lib/layout";
 import type { LiveSourceKind } from "../../lib/live-source";
 import type { OtLayout } from "../../lib/ot";
-import type { OrdreValg, TelemetriBillede } from "../../lib/telemetri";
+import type { Motor, OrdreValg, TelemetriBillede } from "../../lib/telemetri";
 import type { LineData } from "../../lib/types";
 import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
@@ -17,6 +17,7 @@ import {
   KvalitetPanel, OrdrePanel, Overskrift, Readout,
 } from "./HudPanels";
 import { Afkod } from "./Instrumenter";
+import { AgentMaaler } from "./Logge";
 import { LogVindue } from "./LogVindue";
 import type { Hastighed } from "./simKanal";
 import { useTelemetri, type Styring } from "./useTelemetri";
@@ -36,7 +37,7 @@ import "./hud.css";
  *   - Grænseflade: opstarten og kameraets tur. De viser ingen data og
  *     lader ikke som om. `prefers-reduced-motion` slukker begge.
  */
-export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals, ophobning, seed }: {
+export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaskehals, ophobning, seed, motor = "regler" }: {
   model: HudModel;
   line: LineData;
   ot: OtLayout | null;
@@ -50,6 +51,8 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   ophobning?: boolean;
   /** En anden dag: et andet seed giver andre hændelser. */
   seed?: number;
+  /** Hvem der tænker for Claude-agenterne. */
+  motor?: Motor;
 }) {
   useFrameProbe(measure);
   const still = useReducedMotion();
@@ -62,8 +65,8 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
     if (!model.fremskrevet || !o.ordreNr || !o.estimeretKg || !o.kasser || !model.flow.nominal) return null;
     return { ordreNr: o.ordreNr, estimeretKg: o.estimeretKg, kasser: o.kasser, nominalTPrT: model.flow.nominal };
   }, [model]);
-  const { billede, historik, log, samtale, styring } = useTelemetri({
-    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning, ordre, seed,
+  const { billede, historik, log, samtale, styring, agenter } = useTelemetri({
+    layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning, ordre, seed, motor,
   });
   const nu = useUr();
   const boot = useOpstart(still);
@@ -117,8 +120,14 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         {styring ? <Ur nu={billede.t} /> : <Ur nu={nu} />}
         <Puls billede={billede} sim={sim} />
         {styring && <Fart styring={styring} />}
+        {agenter && <AgentMaaler a={agenter} />}
         <h1><Afkod tekst={model.fremskrevet ? "AI-overblik · fremskrevet" : "AI-overblik"} forsinkelse={150} still={still} /></h1>
         {!model.fremskrevet && <Link href="/ai/demo" className="hud-switch">Med signaler inde</Link>}
+        {styring && (
+          <Link href={motor === "claude" ? "/ai/demo" : "/ai/demo?agenter=claude"} className="hud-switch">
+            {motor === "claude" ? "Med regler" : "Med Claude"}
+          </Link>
+        )}
         {styring && <button type="button" className="hud-switch" onClick={aabnSkaerm2}>Log · skærm 2</button>}
         <Link href="/ai?visning=dokument" className="hud-switch">Dokumentvisning</Link>
       </header>

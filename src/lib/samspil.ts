@@ -26,6 +26,34 @@ export interface Besked {
   grund?: string;
   /** En rapport har flere linjer. */
   linjer?: string[];
+  /**
+   * Hvem der tænkte: Claude, eller reglerne og deres skabelon. Fladen
+   * skal kunne se forskel — det er hele pointen med at køre dem rigtigt.
+   */
+  kilde?: "claude" | "regel";
+  /** Hvor længe Claude var om svaret. */
+  ms?: number;
+  model?: string;
+}
+
+/**
+ * Hvem der tænkte, som det står på skærmen: "Claude · 3,4 s" eller "Regel".
+ * Ét sted, så mærket siger det samme i loggen, i panelet og på skærm 2.
+ */
+export function kildeTekst(b: Pick<Besked, "kilde" | "ms">, medTid = true): string {
+  if (b.kilde !== "claude") return "Regel";
+  return medTid && b.ms !== undefined ? `Claude · ${(b.ms / 1000).toFixed(1).replace(".", ",")} s` : "Claude";
+}
+
+/**
+ * Hvorfor reglerne har taget over, i højst to ord. Hele forklaringen — fx
+ * Anthropics fejlbesked — hører ikke til på skærmen.
+ */
+export function stopGrund(tekst: string): string {
+  if (/loft/i.test(tekst)) return "Loft nået";
+  if (/nøgle/i.test(tekst)) return "Ingen nøgle";
+  if (/serveren/i.test(tekst)) return "Ingen forbindelse";
+  return "Claude svarer ikke";
 }
 
 /** Modtagere, der er mennesker. Fladen skal kunne se forskel på dem og agenterne. */
