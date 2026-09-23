@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AGENT_ENGINE_LABEL } from "./agents";
 import { SMÅBELØB_UNDER } from "./agent-cost";
-import { hudAgentState, hudModel, hudState } from "./ai-hud";
+import { chainToneOf, hudAgentState, hudModel, hudState, type HudLink } from "./ai-hud";
 
 const m = hudModel("sliberi");
 assert.ok(m, "sliberi burde have en HUD-model");
@@ -157,5 +157,45 @@ describe("kompositionen har noget at vise i hver zone", () => {
 
   it("kæden har led nok til et bånd", () => {
     assert.ok(m.links.length >= 4, "båndet ville se tomt ud med færre");
+  });
+});
+
+describe("kædens samlede tone", () => {
+  /** Et led med kun det, tonen afhænger af. */
+  const led = (status: HudLink["status"], broken = false): HudLink => ({
+    id: status, label: status, status,
+    state: "afventer", statusLabel: "AFVENTER", tone: "moerk",
+    delivers: !broken, broken,
+  });
+
+  it("er bruddets, når kæden er brudt", () => {
+    assert.equal(m.chainTone, "brud");
+    assert.equal(chainToneOf([led("active"), led("missing", true)]), "brud");
+  });
+
+  it("en hel kæde af led i test er rav, ikke grøn", () => {
+    // isDone() regner test som leverende, så kæden kan være "hel", uden at
+    // ét eneste led er i drift. Grøn ville påstå en drift, der ikke findes.
+    assert.equal(chainToneOf([led("test"), led("test")]), "test");
+    assert.equal(chainToneOf([led("active"), led("test")]), "test");
+  });
+
+  it("grøn kræver, at hvert led er i drift", () => {
+    assert.equal(chainToneOf([led("active"), led("active")]), "drift");
+  });
+
+  it("uden led er der ingen tone at vise", () => {
+    assert.equal(chainToneOf([]), "moerk");
+  });
+});
+
+describe("intet grønt før noget er i drift", () => {
+  it("hverken kæden, agenterne eller tallet er grønt i dag", () => {
+    // Hele farvedisciplinen på ét sted: grøn er forbeholdt drift, og
+    // intet i anlægget er i drift endnu.
+    assert.equal(m.tally.drift, 0);
+    assert.ok(!m.links.some((l) => l.tone === "drift"));
+    assert.ok(!m.agents.some((a) => a.state === "paa-plads"));
+    assert.notEqual(m.chainTone, "drift");
   });
 });

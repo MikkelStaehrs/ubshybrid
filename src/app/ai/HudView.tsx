@@ -52,7 +52,7 @@ export function HudView({ model, line, ot, measure }: {
       {/* Scenens midte holdes fri: hologrammet skal kunne ses. Kun det
           udlæste tal og bruddet står her, og bruddet er blikfanget. */}
       <div className="hud-stage">
-        <BreakStage link={model.broken} />
+        <BreakStage link={model.broken} tone={model.chainTone} />
         <Readout tally={model.tally} />
       </div>
 

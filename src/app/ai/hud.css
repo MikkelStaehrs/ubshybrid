@@ -152,7 +152,8 @@
   text-decoration: none;
   white-space: nowrap;
 }
-.hud-switch:hover { border-color: var(--hud-drift-lys); color: var(--hud-drift-lys); }
+/* Ingen signalfarve på et link. Grøn betyder drift, ikke "musen er her". */
+.hud-switch:hover { border-color: var(--hud-ink); color: var(--hud-ink); }
 
 /* --- Panel med hjørnebeslag ----------------------------------------------
    Ingen afrundede kasser. Beslagene tegnes som otte baggrundsgradienter —
@@ -345,11 +346,15 @@
   pointer-events: auto;
   text-align: center;
   padding: 14px clamp(16px, 3vw, 40px);
-  border-top: 1px solid var(--hud-brud);
-  border-bottom: 1px solid var(--hud-brud);
+  /* Tonen kommer fra modellen. En hel kæde af led, der kun er sat op, er
+     rav — grøn kræver, at hvert led er i drift. */
+  border-top: 1px solid var(--t, var(--hud-brud));
+  border-bottom: 1px solid var(--t, var(--hud-brud));
+}
+/* Gløden er alarmen. Den hører kun til et brud, ikke til en hel kæde. */
+.hud-break.tone-brud {
   background: radial-gradient(70% 140% at 50% 50%, rgba(224, 112, 95, 0.14), transparent 72%);
 }
-.hud-break.is-whole { border-color: var(--hud-drift); background: none; }
 
 .hb-kicker {
   display: flex;
@@ -367,7 +372,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--hud-brud);
+  background: var(--t, var(--hud-brud));
   animation: hb-blink 2.6s ease-in-out infinite;
 }
 @keyframes hb-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -428,8 +433,11 @@
   font-variant-numeric: tabular-nums;
 }
 .ro-of { font-family: var(--font-mono); font-size: 12px; color: var(--hud-muted); }
-/* Farve er kun signal. Rav = test. Intet er i drift, så intet er grønt. */
+/* Farve er kun signal, og kun når der er noget at farve: klasserne sættes
+   først, når tallet er over nul. Et grønt nul ville påstå en drift,
+   der ikke findes. */
 .ro-group.is-test .ro-value { color: var(--hud-test-lys); }
+.ro-group.is-drift .ro-value { color: var(--hud-drift-lys); }
 
 /* --- Kæden som bånd i bunden --------------------------------------------- */
 .hud-chain {

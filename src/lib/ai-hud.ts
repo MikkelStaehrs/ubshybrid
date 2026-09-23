@@ -108,6 +108,12 @@ export interface HudModel {
   /** Maskinerne fordelt på de tre tilstande. Det store udlæste tal. */
   tally: { drift: number; test: number; afventer: number; total: number };
   links: HudLink[];
+  /**
+   * Kædens samlede tone. Grøn kræver, at hvert led er i drift — `isDone()`
+   * regner også `test` som leverende, så en hel kæde kan bestå af led, der
+   * bare er sat op. Den er rav, ikke grøn.
+   */
+  chainTone: LinkTone;
   /** Hvor mange led der leverer, ud af hvor mange. */
   reach: { delivers: number; total: number };
   /** Bruddet — sidens vigtigste oplysning lige nu. null når kæden er hel. */
@@ -147,6 +153,19 @@ function nextStepAt(ot: OtLayout, stepId: string): string | undefined {
   // der skal ske med det, hører til i dokumentvisningen.
   if (!isDone(cabinet.status)) return `${cabinet.name} · ${cabinet.id}`;
   return undefined;
+}
+
+/**
+ * Kæden som helhed.
+ *
+ * Er der et brud, er tonen bruddets. Er kæden hel, afgør det svageste led
+ * farven: ét led i test gør hele kæden til test. Grøn er forbeholdt en kæde,
+ * hvor hvert eneste led er i drift.
+ */
+export function chainToneOf(links: HudLink[]): LinkTone {
+  if (links.length === 0) return "moerk";
+  if (links.some((l) => l.broken)) return "brud";
+  return links.every((l) => l.status === "active") ? "drift" : "test";
 }
 
 function toneOf(status: OtStatus, delivers: boolean, broken: boolean): LinkTone {
@@ -231,6 +250,7 @@ export function hudModel(lineId: string): HudModel | null {
     lineName: data.line.name,
     tally,
     links,
+    chainTone: chainToneOf(links),
     reach: { delivers: links.filter((l) => l.delivers).length, total: links.length },
     broken: links.find((l) => l.broken) ?? null,
     agents,

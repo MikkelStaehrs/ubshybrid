@@ -1,7 +1,7 @@
 "use client";
 import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL } from "../../lib/agents";
-import type { HudAgent, HudLink, HudModel } from "../../lib/ai-hud";
+import type { HudAgent, HudLink, HudModel, LinkTone } from "../../lib/ai-hud";
 
 /**
  * Panelerne rundt om hologrammet.
@@ -39,16 +39,18 @@ export function Panel({ label, right, children, className = "" }: {
  * hvor, det her viser hvad der skal ske — ét navn, udledt af de noder der
  * blokerer leddet.
  */
-export function BreakStage({ link }: { link: HudLink | null }) {
+export function BreakStage({ link, tone }: { link: HudLink | null; tone: LinkTone }) {
   if (!link) {
+    // "Hel" er ikke det samme som "i drift": isDone() regner også test som
+    // leverende. Tonen kommer derfor fra modellen og hardcodes ikke grøn.
     return (
-      <div className="hud-break is-whole">
+      <div className={`hud-break is-whole tone-${tone}`}>
         <p className="hb-where">Kæden er hel</p>
       </div>
     );
   }
   return (
-    <div className="hud-break">
+    <div className={`hud-break tone-${tone}`}>
       <p className="hb-kicker">
         <span className="hb-dot" aria-hidden />
         Kæden stopper ved
@@ -70,12 +72,14 @@ export function BreakStage({ link }: { link: HudLink | null }) {
 export function Readout({ tally }: { tally: HudModel["tally"] }) {
   return (
     <div className="hud-readout">
-      <span className="ro-group">
+      {/* Farven tændes kun, når der er noget at farve. Et grønt nul ville
+          påstå en drift, der ikke findes. */}
+      <span className={`ro-group${tally.drift > 0 ? " is-drift" : ""}`}>
         <span className="ro-label">I drift</span>
         <span className="ro-value">{tally.drift}</span>
         <span className="ro-of">/ {tally.total}</span>
       </span>
-      <span className="ro-group is-test">
+      <span className={`ro-group${tally.test > 0 ? " is-test" : ""}`}>
         <span className="ro-label">Test</span>
         <span className="ro-value">{tally.test}</span>
       </span>
@@ -123,7 +127,7 @@ export function CostPanel({ model }: { model: HudModel }) {
       </ul>
 
       {model.ideas > 0 && (
-        <p className="hp-note">{model.ideas} idéer tælles ikke med</p>
+        <p className="hp-note">{model.ideas} idéer · ikke medregnet</p>
       )}
     </Panel>
   );
