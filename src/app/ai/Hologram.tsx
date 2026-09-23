@@ -587,13 +587,15 @@ const fmt = (v: number | null, d: number) =>
  * ligner noget, panelet siger; i skærmkanten skæres det over. Derfor
  * projiceres det hver frame, og uden for scenen skjules det.
  */
-function Maerkat({ m, pos, fokus, scene, sim }: {
+function Maerkat({ m, pos, fokus, scene, sim, onVaelg }: {
   m: MaskinLaesning;
   pos: [number, number, number];
   fokus: boolean;
   scene: React.RefObject<DOMRect | null>;
   /** Tallet er simuleret. Mærkatet siger det selv. */
   sim: boolean;
+  /** Et klik på mærkatet åbner enheden. */
+  onVaelg?: (id: string) => void;
 }) {
   const gruppe = useRef<import("three").Group>(null);
   const tag = useRef<HTMLDivElement>(null);
@@ -618,7 +620,11 @@ function Maerkat({ m, pos, fokus, scene, sim }: {
     <group position={pos} ref={gruppe}>
       <Line points={[[0, -2.6, 0], [0, -0.3, 0]]} color={tilstand === "koerer" ? "#5fc4a9" : tilstand === "ukendt" ? "#2b3936" : tilstand === "styret" ? "#ffc766" : "#e0705f"} lineWidth={1} transparent opacity={0.7} />
       <Html center zIndexRange={[30, 0]} className="h3-wrap">
-        <div ref={tag} className={`h3-tag t-${tilstand}${fokus ? " is-fokus" : ""}`}>
+        <div
+          ref={tag}
+          className={`h3-tag t-${tilstand}${fokus ? " is-fokus" : ""}${onVaelg ? " is-klikbar" : ""}`}
+          onClick={onVaelg ? () => onVaelg(m.id) : undefined}
+        >
           <div className="h3-head">
             <span className="h3-dot" />
             <span className="h3-navn">{m.kort}</span>
@@ -652,9 +658,45 @@ function vaelgMaerkater(billede: TelemetriBillede, fokus: string | null): Maskin
 }
 
 // ---------------------------------------------------------------------------
+// Klik på en maskine
+
+/**
+ * En usynlig kasse om hver maskine, der kan klikkes på. Punktskyen kan ikke
+ * rammes præcist; kassen kan. Et træk med musen — kameraet, der drejes — er
+ * ikke et klik.
+ */
+function Klikflader({ layout, ids, onVaelg }: { layout: Layout; ids: string[]; onVaelg: (id: string) => void }) {
+  return (
+    <group>
+      {ids.map((id) => {
+        const m = layout.byId.get(id);
+        if (!m) return null;
+        return (
+          <mesh
+            key={id}
+            position={[m.pos[0], m.size.h / 2, m.pos[2]]}
+            rotation={[0, m.rotY, 0]}
+            onClick={(e) => {
+              if (e.delta > 6) return;
+              e.stopPropagation();
+              onVaelg(id);
+            }}
+            onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+            onPointerOut={() => { document.body.style.cursor = ""; }}
+          >
+            <boxGeometry args={[Math.max(1.5, m.size.x), Math.max(1.5, m.size.h), Math.max(1.5, m.size.z)]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Kameraet
 
-function Kamera({ layout, fokus, still }: { layout: Layout; fokus: string | null; still: boolean }) {
+function Kamera({ layout, fokus, still, svaj }: { layout: Layout; fokus: string | null; still: boolean; svaj: boolean }) {
   const { camera, gl } = useThree();
   const kig = useRef(new Vector3(...layout.center));
   const oenske = useMemo(() => new Vector3(), []);
@@ -698,7 +740,9 @@ function Kamera({ layout, fokus, still }: { layout: Layout; fokus: string | null
     if (m) maal.set(m.pos[0], m.size.h * 0.5 + 1.5, m.pos[2]);
     else maal.set(cx, 2, cz);
 
-    const az = Math.sin(t * 0.045) * 0.42 + bruger.current.az;
+    // Det langsomme svaj hører til turen. I en simulering står kameraet,
+    // hvor brugeren har sat det.
+    const az = (svaj ? Math.sin(t * 0.045) * 0.42 : 0) + bruger.current.az;
     const R = (m ? 52 : 112) * bruger.current.zoom;
     const H = (m ? 27 : 57) * bruger.current.zoom;
     oenske.set(maal.x + Math.sin(az) * R, H, maal.z + Math.cos(az) * R);
@@ -738,7 +782,7 @@ function Effekter({ kvalitet }: { kvalitet: Kvalitet }) {
 
 // ---------------------------------------------------------------------------
 
-export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus, skanning }: {
+export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus, skanning, svaj = true, onVaelg }: {
   data: LineData;
   ot: OtLayout | null;
   /** prefers-reduced-motion: stillbillede. Tilstande vises stadig. */
@@ -748,6 +792,10 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
   fokus: string | null;
   /** Kædevagten kører. Skanningen løber. */
   skanning: boolean;
+  /** Svajer kameraet langsomt af sig selv? Kun med turen. */
+  svaj?: boolean;
+  /** Et klik på en maskine åbner den. */
+  onVaelg?: (id: string) => void;
 }) {
   const [kvalitet, setKvalitet] = useState<Kvalitet>(3);
   const budget = kvalitet <= 1 ? Math.round(PUNKT_BUDGET / 2) : PUNKT_BUDGET;
@@ -837,9 +885,10 @@ export const Hologram = memo(function Hologram({ data, ot, still, billede, fokus
           const pm = layout.byId.get(m.id);
           if (!pm) return null;
           const top = formTop(formFor({ kind: pm.kind, name: pm.name, size: pm.size, wIdCount: pm.wIds.length }));
-          return <Maerkat key={m.id} m={m} pos={[pm.pos[0], top + 3, pm.pos[2]]} fokus={m.id === fokus} scene={scene} sim={billede.simuleret} />;
+          return <Maerkat key={m.id} m={m} pos={[pm.pos[0], top + 3, pm.pos[2]]} fokus={m.id === fokus} scene={scene} sim={billede.simuleret} onVaelg={onVaelg} />;
         })}
-        <Kamera layout={layout} fokus={fokus} still={still} />
+        {onVaelg && <Klikflader layout={layout} ids={ids} onVaelg={onVaelg} />}
+        <Kamera layout={layout} fokus={fokus} still={still} svaj={svaj} />
         <Effekter kvalitet={kvalitet} />
         {/* Skruer kun ned, aldrig op igen: en scene, der vipper frem og
             tilbage mellem to trin, ser værre ud end én, der ligger lavt. */}

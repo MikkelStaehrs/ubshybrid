@@ -512,6 +512,9 @@ button.hud-switch { background: transparent; cursor: pointer; }
 }
 .m-bjaelke.is-alarm .m-bjaelke-fyld { background: var(--hud-brud); }
 .m-bjaelke-graense { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--hud-brud); opacity: 0.7; }
+/* En grænse, hvor en agent griber ind, er et styret stop: rav. */
+.m-bjaelke.is-styret .m-bjaelke-graense,
+.m-bjaelke.is-styret.is-alarm .m-bjaelke-fyld { background: var(--hud-test); }
 
 /* --- Paneler ---------------------------------------------------------------- */
 .hp-flow-top { display: grid; grid-template-columns: minmax(104px, 50%) 1fr; gap: 10px; align-items: center; }
@@ -594,6 +597,90 @@ button.hud-switch { background: transparent; cursor: pointer; }
 .hp-fv-hoved span { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; color: var(--hud-muted); }
 .hp-fv-tal { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--hud-ink); }
 .hp-fv-rk.is-alarm .hp-fv-tal.d-3 { color: var(--hud-brud); }
+/* BIGF, BIGH, NOTS og udskuddet under båndet: samme bord, samme prøve. */
+.hp-fv-tung { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 9.5px; color: var(--hud-muted); letter-spacing: 0.04em; }
+.hp-fv-tung b { font-weight: 500; color: var(--hud-ink); margin-left: 3px; }
+
+/* --- Enheden ----------------------------------------------------------------
+   Det, der sker inde i den enhed, man har klikket på. Samme udtryk som
+   fokuspanelet, bare det hele. */
+.hud-enhed {
+  --f: var(--hud-dim);
+  width: min(700px, 64%);
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--hud-line-2);
+  border-left: 3px solid var(--f);
+  background: rgba(4, 9, 8, 0.94);
+  animation: fokus-ind 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hud-enhed.t-koerer { --f: var(--hud-drift-lys); }
+.hud-enhed.t-staar, .hud-enhed.t-alarm { --f: var(--hud-brud); }
+.hud-enhed.t-styret, .hud-enhed.t-planlagt { --f: var(--hud-test-lys); }
+.he-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.he-head .hf-tilstand { margin-left: auto; }
+.he-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.he-kol { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.he-h {
+  margin: 4px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+.he-tid { font-family: var(--font-mono); font-size: 9px; color: var(--hud-dim); letter-spacing: 0.06em; text-transform: none; }
+.he-kanaler { grid-template-columns: 1fr; }
+.he-buffer { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; align-items: baseline; }
+.he-buffer .m-bjaelke { grid-column: 1 / -1; }
+.he-ind { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.he-ind dt { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--hud-muted); }
+.he-ind dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: 13px; color: var(--hud-ink); display: grid; }
+.he-paavej { font-size: 9px; color: var(--hud-test-lys); }
+.he-haeldning { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.he-vinkel { margin: 0; }
+.he-vinkel svg { width: 100%; height: auto; display: block; }
+.he-vinkel figcaption { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--hud-muted); }
+.he-vinkel figcaption .fm-num { color: var(--hud-ink); letter-spacing: 0.04em; }
+.he-vandret { stroke: var(--hud-line-2); stroke-width: 1; }
+.he-daek { stroke: var(--hud-ink); stroke-width: 3; stroke-linecap: round; transition: all 0.6s ease; }
+/* Det satte, som målingen ikke er nået hen til endnu: stiplet. */
+.he-sat { stroke: var(--hud-test-lys); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.he-akse { fill: var(--hud-muted); }
+.he-klasser { display: flex; flex-wrap: wrap; gap: 4px 12px; font-family: var(--font-mono); font-size: 12px; color: var(--hud-ink); }
+.he-klasser b { font-weight: 500; font-size: 8.5px; letter-spacing: 0.1em; color: var(--hud-muted); margin-right: 4px; }
+.he-klasser i { font-style: normal; font-size: 8px; color: var(--hud-dim); margin-left: 1px; }
+.he-klasser .is-alarm { color: var(--hud-brud); }
+.he-maalere, .he-seneste { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-family: var(--font-mono); font-size: 10px; }
+.he-maalere li { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; color: var(--hud-ink); }
+.he-seneste li { display: grid; grid-template-columns: 58px 104px 1fr auto; gap: 8px; color: var(--hud-muted); }
+.he-seneste li.n-alarm { color: var(--hud-brud); }
+.he-seneste time, .he-dim { color: var(--hud-dim); }
+.he-fra { color: var(--hud-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Anbefalinger -------------------------------------------------------------
+   Rav, mens den venter på et menneske; grøn, når den er udført; mørk, når
+   den er afvist eller bortfaldet. */
+.hp-anbefalinger { display: grid; gap: 6px; }
+.he-anbefaling { padding: 6px 8px 7px; border-left: 2px solid var(--hud-line-2); background: rgba(111, 224, 194, 0.025); display: grid; gap: 3px; }
+.he-anbefaling.s-aaben { border-left-color: var(--hud-test-lys); }
+.he-anbefaling.s-udfoert { border-left-color: var(--hud-drift-lys); }
+.he-anb-hoved { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-mono); font-size: 9px; }
+.he-anb-status { letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-muted); }
+.he-anbefaling.s-aaben .he-anb-status { color: var(--hud-test-lys); }
+.he-anbefaling.s-udfoert .he-anb-status { color: var(--hud-drift-lys); }
+.he-anb-hoved .he-tid { margin-left: auto; }
+.he-anb-hvad { margin: 0; font-size: 12px; color: var(--hud-ink); }
+.he-anb-forventet, .he-anb-efter { margin: 0; font-family: var(--font-mono); font-size: 9.5px; color: var(--hud-muted); }
+.he-anb-efter { color: var(--hud-ink); }
+.he-anb-knapper { display: flex; gap: 6px; margin-top: 3px; }
+.hp-knap.is-udfoer { border-color: var(--hud-ink); color: var(--hud-ink); }
 .hp-fv-tal i, .hp-kb-tal i { font-style: normal; font-size: 8px; color: var(--hud-muted); margin-left: 2px; }
 
 /* Ordren. Tre felter side om side — masterdata, ikke en måling. */
@@ -1069,6 +1156,8 @@ button.hud-switch { background: transparent; cursor: pointer; }
 
 /* --- Mærkaterne i 3D ------------------------------------------------------- */
 .h3-wrap { pointer-events: none; }
+/* Et mærkat kan klikkes på: det åbner enheden. */
+.h3-tag.is-klikbar { pointer-events: auto; cursor: pointer; }
 .h3-tag {
   --c: var(--hud-dim);
   min-width: 78px;

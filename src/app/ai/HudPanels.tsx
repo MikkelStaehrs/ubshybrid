@@ -415,16 +415,17 @@ export function KlimaPanel({ billede, historik, nr, still }: {
 // Kvaliteten
 
 /**
- * FV-fordelingen fra hvert kastebord. Tallene står over et bånd, så man
- * både kan læse dem og se, hvem der dominerer. Kun FV3 melder: det er den,
- * bordene skal rense ud.
+ * Klassificeringen af frøet på hvert kastebord: FV0–FV3 over et bånd, så
+ * man både kan læse dem og se, hvem der dominerer, og under dem BIGF, BIGH,
+ * NOTS og det, der gik til den lette ende. Det er output — hvad bordet gør
+ * ved frøet — og står derfor her og ikke på maskinen.
  */
 export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
   const tider = billede.analyse.map((a) => a.proeveT).filter((t): t is number => t !== null);
   const sidst = tider.length > 0 ? Math.max(...tider) : null;
   return (
     <Panel
-      label="Analyse · FV"
+      label="Kvalitet · kasteborde"
       nr={nr}
       still={still}
       right={billede.simuleret ? <Sim /> : undefined}
@@ -451,6 +452,14 @@ export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBilled
                     <span key={ANALYSE.klasser[i]} className={`m-del d-${i}`} style={{ width: `${p}%` }} />
                   ))}
                 </span>
+                {a.tung && (
+                  <span className="hp-fv-tung fm-num">
+                    <span>BIGF <b>{komma1(a.tung.bigf)}</b></span>
+                    <span>BIGH <b>{komma1(a.tung.bigh)}</b></span>
+                    <span>NOTS <b>{komma1(a.tung.nots)}</b></span>
+                    {a.udskudPct !== null && <span>Udskud <b>{komma1(a.udskudPct)}</b></span>}
+                  </span>
+                )}
               </div>
             );
           })}
@@ -461,38 +470,7 @@ export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBilled
   );
 }
 
-/** De fire kasteborde og det, der ender på deres tunge side. */
-export function KastebordPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
-  const kb = billede.maskiner.filter((m) => KASTEBORD.test(m.navn));
-  const har = kb.some((m) => m.kanaler.some((k) => k.value !== null));
-  return (
-    <Panel label="Kasteborde · tung side" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
-      {!har ? <Afventer /> : (
-        <div className="hp-kb">
-          <div className="hp-kb-hoved">
-            <span />
-            {["BIGF", "BIGH", "NOTS"].map((k) => <span key={k}>{k}</span>)}
-          </div>
-          {kb.map((m) => (
-            <div key={m.id} className={`hp-kb-rk${m.styret ? " is-styret" : m.koerer === false ? " is-stop" : ""}`}>
-              <span className="hp-kb-navn">{m.kort}</span>
-              {["bigf", "bigh", "nots"].map((id) => {
-                const k = m.kanaler.find((x) => x.spec.id === id);
-                if (!k) return <span key={id} />;
-                return (
-                  <span key={id} className={`hp-kb-celle${k.alarm ? " is-alarm" : ""}`}>
-                    <span className="hp-kb-tal"><Tal v={k.value} d={1} />{k.value !== null && <i>{k.spec.unit}</i>}</span>
-                    <Bjaelke v={k.value} max={id === "nots" ? 12 : 100} graense={k.spec.alarmHoej} alarm={k.alarm} />
-                  </span>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
+const komma1 = (v: number) => v.toFixed(1).replace(".", ",");
 
 /** Grænsen ved en kanals navn. Har den ingen, står der ingenting. */
 function Graense({ k }: { k: KanalSpec }) {

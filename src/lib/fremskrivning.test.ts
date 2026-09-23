@@ -7,7 +7,7 @@ import { hudModel } from "./ai-hud";
 import { fremskrivAgenter, fremskrivLayer } from "./fremskrivning";
 import { layoutLine } from "./layout";
 import { channelReport, otLayerFor, sensorType } from "./ot";
-import { kanalerFor } from "./telemetri";
+import { ekstraMaalereFor, kanalerFor } from "./telemetri";
 import type { LineData } from "./types";
 
 const layout = layoutLine(sliberi as LineData);
@@ -58,7 +58,7 @@ describe("fremskrivningen opfinder ikke tal", () => {
     );
     for (const s of ekstra) {
       const m = layout.machines.find((x) => x.wIds[0] === s.machineId);
-      const kanal = !!m && kanalerFor(m).some((k) => k.maaler === s.catalogType);
+      const kanal = !!m && (kanalerFor(m).some((k) => k.maaler === s.catalogType) || ekstraMaalereFor(m).includes(s.catalogType!));
       const hal = s.id.endsWith("-HAL") && HAL.some((k) => k.maaler === s.catalogType);
       assert.ok(ønsket.has(s.catalogType) || kanal || hal, `${s.id} er hverken bedt om eller vist`);
     }

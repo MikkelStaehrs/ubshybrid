@@ -18,10 +18,13 @@
 //   - FV0–FV3 er læst som fire klasser i en analyseprøve fra hvert kastebord,
 //     der summer til 100 %. FV0 og FV1 dominerer; FV3 er det, kastebordene
 //     renser ud. Er de noget andet, skal `ANALYSE` laves om.
-//   - BIGF, BIGH og NOTS er læst som andele af prøven fra den tunge side af
-//     kastebordet. Er det mængder (kg/t), skal enheden skiftes.
+//   - BIGF, BIGH og NOTS er, som FV, klassificeringer af frøet på bordet —
+//     læst som andele af prøven fra den tunge ende. Er det mængder (kg/t),
+//     skal enheden skiftes.
 //   - Andet kastebord i hvert spor (KB-3NN, KB-2SS) får det, første har
 //     renset: markant mindre FV3, BIGF og BIGH, og nærmest ingen NOTS.
+//   - Hvordan indstillingerne på et kastebord flytter klassificeringen og
+//     udskuddet, står i KASTEBORDET. Det er det groveste gæt i filen.
 //   - Der er ingen bånd som selvstændige maskiner på linjen. Transporten
 //     ligger i kanterne mellem maskinerne og vises som materialestrøm.
 
@@ -68,6 +71,12 @@ export interface KanalGruppe {
   /** Regulært udtryk mod maskinens navn. */
   navn?: RegExp;
   kanaler: KanalSpec[];
+  /**
+   * Målere på maskinen, hvis tal ikke er drift — et analyseudstyr, der
+   * klassificerer frøet. De står i OT-laget og i kæden, men ikke som kanaler
+   * på maskinen.
+   */
+  ekstraMaalere?: string[];
 }
 
 const motortemperatur: KanalSpec = {
@@ -92,16 +101,21 @@ export const KASTEBORD = /^kb[-\s]/i;
 export const KANALER: KanalGruppe[] = [
   {
     navn: KASTEBORD,
+    // Det, et kastebord stilles efter, og som driften ser på under kørslen.
+    // Hældningen, slagtallet og luften kan ændres undervejs; nominal er
+    // udgangspunktet. Hvad der kommer ud — klassificeringen af frøet — er
+    // output og står i analysen, ikke her.
     kanaler: [
-      // Tunge side af kastebordet: hvad ender der, som ikke burde. Tallene
-      // er første bord i sporet; det andet står i AFVIGELSER.
-      { id: "bigf", label: "BIGF", unit: "%", maaler: "analyzer", nominal: 68, spredning: 2.2, min: 0, max: 100, alarmHoej: 76, decimaler: 1, traeghed: 0.08 },
-      { id: "bigh", label: "BIGH", unit: "%", maaler: "analyzer", nominal: 21, spredning: 1.6, min: 0, max: 100, alarmHoej: 27, decimaler: 1, traeghed: 0.08 },
-      { id: "nots", label: "NOTS", unit: "%", maaler: "analyzer", nominal: 4.2, spredning: 0.9, min: 0, max: 100, alarmHoej: 8, decimaler: 1, traeghed: 0.06 },
       // Et rystebord ryster med vilje. Grænsen er ikke vibrationens — og
       // ryster dækket for lidt, sorterer bordet ikke.
       { ...vibration, id: "dæk", label: "Dæk", nominal: 5.8, spredning: 0.3, alarmHoej: 8.5, alarmLav: 4.5 },
+      { id: "slag", label: "Slag", unit: "/min", maaler: "drive", nominal: 420, spredning: 2, min: 0, max: 700, alarmLav: 360, alarmHoej: 520, decimaler: 0, hvile: 0, traeghed: 0.5 },
+      // Hældningen falder ikke, fordi bordet står. Den står, hvor den er sat.
+      { id: "tvaers", label: "Tværs", unit: "°", maaler: "inclinometer", nominal: 4.0, spredning: 0.02, min: 0, max: 10, alarmLav: 2, alarmHoej: 7, decimaler: 1, traeghed: 0.15 },
+      { id: "langs", label: "Langs", unit: "°", maaler: "inclinometer", nominal: 1.5, spredning: 0.02, min: 0, max: 6, alarmLav: 0.3, alarmHoej: 4, decimaler: 1, traeghed: 0.15 },
+      { id: "luft", label: "Luft", unit: "%", maaler: "drive", nominal: 65, spredning: 1, min: 0, max: 100, alarmLav: 40, alarmHoej: 90, decimaler: 0, hvile: 0, traeghed: 0.25 },
     ],
+    ekstraMaalere: ["analyzer"],
   },
   {
     navn: /jet\s?pe[ae]ler/i,
@@ -200,19 +214,56 @@ export const ANALYSE = {
 };
 
 /** Maskiner, der afviger fra deres slags. Nøglet på W-ID. */
-export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec>>>> = {
-  // Andet kastebord i hvert spor. Der er markant mindre at fange, og NOTS er
-  // næsten væk — ses den her, har første bord ikke gjort sit arbejde.
-  "746": {
-    bigf: { nominal: 38, spredning: 1.6, alarmHoej: 45 },
-    bigh: { nominal: 8, spredning: 0.8, alarmHoej: 12 },
-    nots: { nominal: 0.3, spredning: 0.12, alarmHoej: 1.5 },
-  },
-  "745": {
-    bigf: { nominal: 39, spredning: 1.6, alarmHoej: 45 },
-    bigh: { nominal: 8.5, spredning: 0.8, alarmHoej: 12 },
-    nots: { nominal: 0.3, spredning: 0.12, alarmHoej: 1.5 },
-  },
+export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec>>>> = {};
+
+/**
+ * Kastebordet: hvad indstillingerne gør ved frøet.
+ *
+ * Tværhældningen og luften bestemmer, hvor skarpt bordet skiller. Mere
+ * hældning eller mere luft sender mere til den lette ende: mindre FV3, BIGH
+ * og NOTS i den tunge ende — men mere godt frø i udskuddet. Det er den
+ * afvejning, en linjeagent anbefaler efter.
+ *
+ * Alle sammenhænge her er skøn. De skal forbi driften, og en rigtig agent
+ * ville lære dem af historikken frem for at få dem her.
+ */
+export const KASTEBORDET = {
+  /**
+   * Udgangspunktet pr. bord, ved bordets egne standardindstillinger. BIGF,
+   * BIGH og NOTS i procent af prøven fra den tunge ende; udskud i procent af
+   * det, bordet fik. Første bord i sporet; det andet har fået, hvad det første
+   * har renset.
+   */
+  bord: {
+    standard: { bigf: 68, bigh: 21, nots: 4.2, udskud: 12, alarmNots: 8 },
+    "746": { bigf: 38, bigh: 8, nots: 0.3, udskud: 7, alarmNots: 1.5 },
+    "745": { bigf: 39, bigh: 8.5, nots: 0.3, udskud: 7, alarmNots: 1.5 },
+  } as Record<string, { bigf: number; bigh: number; nots: number; udskud: number; alarmNots: number }>,
+  /** Pr. grad tværhældning væk fra udgangspunktet. */
+  prGradTvaers: { udskud: 3, fv3: -2, bigh: -3, nots: -0.8 },
+  /** Pr. 10 procentpoint luft væk fra udgangspunktet. */
+  prTiLuft: { udskud: 2, fv3: -1.2, bigh: -2, nots: -0.5 },
+  /**
+   * Frøet, der kommer ind, er ikke det samme hele ordren. Et parti med flere
+   * lette frø giver mere FV3 og mere udskud ved de samme indstillinger — og
+   * så er det indstillingerne, der skal følge med.
+   */
+  parti: { spredning: 1, traeghed: 0.0015, fv3: 1.6, udskud: 1.8 },
+  /** Så meget over bordets normale FV3, før en linjeagent anbefaler at skille skarpere. */
+  fv3Tolerance: 2.5,
+  /** Over så meget udskud anbefaler den at skille blødere — hvis FV3 kan tåle det. */
+  maksUdskudPct: 16,
+  /** Et trin, en anbefaling flytter en indstilling. */
+  trin: { tvaers: 0.3, luft: 5 },
+  /** Så mange prøver efter en ændring, før virkningen gøres op. */
+  proeverFoerVurdering: 3,
+  /** En anbefaling, ingen har taget stilling til, bortfalder efter så lang tid. */
+  anbefalingGyldigS: 600,
+  /**
+   * Har operatøren sagt nej — eller ikke taget stilling — får bordet ro så
+   * længe. En agent, der gentager sig hvert andet minut, bliver ikke hørt.
+   */
+  roEfterNejS: 1800,
 };
 
 // ---------------------------------------------------------------------------

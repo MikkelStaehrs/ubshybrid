@@ -272,7 +272,8 @@ taler selv på netværket (`signal: "feltbus"`). `channelReport()` springer
 dem over; talte de med, forudsatte fremskrivningen kort, ingen skal bruge.
 
 **Tallene er simulerede, og det står på dem.** Temperatur, fugt, hastighed,
-omdrejninger, FV0–FV3 og BIGF/BIGH/NOTS kommer fra simulatoren i
+omdrejninger, kastebordenes vibration, slag, hældning og luft, FV0–FV3 og
+BIGF/BIGH/NOTS kommer fra simulatoren i
 `src/lib/telemetri.ts`, som læser sine antagelser fra `data/fremskrivning.ts`.
 Ret antagelserne dér — ikke i koden. Kanalerne og flowet tager et eksakt
 skridt, ikke en tilnærmelse: udsvinget er det samme, uanset hvor tit siden
@@ -392,8 +393,8 @@ koster penge pr. kald, og derfor er det et valg i adressen.
 - **Et spor startes bagfra og stoppes forfra.** Så fødes ingen buffer, før
   maskinen efter den kører, og intet står fuldt til næste ordre. En maskine,
   der er slukket efter planen, er ikke en fejl (`styret`). Begge har tests.
-- **Én FV3-prøve er ikke en trend.** To i træk giver et forslag til
-  operatøren; én giver "ingen handling".
+- **Én FV3-prøve er ikke en trend.** Den meldes som en iagttagelse. En
+  anbefaling kræver to prøver i træk — se kastebordene nedenfor.
 
 **Loggen på skærm 2** (`/ai/demo/log`) kører ingen simulering selv. Den
 lytter på kontrolrummet gennem browserens `BroadcastChannel` — samme maskine,
@@ -403,6 +404,65 @@ kontrolrummet, bliver loggen stående og siger det.
 `frem()` tager et skridt uden at bygge et billede, til mellemskridtene, når
 tiden går hurtigt. Støjen i billedet trækkes, før billedet bygges, så et
 forløb med og uden billeder er det samme.
+
+### Kastebordene
+
+**Maskinen viser drift, analysen viser output.** Det, der står på en maskine
+— på mærkatet, i enheden — er det, den stilles og køres efter: på et
+kastebord dækkets vibration, slag, tværhældning, langshældning og luft.
+FV0–FV3, BIGF, BIGH, NOTS og udskud er klassificeringer af frøet, der
+kommer ud, og står i analysen (`Analyse.andele`, `tung`, `udskudPct`). En
+test holder klassificeringerne væk fra maskinens kanaler. Analyseudstyret er
+en måler på bordet (`ekstraMaalere`), så fremskrivningen stadig sætter det,
+der leverer tallene.
+
+**Indstillingen styrer skillet.** Hældning og luft sættes under kørslen
+(`indstillinger` i billedet), og målingen følger efter med kanalens
+træghed. Mere tværhældning eller mere luft skiller skarpere: mindre FV3
+i den tunge ende, mere udskud i den lette. Hvor meget pr. grad og pr. ti
+procent luft står i `KASTEBORDET` i `data/fremskrivning.ts` — skøn, som
+resten af fremskrivningens tal. Partiet vandrer langsomt, så et bord, der
+skilte fint for en time siden, kan skille for blødt nu.
+
+**Agenten anbefaler, et menneske udfører.** Linjeagenten ser prøverne og
+anbefaler én indstilling ét trin (`KASTEBORDET.trin`), med det forventede.
+Anbefalingen står i enheden og i Anbefalinger-panelet med **Udfør** og
+**Afvis**; ingen hældning flytter sig, før nogen trykker. Det, operatøren
+gør, står i samtalen som `kilde: "menneske"`. Efter
+`proeverFoerVurdering` prøver gør agenten virkningen op mod det forventede.
+Tager ingen stilling, bortfalder den efter `anbefalingGyldigS` — og bremser
+kun tiden det første minut, så en glemt anbefaling ikke holder simuleringen i
+langsom gang.
+
+- **To prøver i træk, samme vej.** For meget FV3 over bordets normale
+  giver "hæv"; for meget udskud med FV3 i orden giver "sænk".
+- **Aldrig på et bord, der ikke står, hvor det er sat.** Lige efter en start
+  er luften på vej op, og bordet skiller dårligt af den grund. Prøver, hvor
+  hældning eller luft er mere end et halvt trin fra det satte
+  (`staarSomSat()`), står i analysen, men melder ingen FV3- eller
+  NOTS-alarm og tæller hverken til en anbefaling eller til opgørelsen af en
+  — som en maskine i indkøring, der ikke melder "for langsom". Begge dele
+  har tests.
+- **Inden for grænserne.** En anbefaling går aldrig over kanalens alarmgrænse
+  minus et trin.
+- **Ét skridt ad gangen.** Ingen ny anbefaling til et bord, før virkningen af
+  den sidste udførte er gjort op — ellers ved ingen, hvad der virkede.
+- **Et nej bliver hørt.** Afviser operatøren, eller bortfalder anbefalingen,
+  får bordet ro i `roEfterNejS`. En agent, der gentager sig hvert andet
+  minut, bliver ikke hørt — og i `?agenter=claude` koster hver gentagelse et
+  kald. Begge har tests.
+
+**Enheden.** Tryk på en maskine — på mærkatet eller i scenen — og kameraet
+låser på den, og enheden erstatter fokuspanelet: drift med grænser og
+kurver, bufferen foran, og på et kastebord indstillingen, dækket tegnet fra
+enden og fra siden (hældningen fire gange overdrevet, det satte stiplet,
+når målingen ikke er nået derhen), klassificeringen, anbefalingerne, målerne
+og de seneste beskeder. "Oversigt" eller Escape lukker den. Et træk i scenen
+er ikke et klik.
+
+**Kameraet flyver ikke i en simulering.** Turen er slået fra, når en ordre
+køres — man skal kunne følge en kørsel, uden at scenen flytter sig. "Tur" i
+toppen slår den til igen. Svajet følger turen.
 
 ### Flaskehalse i kæden
 

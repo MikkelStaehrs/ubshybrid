@@ -118,6 +118,14 @@ export const OT_SENSOR_TYPES: OtSensorType[] = [
     purpose: "Strøm, frekvens og effekt direkte fra drevet. Går på feltbussen og fylder ingen kanal.",
   },
   {
+    type: "inclinometer",
+    label: "Hældningsmåler",
+    kort: "Hældning",
+    signal: "IO-Link",
+    typicalPlacement: "Kastebordenes dæk",
+    purpose: "Dækkets vinkel langs og på tværs. Den ændres under kørslen; måleren viser, hvor den står.",
+  },
+  {
     type: "analyzer",
     label: "Analyseudstyr",
     kort: "Analyse",

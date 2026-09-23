@@ -13,9 +13,10 @@ import type { LineData } from "../../lib/types";
 import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
 import {
-  AgentCores, DriftPanel, FlowPanel, FokusPanel, Haendelser, KastebordPanel, KlimaPanel,
+  AgentCores, DriftPanel, FlowPanel, FokusPanel, Haendelser, KlimaPanel,
   KvalitetPanel, OrdrePanel, Overskrift, Readout,
 } from "./HudPanels";
+import { AnbefalingerPanel, EnhedPanel } from "./Enhed";
 import { Afkod } from "./Instrumenter";
 import { AgentMaaler } from "./Logge";
 import { LogVindue } from "./LogVindue";
@@ -71,8 +72,15 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   const nu = useUr();
   const boot = useOpstart(still);
   const laast = fokusWid ? layout.machines.find((m) => m.wIds.includes(fokusWid))?.id ?? null : null;
-  const [turFokus, pause] = useTur(billede, still || laast !== null);
-  const fokus = laast ?? turFokus;
+  // Turen hører til præsentationen. I en simulering står kameraet stille og
+  // flytter sig kun, når man klikker på en enhed — eller selv slår turen til.
+  const [turValg, setTurValg] = useState<boolean | null>(null);
+  const tur = turValg ?? !styring;
+  const [valgt, setValgt] = useState<string | null>(null);
+  const [turFokus, pause] = useTur(billede, still || laast !== null || !tur || valgt !== null);
+  const fokus = valgt ?? laast ?? (tur ? turFokus : null);
+  const lukEnhed = useCallback(() => setValgt(null), []);
+  const vaelg = useCallback((id: string) => setValgt(id), []);
   // Skanningen løber, når Kædevagten kører: de første tolv sekunder af hvert
   // kvarter, samme kadence som agenten har i agents.ts. Kun i fremskrivningen
   // — i virkeligheden kører vagten ikke endnu.
@@ -81,6 +89,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   // skal hvert instrument, der viser dem, sige det.
   const sim = billede.simuleret || liveSource === "mock";
   const iFokus = fokus ? billede.maskiner.find((m) => m.id === fokus) ?? null : null;
+  const iValgt = valgt ? billede.maskiner.find((m) => m.id === valgt) ?? null : null;
   const [logAaben, setLogAaben] = useState(false);
   const lukLog = useCallback(() => setLogAaben(false), []);
   // Loggen i sit eget vindue, til en anden skærm. Den lytter på simuleringen
@@ -94,7 +103,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       className={`ai-hud${model.fremskrevet || liveSource === "mock" ? " is-fremskrevet" : ""}${boot ? " is-boot" : ""}`}
       onPointerDown={(e) => { if ((e.target as HTMLElement).tagName === "CANVAS") pause(); }}
     >
-      <Hologram data={line} ot={ot} still={still} billede={billede} fokus={fokus} skanning={vagt} />
+      <Hologram data={line} ot={ot} still={still} billede={billede} fokus={fokus} skanning={vagt} svaj={tur && valgt === null} onVaelg={vaelg} />
       <div className="hud-skanlinjer" aria-hidden />
 
       {model.fremskrevet && (
@@ -120,6 +129,8 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         {styring ? <Ur nu={billede.t} /> : <Ur nu={nu} />}
         <Puls billede={billede} sim={sim} />
         {styring && <Fart styring={styring} />}
+        <button type="button" className={`hud-fartknap${tur ? " is-valgt" : ""}`} aria-pressed={tur} onClick={() => setTurValg(!tur)}>Tur</button>
+        {valgt && <button type="button" className="hud-fartknap" onClick={lukEnhed}>Oversigt</button>}
         {agenter && <AgentMaaler a={agenter} />}
         <h1><Afkod tekst={model.fremskrevet ? "AI-overblik · fremskrevet" : "AI-overblik"} forsinkelse={150} still={still} /></h1>
         {!model.fremskrevet && <Link href="/ai/demo" className="hud-switch">Med signaler inde</Link>}
@@ -142,7 +153,21 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       <div className="hud-stage">
         <Overskrift model={model} billede={billede} still={still} />
         <div className="hud-stage-bund">
-          <FokusPanel m={iFokus} historik={historik} sim={billede.simuleret} />
+          {iValgt ? (
+            <EnhedPanel
+              m={iValgt}
+              billede={billede}
+              historik={historik}
+              log={log}
+              samtale={samtale}
+              ot={ot}
+              onLuk={lukEnhed}
+              onUdfoer={styring?.udfoer}
+              onAfvis={styring?.afvis}
+            />
+          ) : (
+            <FokusPanel m={iFokus} historik={historik} sim={billede.simuleret} />
+          )}
           <Readout tally={tallyMedTelemetri(model, billede)} sim={billede.simuleret} />
         </div>
       </div>
@@ -150,7 +175,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       <div className="hud-right">
         <AgentCores model={model} nr={5} still={still} ai={billede.ai} sim={billede.simuleret} samtale={samtale} />
         <KvalitetPanel billede={billede} nr={6} still={still} />
-        <KastebordPanel billede={billede} nr={7} still={still} />
+        {styring && <AnbefalingerPanel billede={billede} nr={7} still={still} onUdfoer={styring.udfoer} onAfvis={styring.afvis} />}
       </div>
 
       <footer className="hud-chain" style={{ ["--i" as string]: 8 }}>

@@ -19,7 +19,7 @@ import { HAL } from "../../data/fremskrivning";
 import { machinesInScope } from "./agents";
 import type { Layout } from "./layout";
 import { channelReport, sensorType } from "./ot";
-import { kanalerFor } from "./telemetri";
+import { ekstraMaalereFor, kanalerFor } from "./telemetri";
 import type { Agent, OtCabinet, OtHardware, OtLayer, OtSensor, OtSignal } from "./types";
 
 /** Kanaler pr. IO-kort, som de kort, styklisten allerede har. */
@@ -133,11 +133,14 @@ function ekstraSensorer(layer: OtLayer, layout: Layout, agents: Agent[]): OtSens
     }
   }
 
-  // Målerne bag demoens tal. Én måler pr. slags pr. maskine: et
-  // analyseudstyr, der melder både BIGF, BIGH og NOTS, er ét udstyr.
+  // Målerne bag demoens tal. Én måler pr. slags pr. maskine: en
+  // hældningsmåler, der melder både langs og tværs, er ét udstyr. Og målere,
+  // hvis tal ikke er drift — analyseudstyret på kastebordene — er med, selv
+  // om deres tal ikke står på maskinen.
   for (const m of layout.machines) {
     if (m.kind === "person" || m.wIds.length === 0) continue;
     for (const k of kanalerFor(m)) saet(k.maaler, m.wIds[0]);
+    for (const t of ekstraMaalereFor(m)) saet(t, m.wIds[0]);
   }
 
   // Hallen er ikke en maskine. Dens målere hænger ved skabet, og de får

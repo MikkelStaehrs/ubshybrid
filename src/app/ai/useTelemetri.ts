@@ -31,6 +31,9 @@ export interface Styring {
   gang: number;
   saet: (h: Hastighed) => void;
   genstart: () => void;
+  /** Operatøren udfører eller afviser en anbefaling. */
+  udfoer: (id: number) => void;
+  afvis: (id: number) => void;
 }
 
 export interface Telemetri {
@@ -120,6 +123,10 @@ export function useTelemetri(opts: {
   const [koersel, setKoersel] = useState(0);
   const [agenter, setAgenter] = useState<AgentStatus | null>(null);
   const saet = useCallback((h: Hastighed) => { valgtRef.current = h; setValgt(h); }, []);
+  // Den kørende simulering, så operatørens klik når den — uden at starte forfra.
+  const aktivSim = useRef<ReturnType<typeof simulator> | null>(null);
+  const udfoer = useCallback((id: number) => aktivSim.current?.udfoer(id), []);
+  const afvis = useCallback((id: number) => aktivSim.current?.afvis(id), []);
   const genstart = useCallback(() => setKoersel((n) => n + 1), []);
 
   // Uden ordre: forvarm et minut, og kør i virkelig tid.
@@ -174,6 +181,7 @@ export function useTelemetri(opts: {
       // Ti minutter inde i ordren — efter opstarten, så man kan se det ske.
       planlagteStop: ophobning ? [{ wid: "636", fraS: 600, varighedS: 180 }] : [],
     });
+    aktivSim.current = s;
 
     // --- Claude-agenterne ---------------------------------------------------
     // Hver opgave sendes til serveren, der kalder Claude. Svaret går tilbage
@@ -336,8 +344,8 @@ export function useTelemetri(opts: {
   }, [fremskrevet, ordre, layout, flaskehals, ophobning, seed, koersel, motor]);
 
   const styring = useMemo<Styring | null>(
-    () => (fremskrevet && ordre ? { valgt, gang, saet, genstart } : null),
-    [fremskrevet, ordre, valgt, gang, saet, genstart],
+    () => (fremskrevet && ordre ? { valgt, gang, saet, genstart, udfoer, afvis } : null),
+    [fremskrevet, ordre, valgt, gang, saet, genstart, udfoer, afvis],
   );
 
   if (fremskrevet && sim) {

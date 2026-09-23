@@ -268,15 +268,17 @@ export function Oscilloskop({ serie }: { serie: (number | null)[] }) {
 
 /** Fire klasser, der summer til hundrede, som ét bånd. */
 /** En vandret bjælke med en valgfri alarmgrænse tegnet ind. */
-export function Bjaelke({ v, max, graense, alarm }: {
+export function Bjaelke({ v, max, graense, alarm, styret }: {
   v: number | null;
   max: number;
   graense?: number;
   alarm?: boolean;
+  /** Grænsen er der, hvor en agent griber ind — rav, ikke rød. */
+  styret?: boolean;
 }) {
   const p = v === null ? 0 : Math.max(0, Math.min(1, v / max)) * 100;
   return (
-    <span className={`m-bjaelke${alarm ? " is-alarm" : ""}${v === null ? " is-tom" : ""}`}>
+    <span className={`m-bjaelke${alarm ? " is-alarm" : ""}${styret ? " is-styret" : ""}${v === null ? " is-tom" : ""}`}>
       {/* scaleX frem for bredde: en bredde, der ændrer sig, tvinger browseren
           til at regne layout om for hver frame, en transform gør ikke. */}
       <span className="m-bjaelke-fyld" style={{ transform: `scaleX(${p / 100})` }} />

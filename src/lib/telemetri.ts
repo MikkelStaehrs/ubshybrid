@@ -16,8 +16,8 @@
 // seedet tilfældighed. Samme seed og samme skridt giver de samme tal, og
 // det er det, der gør den testbar.
 import {
-  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, KASTEBORD, PROEVERATE, SIMULERING,
-  TILLOEB, VARME, type KanalSpec,
+  AFVIGELSER, ANALYSE, DRIFTSAGENT, FLASKEHALS, HAL, KAEDE, KANALER, KASTEBORD, KASTEBORDET, PROEVERATE,
+  SIMULERING, TILLOEB, VARME, type KanalSpec,
 } from "../../data/fremskrivning";
 import { maFromPercent } from "./live-source";
 import type { Layout, PlacedMachine } from "./layout";
@@ -61,6 +61,11 @@ export interface MaskinLaesning {
    * fejl, og det skal kunne ses.
    */
   styret: boolean;
+  /**
+   * Slukket efter planen: før ordren har startet den, efter udløbet, eller
+   * mens sporet startes bagfra. Ikke en fejl, og ikke agentens stop.
+   */
+  planlagt: boolean;
   /** Bufferen foran maskinen i procent. null uden for sporene og uden signal. */
   fyld: number | null;
   kanaler: KanalLaesning[];
@@ -157,6 +162,10 @@ export interface TelemetriBillede {
    * med reglerne — dér svarer de med det samme.
    */
   opgaver: Opgave[];
+  /** Linjeagenternes anbefalinger til operatøren, nyeste først. */
+  anbefalinger: Anbefaling[];
+  /** Kastebordenes indstillinger lige nu, nøglet på maskinens id. */
+  indstillinger: Record<string, Indstilling>;
   /**
    * Det, der sker lige nu: et spor, der står, en database, der halter. Tom,
    * når alt kører roligt — og så længe den ikke er tom, går tiden langsomt.
@@ -240,8 +249,42 @@ export interface Analyse {
   lane: string | null;
   /** FV0 … FV3 i procent. null før første prøve. */
   andele: number[] | null;
+  /**
+   * BIGF, BIGH og NOTS — også klassificeringer af frøet på bordet — i procent
+   * af prøven fra den tunge ende. null før første prøve.
+   */
+  tung: { bigf: number; bigh: number; nots: number } | null;
+  /** Andel af det, bordet fik, der gik til den lette ende. */
+  udskudPct: number | null;
   alarm: boolean;
   proeveT: number | null;
+}
+
+/** Et kastebords indstillinger. Ændres under kørslen. */
+export type Indstilling = Record<"tvaers" | "langs" | "slag" | "luft", number>;
+
+/**
+ * En anbefaling fra en linjeagent til operatøren: flyt én indstilling ét
+ * trin. AI'en anbefaler; et menneske udfører eller afviser.
+ */
+export interface Anbefaling {
+  id: number;
+  t: number;
+  /** Maskinens id og korte navn. */
+  maskine: string;
+  kort: string;
+  /** Agenten, der anbefaler. */
+  fra: string;
+  parameter: "tvaers" | "luft";
+  fraVaerdi: number;
+  tilVaerdi: number;
+  /** Det, agenten venter, der sker med FV3 og udskuddet, i procentpoint. */
+  forventet: { fv3: number; udskud: number };
+  /** Snittet af de prøver, anbefalingen bygger på. */
+  foer: { fv3: number; udskud: number };
+  status: "aaben" | "udfoert" | "afvist" | "udloebet";
+  /** Når virkningen er gjort op, efter ændringen. */
+  efter?: { fv3: number; udskud: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +314,31 @@ export function maskinFart(m: Pick<MaskinLaesning, "koerer" | "kanaler">): numbe
   const k = m.kanaler.find((x) => x.spec.id === "hastighed" || x.spec.id === "rpm");
   if (k && k.value !== null && k.spec.nominal > 0) return Math.min(1.5, Math.max(0, k.value / k.spec.nominal));
   return m.koerer ? 1 : 0;
+}
+
+/** Målere på en maskine, hvis tal ikke er drift — fx et analyseudstyr. */
+export function ekstraMaalereFor(m: Pick<PlacedMachine, "kind" | "name">): string[] {
+  const gruppe = KANALER.find((g) =>
+    (!g.kind || g.kind === m.kind) && (!g.navn || g.navn.test(m.name)),
+  );
+  return gruppe?.ekstraMaalere ?? [];
+}
+
+/** Et kastebords udgangspunkt: klassificering og udskud ved standardindstillingerne. */
+export function bordFor(m: Pick<PlacedMachine, "wIds">) {
+  return m.wIds.map((w) => KASTEBORDET.bord[w]).find(Boolean) ?? KASTEBORDET.bord.standard;
+}
+
+/**
+ * Hvad en ændring af indstillingerne gør ved FV3 og udskuddet, i procentpoint.
+ * Den samme sammenhæng, som simulatoren regner med — og som agenten får at
+ * vide, når den skal anbefale.
+ */
+export function virkning(dTvaers: number, dLuft: number): { fv3: number; udskud: number } {
+  return {
+    fv3: KASTEBORDET.prGradTvaers.fv3 * dTvaers + KASTEBORDET.prTiLuft.fv3 * (dLuft / 10),
+    udskud: KASTEBORDET.prGradTvaers.udskud * dTvaers + KASTEBORDET.prTiLuft.udskud * (dLuft / 10),
+  };
 }
 
 /** FV-andelene for ét kastebord: dets egne, hvis det afviger. */
@@ -378,6 +446,7 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
       lane: m.lane,
       koerer: null,
       styret: false,
+      planlagt: false,
       fyld: null,
       kanaler: kanalerFor(m).map((spec) => ({ spec, value: null, alarm: false })),
       alarm: false,
@@ -391,7 +460,7 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
     flowMa: flowPct === null ? null : maFromPercent(flowPct),
     gennemloeb: null,
     analyse: kastebordeI(layout).map((m) => ({
-      id: m.id, kort: kortNavn(m), lane: m.lane ?? null, andele: null, alarm: false, proeveT: null,
+      id: m.id, kort: kortNavn(m), lane: m.lane ?? null, andele: null, tung: null, udskudPct: null, alarm: false, proeveT: null,
     })),
     kaede: null,
     haendelser: [],
@@ -402,6 +471,8 @@ export function tomtBillede(layout: Layout, t: number, flowPct: number | null): 
     samtale: [],
     ordre: null,
     opgaver: [],
+    anbefalinger: [],
+    indstillinger: {},
     uro: [],
   };
 }
@@ -486,6 +557,23 @@ interface MaskinTilstand {
   /** Siden hvornår en kanal har været langt ude, og om det er meldt. */
   afvigFra: number | null;
   afvigMeldt: boolean;
+  /** Et kastebords indstillinger. null for alt andet. */
+  indstilling: Indstilling | null;
+}
+
+/**
+ * Står kastebordet, hvor det er sat? Luften er på vej op efter en start,
+ * hældningen på vej efter en ændring — så skiller bordet dårligt af den
+ * grund. Prøven er rigtig nok, men den siger intet om indstillingen: den
+ * melder ikke alarm, og ingen anbefaling bygges på den. Samme tanke som
+ * indkøringen, der ikke melder "for langsom".
+ */
+function staarSomSat(s: MaskinTilstand): boolean {
+  if (!s.indstilling) return true;
+  return (["tvaers", "luft"] as const).every((id) => {
+    const k = s.kanaler.find((x) => x.spec.id === id);
+    return !k || Math.abs(k.x - s.indstilling![id]) <= KASTEBORDET.trin[id] / 2;
+  });
 }
 
 /** Valg til simulatoren. Alle har en standard. */
@@ -531,7 +619,8 @@ type Sket =
   | { type: "sporKlar"; lane: string; hvad: string; fyld: number | null; driftTekst: string }
   | { type: "sensorfejl" }
   | { type: "sensorTilbage"; varighedS: number }
-  | { type: "fv3"; a: Analyse };
+  | { type: "fv3"; a: Analyse }
+  | { type: "proeve"; a: Analyse };
 
 /** Kanalerne, en linjeagent holder øje med for at se et stop komme. */
 const OVERVAAGET = new Set(["vibration", "dæk", "motortemp", "stroem", "rpm", "hastighed", "luft"]);
@@ -582,6 +671,10 @@ export interface Simulator {
   svar(id: number, svar: Svar | null): void;
   /** Hvor mange opgaver, der venter på et svar. */
   antalOpgaver(): number;
+  /** Operatøren udfører en anbefaling: indstillingen flyttes. */
+  udfoer(id: number): void;
+  /** Operatøren afviser en anbefaling. */
+  afvis(id: number): void;
 }
 
 /**
@@ -592,6 +685,12 @@ export interface Simulator {
  * stedet for at flimre. Når maskinen står, søger den mod sin hvileværdi —
  * hastigheden mod nul, motortemperaturen langsomt mod hallens.
  */
+/** Et kastebords standardindstillinger: kanalernes driftspunkt. */
+function udgangspunkt(kanaler: KanalSpec[]): Indstilling {
+  const v = (id: string, standard: number) => kanaler.find((k) => k.id === id)?.nominal ?? standard;
+  return { tvaers: v("tvaers", 4), langs: v("langs", 1.5), slag: v("slag", 420), luft: v("luft", 65) };
+}
+
 export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
   const {
     seed = 743, stopEfterS = SIM.stopEfterS, tvungenFlaskehals = false, ai = true,
@@ -600,6 +699,9 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
   let startT: number | null = null;
   const udfoert = new Set<number>();
   const r = rng(seed);
+  // Kastebordenes klassificering og partierne har deres egen strøm, så resten
+  // af forløbet ikke flytter sig, fordi de kom til.
+  const rk = rng(seed ^ 0x5eed);
   const maskiner: MaskinTilstand[] = layout.machines
     .filter((m) => m.kind !== "person")
     .map((m) => ({
@@ -627,6 +729,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       varslet: null,
       afvigFra: null,
       afvigMeldt: false,
+      indstilling: KASTEBORD.test(m.name) ? udgangspunkt(kanalerFor(m)) : null,
     }));
   const hal: KanalTilstand[] = HAL.map((spec) => ({ spec, x: spec.nominal, alarm: false }));
 
@@ -704,9 +807,16 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
   /** Spor, der startes bagfra, og hvornår det begyndte. */
   const genstarter = new Map<string, number>();
   const fv3 = new Map<string, { sum: number; n: number }>();
-  /** En FV3-alarm, der venter på næste prøve: er det en trend eller et enkeltudfald? */
-  const fv3Tjek = new Map<string, { t: number; v: number }>();
   const froe = new Map<string, { punkter: { t: number; x: number }[]; meldt: boolean; udeFra: number | null }>();
+  /** Hvor let frøet i det aktuelle parti er, i spredninger. Vandrer langsomt. */
+  let parti = 0;
+  const anbefalinger: Anbefaling[] = [];
+  let anbefalingNr = 0;
+  /** De seneste prøver pr. bord, og hvornår det tidligst må anbefale igen. */
+  const proever = new Map<string, { fv3: number; udskud: number }[]>();
+  const anbefalIgenFra = new Map<string, number>();
+  /** En udført anbefaling venter på prøver, før virkningen gøres op. */
+  const vurderes = new Map<number, { fv3: number; udskud: number }[]>();
 
   let flow = valg.ordre ? 0 : SIM.flowNominal;
 
@@ -751,7 +861,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
   const borde = kastebordeI(layout);
   let analyse: Analyse[] = borde.map((m) => ({
     id: m.id, kort: kortNavn(m), lane: m.lane ?? null,
-    andele: null, alarm: false, proeveT: null,
+    andele: null, tung: null, udskudPct: null, alarm: false, proeveT: null,
   }));
   const naesteAnalyse = borde.map((_, i) => (i * SIM.analyseHverS * 1000) / Math.max(1, borde.length));
   let analyseStart: number | null = null;
@@ -961,6 +1071,8 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
         if (k.spec.id === "froetemp" && s.varmeTil !== null) maal = VARME.maalC;
         // Et stop på vej: kanalen løber ud af sit bånd.
         if (s.varsel && k.spec.id === s.varsel.kanal) maal = s.varsel.maal;
+        // Et kastebords hældning, slag og luft står, hvor de er sat.
+        if (s.indstilling && k.spec.id in s.indstilling) maal = s.indstilling[k.spec.id as keyof Indstilling];
         // Fordeleren sender alt til det spor, der kører — og intet til et spor,
         // der er ved at blive startet bagfra.
         if (k.spec.id === "andelN") {
@@ -1100,8 +1212,9 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
         // stoppes først — intet står fuldt til næste ordre.
         const indTrin = [...new Set(maskiner.filter((s) => !s.m.lane).map((s) => s.m.step))].sort((a, b) => a - b);
         const sporTrin = [...new Set(maskiner.filter((s) => s.m.lane).map((s) => s.m.step))].sort((a, b) => a - b);
+        // En genstart, der er i gang, gør sig færdig — ellers stod sporet
+        // slukket, mens indgangen stadig fodrede det andet.
         for (const s of maskiner) {
-          s.startVed = null;
           s.stopVed = s.m.lane
             ? nu + (SIMULERING.udloebS + sporTrin.indexOf(s.m.step) * SIMULERING.trinS) * 1000
             : nu + indTrin.indexOf(s.m.step) * SIMULERING.trinS * 1000;
@@ -1119,25 +1232,62 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     // Et bord, der står, sender intet frø forbi analysen. Så står den seneste
     // prøve, til bordet kører igen — der kommer ikke en ny af ingenting.
     if (analyseStart === null) analyseStart = nu;
+    // Partiet vandrer — kun med en ordre, hvor der er et parti at tale om.
+    if (O) {
+      const a = Math.exp(-KASTEBORDET.parti.traeghed * dt);
+      parti = parti * a + KASTEBORDET.parti.spredning * Math.sqrt(1 - a * a) * gauss(rk);
+    }
     analyse = analyse.map((a, i) => {
       if (nu - analyseStart! < naesteAnalyse[i]) return a;
       const bord = maskiner.find((s) => s.m.id === a.id);
       if (!bord || !koererNu(bord)) return a;
       naesteAnalyse[i] += SIM.analyseHverS * 1000;
+      // Indstillingerne, som bordet står — målt, ikke sat: en hældning, der
+      // lige er ændret, er ikke nået derhen endnu.
+      const maalt = (id: string) => bord.kanaler.find((k) => k.spec.id === id)!;
+      const tv = maalt("tvaers");
+      const lu = maalt("luft");
+      const dT = tv ? tv.x - tv.spec.nominal : 0;
+      const dL = lu ? lu.x - lu.spec.nominal : 0;
+      const v = virkning(dT, dL);
+      const fv3Skift = v.fv3 + KASTEBORDET.parti.fv3 * parti;
       // Udsvinget er det, en prøve af den størrelse giver: binomialt.
       const n = ANALYSE.froePrProeve;
-      const raa = analyseFor(bord.m).map((p) => {
-        const q = p / 100;
-        return Math.max(0, p + gauss(r) * Math.sqrt((q * (1 - q)) / n) * 100);
-      });
+      const binomial = (p: number, strøm: () => number) => {
+        const q = Math.min(1, Math.max(0, p / 100));
+        return Math.max(0, p + gauss(strøm) * Math.sqrt((q * (1 - q)) / n) * 100);
+      };
+      // Mere FV3 tager fra FV0 og FV1; mindre giver til dem.
+      const base = analyseFor(bord.m);
+      const flyttet = [base[0] - fv3Skift * 0.6, base[1] - fv3Skift * 0.4, base[2], Math.max(0.3, base[3] + fv3Skift)];
+      const raa = flyttet.map((p) => binomial(p, r));
       const sum = raa.reduce((x, y) => x + y, 0);
       const andele = raa.map((p) => (p / sum) * 100);
-      const alarm = andele[3] > ANALYSE.alarmFV3;
-      const ny = { ...a, andele, alarm, proeveT: nu };
-      if (alarm && !a.alarm) {
+      const b = bordFor(bord.m);
+      const tung = {
+        bigf: binomial(b.bigf, rk),
+        bigh: binomial(Math.max(0.2, b.bigh + KASTEBORDET.prGradTvaers.bigh * dT + KASTEBORDET.prTiLuft.bigh * (dL / 10)), rk),
+        nots: binomial(Math.max(0.02, b.nots + KASTEBORDET.prGradTvaers.nots * dT * (b.nots / 4.2) + KASTEBORDET.prTiLuft.nots * (dL / 10) * (b.nots / 4.2)), rk),
+      };
+      const udskudPct = Math.min(60, Math.max(0, b.udskud + v.udskud + KASTEBORDET.parti.udskud * parti + gauss(rk) * 0.6));
+      const somSat = staarSomSat(bord);
+      const fv3Alarm = somSat && andele[3] > ANALYSE.alarmFV3;
+      const notsAlarm = somSat && tung.nots > b.alarmNots;
+      const alarm = fv3Alarm || notsAlarm;
+      const ny: Analyse = { ...a, andele, tung, udskudPct, alarm, proeveT: nu };
+      // Meldt før er det, der var alarm på — ikke det, der var over grænsen:
+      // en prøve over grænsen under en start meldte ikke, så den første
+      // efter skal.
+      const varFv3 = a.alarm && !!a.andele && a.andele[3] > ANALYSE.alarmFV3;
+      const varNots = a.alarm && !!a.tung && a.tung.nots > b.alarmNots;
+      if (fv3Alarm && !varFv3) {
         skriv({ t: nu, hvor: a.kort, tekst: `FV3 ${andele[3].toFixed(1).replace(".", ",")} %`, niveau: "alarm" });
         if (O) sket.push({ type: "fv3", a: ny });
       }
+      if (notsAlarm && !varNots) {
+        skriv({ t: nu, hvor: a.kort, tekst: `NOTS ${tung.nots.toFixed(1).replace(".", ",")} %`, niveau: "alarm" });
+      }
+      if (O) sket.push({ type: "proeve", a: ny });
       if (O) {
         const f = fv3.get(a.kort) ?? { sum: 0, n: 0 };
         f.sum += andele[3];
@@ -1358,6 +1508,15 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
         st.aarsag = null;
         st.siden = null;
         beslutninger++;
+        // Er ordren ved at løbe tom, startes intet bagfra: planen stopper
+        // sporet om lidt. Det, der ikke er slukket endnu, kører igen — og er
+        // på vej op i fart, ikke for langsomt.
+        if (fase === "udloeb" || fase === "faerdig") {
+          for (const x of liste) if (!x.slukket) x.startet = t;
+          const aaben = sporStop.find((p) => p.lane === lane && p.til === null);
+          if (aaben) aaben.til = t;
+          return;
+        }
         // Bagfra: det sidste trin først. Sporets første maskine — den, fordeleren
         // fodrer — starter sidst, så ingen buffer fyldes, før maskinen efter
         // den kører. Alle på én gang: nu.
@@ -1495,7 +1654,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
           }, nu);
         } else if (e.type === "fv3") {
           const bord = maskiner.find((x) => x.m.id === e.a.id)!;
-          const v = (id: string) => bord.kanaler.find((k) => k.spec.id === id)?.x;
+          const v = (id: "bigf" | "bigh") => e.a.tung?.[id];
           const hvem = AGENT.linje(e.a.lane ?? "N");
           taenk({
             agent: hvem,
@@ -1509,42 +1668,125 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
             skabelon: [{
               fra: hvem, til: AGENT.operatoer, type: "iagttagelse",
               tekst: `FV3 ${tal(e.a.andele![3], 1)} % på ${e.a.kort} — normalt ${tal(analyseFor(bord.m)[3], 1)} %.`,
-              grund: `BIGF ${tal(v("bigf") ?? 0, 1)} %, BIGH ${tal(v("bigh") ?? 0, 1)} %. Én prøve er ikke en trend — næste kommer om ${SIM.analyseHverS} s.`,
+              grund: `BIGF ${tal(v("bigf") ?? 0, 1)} %, BIGH ${tal(v("bigh") ?? 0, 1)} %, udskud ${tal(e.a.udskudPct ?? 0, 1)} %. Én prøve er ikke en trend — næste kommer om ${SIM.analyseHverS} s.`,
             }],
             standard: "ingen",
           }, nu);
-          fv3Tjek.set(e.a.id, { t: e.a.proeveT!, v: e.a.andele![3] });
+        } else if (e.type === "proeve") {
+          // --- Kastebordet: prøven, virkningen af en ændring, en anbefaling ---
+          const a = e.a;
+          const bord = maskiner.find((x) => x.m.id === a.id)!;
+          const ind = bord.indstilling!;
+          const p = { fv3: a.andele![3], udskud: a.udskudPct! };
+          // En anbefaling bygget på et bord på vej et sted hen ville rette på
+          // det forkerte.
+          if (!staarSomSat(bord)) continue;
+          const liste = [...(proever.get(a.id) ?? []), p].slice(-4);
+          proever.set(a.id, liste);
+
+          // Virkningen af en udført ændring gøres op efter nogle prøver.
+          for (const an of anbefalinger) {
+            if (an.maskine !== a.id || an.status !== "udfoert" || an.efter) continue;
+            const efter = [...(vurderes.get(an.id) ?? []), p];
+            vurderes.set(an.id, efter);
+            if (efter.length < KASTEBORDET.proeverFoerVurdering) continue;
+            const snit = { fv3: efter.reduce((x, y) => x + y.fv3, 0) / efter.length, udskud: efter.reduce((x, y) => x + y.udskud, 0) / efter.length };
+            an.efter = snit;
+            vurderes.delete(an.id);
+            const hvem = AGENT.linje(a.lane ?? "N");
+            taenk({
+              agent: hvem,
+              spoergsmaal: `Virkningen af ændringen på ${a.kort} er målt. Fortæl operatøren, om den virkede.`,
+              situation: {
+                kastebord: a.kort, aendring: `${an.parameter === "tvaers" ? "tværhældning" : "luft"} ${tal(an.fraVaerdi, 1)} → ${tal(an.tilVaerdi, 1)}`,
+                foer: { fv3Pct: Math.round(an.foer.fv3 * 10) / 10, udskudPct: Math.round(an.foer.udskud * 10) / 10 },
+                efter: { fv3Pct: Math.round(snit.fv3 * 10) / 10, udskudPct: Math.round(snit.udskud * 10) / 10 },
+                forventet: { fv3Pp: Math.round(an.forventet.fv3 * 10) / 10, udskudPp: Math.round(an.forventet.udskud * 10) / 10 },
+                antalProever: efter.length,
+              },
+              handlinger: ["ingen"], modtagere: ["Operatør"],
+              skabelon: [{
+                fra: hvem, til: "Operatør", type: "rapport",
+                tekst: `Efter ændringen på ${a.kort}: FV3 ${tal(an.foer.fv3, 1)} → ${tal(snit.fv3, 1)} %, udskud ${tal(an.foer.udskud, 1)} → ${tal(snit.udskud, 1)} %.`,
+                grund: `Snit af ${efter.length} prøver. Forventet: FV3 ${tal(an.forventet.fv3, 1)} og udskud ${an.forventet.udskud >= 0 ? "+" : ""}${tal(an.forventet.udskud, 1)} procentpoint.`,
+              }],
+              standard: "ingen",
+            }, nu);
+          }
+
+          // En ny anbefaling: to prøver i træk skal pege samme vej, og der må
+          // ikke allerede stå en åben for bordet — eller en udført, hvis
+          // virkning ikke er gjort op. Ét skridt ad gangen.
+          if (anbefalinger.some((x) => x.maskine === a.id && (x.status === "aaben" || (x.status === "udfoert" && !x.efter)))) continue;
+          if ((anbefalIgenFra.get(a.id) ?? 0) > nu || liste.length < 2) continue;
+          const [x1, x2] = liste.slice(-2);
+          const normalt = analyseFor(bord.m)[3];
+          const maks = (id: "tvaers" | "luft") => bord.kanaler.find((k) => k.spec.id === id)!.spec;
+          const forHoej = x1.fv3 > normalt + KASTEBORDET.fv3Tolerance && x2.fv3 > normalt + KASTEBORDET.fv3Tolerance;
+          const forMeget = x1.udskud > KASTEBORDET.maksUdskudPct && x2.udskud > KASTEBORDET.maksUdskudPct && x2.fv3 < normalt + 0.5;
+          if (!forHoej && !forMeget) continue;
+          const kanOp = (id: "tvaers" | "luft") => ind[id] + KASTEBORDET.trin[id] <= (maks(id).alarmHoej ?? Infinity) - KASTEBORDET.trin[id];
+          const kanNed = (id: "tvaers" | "luft") => ind[id] - KASTEBORDET.trin[id] >= (maks(id).alarmLav ?? -Infinity) + KASTEBORDET.trin[id];
+          const regel = forHoej
+            ? (kanOp("tvaers") ? "haev_tvaers" : kanOp("luft") ? "haev_luft" : "ingen")
+            : (kanNed("tvaers") ? "saenk_tvaers" : kanNed("luft") ? "saenk_luft" : "ingen");
+          const effekt = {
+            haev_tvaers: virkning(KASTEBORDET.trin.tvaers, 0), saenk_tvaers: virkning(-KASTEBORDET.trin.tvaers, 0),
+            haev_luft: virkning(0, KASTEBORDET.trin.luft), saenk_luft: virkning(0, -KASTEBORDET.trin.luft),
+          };
+          const foer = { fv3: (x1.fv3 + x2.fv3) / 2, udskud: (x1.udskud + x2.udskud) / 2 };
+          const hvem = AGENT.linje(a.lane ?? "N");
+          const skabelon = (h: string) => {
+            if (h === "ingen") return { fra: hvem, til: "Operatør", type: "iagttagelse" as const, tekst: `${a.kort} skiller ${forHoej ? "for blødt" : "for skarpt"}, men indstillingerne er ved grænsen.`, grund: `FV3 ${tal(foer.fv3, 1)} %, udskud ${tal(foer.udskud, 1)} %.` };
+            const [retning, par] = h.split("_") as ["haev" | "saenk", "tvaers" | "luft"];
+            const til = ind[par] + (retning === "haev" ? 1 : -1) * KASTEBORDET.trin[par];
+            const f = effekt[h as keyof typeof effekt];
+            return {
+              fra: hvem, til: "Operatør", type: "forslag" as const,
+              tekst: `${retning === "haev" ? "Hæv" : "Sænk"} ${par === "tvaers" ? "tværhældningen" : "luften"} på ${a.kort} fra ${tal(ind[par], par === "tvaers" ? 1 : 0)} til ${tal(til, par === "tvaers" ? 1 : 0)}${par === "tvaers" ? "°" : " %"}.`,
+              grund: forHoej
+                ? `To prøver med FV3 ${tal(x1.fv3, 1)} og ${tal(x2.fv3, 1)} % — normalt ${tal(normalt, 1)}. Venter FV3 ${tal(f.fv3, 1)} og udskud +${tal(f.udskud, 1)} procentpoint.`
+                : `Udskud ${tal(x1.udskud, 1)} og ${tal(x2.udskud, 1)} % i den lette ende, og FV3 kan tåle det. Venter udskud ${tal(f.udskud, 1)} og FV3 +${tal(f.fv3, 1)} procentpoint.`,
+            };
+          };
+          anbefalIgenFra.set(a.id, nu + 4 * SIM.analyseHverS * 1000);
+          taenk({
+            agent: hvem,
+            spoergsmaal: `${a.kort} skiller ${forHoej ? "for blødt: for meget FV3 i den tunge ende" : "for skarpt: for meget godt frø i den lette ende"}. Hvilken ændring anbefaler du operatøren?`,
+            situation: {
+              kastebord: a.kort, spor: a.lane,
+              indstillingNu: { tvaersGrader: ind.tvaers, langsGrader: ind.langs, slagPrMin: ind.slag, luftPct: ind.luft },
+              seneste2Proever: [x1, x2].map((x) => ({ fv3Pct: Math.round(x.fv3 * 10) / 10, udskudPct: Math.round(x.udskud * 10) / 10 })),
+              normaltFv3Pct: normalt, maksUdskudPct: KASTEBORDET.maksUdskudPct,
+              virkningPrTrin: Object.fromEntries(Object.entries(effekt).map(([k, f]) => [k, { fv3Pp: Math.round(f.fv3 * 10) / 10, udskudPp: Math.round(f.udskud * 10) / 10 }])),
+              graenser: { tvaersGrader: [maks("tvaers").alarmLav, maks("tvaers").alarmHoej], luftPct: [maks("luft").alarmLav, maks("luft").alarmHoej] },
+              hvemUdfoerer: "operatøren — du anbefaler, et menneske beslutter",
+            },
+            handlinger: ["haev_tvaers", "saenk_tvaers", "haev_luft", "saenk_luft", "ingen"],
+            modtagere: ["Operatør"],
+            skabelon: [skabelon(regel)],
+            standard: regel,
+          }, nu, (h) => {
+            if (h === "ingen") return;
+            const [retning, par] = h.split("_") as ["haev" | "saenk", "tvaers" | "luft"];
+            const fra = bord.indstilling![par];
+            const til = Math.round((fra + (retning === "haev" ? 1 : -1) * KASTEBORDET.trin[par]) * 10) / 10;
+            anbefalinger.unshift({
+              id: ++anbefalingNr, t: sidsteNu, maskine: a.id, kort: a.kort, fra: hvem,
+              parameter: par, fraVaerdi: fra, tilVaerdi: til,
+              forventet: effekt[h as keyof typeof effekt], foer, status: "aaben",
+            });
+            if (anbefalinger.length > 20) anbefalinger.length = 20;
+          });
         }
       }
 
-      // FV3: to prøver i træk er en trend, én er et udfald.
-      for (const a of analyse) {
-        const tjek = fv3Tjek.get(a.id);
-        if (!tjek || a.proeveT === null || a.proeveT <= tjek.t || !a.andele) continue;
-        fv3Tjek.delete(a.id);
-        const hoej = a.andele[3] > ANALYSE.alarmFV3;
-        taenk({
-          agent: AGENT.operatoer,
-          spoergsmaal: `Næste FV3-prøve fra ${a.kort} er kommet. Skal operatøren gøre noget?`,
-          situation: {
-            kastebord: a.kort, spor: a.lane, foersteProeveFv3Pct: Math.round(tjek.v * 10) / 10,
-            andenProeveFv3Pct: Math.round(a.andele[3] * 10) / 10, alarmgraensePct: ANALYSE.alarmFV3,
-            hvadOperatoerenKanTjekke: `luften på Alfa ${a.lane} og dækket på ${a.kort}`,
-          },
-          handlinger: ["bed_operatoeren_tjekke", "ingen_handling"],
-          modtagere: ["Operatør", AGENT.linje(a.lane ?? "N")],
-          skabelon: [hoej
-            ? {
-                fra: AGENT.operatoer, til: "Operatør", type: "forslag",
-                tekst: `Tjek luften på Alfa ${a.lane} og dækket på ${a.kort}.`,
-                grund: `To prøver i træk over ${ANALYSE.alarmFV3} % FV3: ${tal(tjek.v, 1)} og ${tal(a.andele[3], 1)} %. Det er det, bordet skal rense ud.`,
-              }
-            : {
-                fra: AGENT.operatoer, til: AGENT.linje(a.lane ?? "N"), type: "beslutning", tekst: "Ingen handling.",
-                grund: `Næste prøve: FV3 ${tal(a.andele[3], 1)} %. Det var et enkeltudfald.`,
-              }],
-          standard: hoej ? "bed_operatoeren_tjekke" : "ingen_handling",
-        }, nu);
+      // En anbefaling, ingen har taget stilling til, bortfalder.
+      for (const an of anbefalinger) {
+        if (an.status === "aaben" && nu - an.t > KASTEBORDET.anbefalingGyldigS * 1000) {
+          an.status = "udloebet";
+          anbefalIgenFra.set(an.maskine, nu + KASTEBORDET.roEfterNejS * 1000);
+        }
       }
 
       // Et spor, der er startet igen, kører, når dets sidste maskine gør.
@@ -1860,8 +2102,10 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
       if (episode || koe > 0.5) u("MSSQL bagud");
       if (proeveTrin > 0) u("Prøverate sænket");
       if (sensorfejlTil !== null) u("FT-743 ude", true);
-      if (fv3Tjek.size > 0) u("FV3 tjekkes");
       for (const o of aabneOpgaver.values()) u(`${o.agent} tænker`);
+      // En ny anbefaling bremser tiden et minut, så man når at se den. Står
+      // den stadig åben, går tiden videre — den venter i panelet.
+      for (const an of anbefalinger) if (an.status === "aaben" && nu - an.t < 60_000) u(`Anbefaling ${an.kort}`);
     }
 
     // Støjen i billedet trækkes her, i samme rækkefølge som altid, så et
@@ -1887,6 +2131,7 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
           // En maskine, der selv er gået i stå, er en fejl — også når dens
           // spor står. Kun de andre står på agentens beslutning eller plan.
           styret: s.stopTil === null && (styret(s) || s.slukket),
+          planlagt: s.stopTil === null && s.slukket,
           fyld: s.fyld === null ? null : Math.round(s.fyld),
           kanaler,
           alarm: kanaler.some((k) => k.alarm),
@@ -1937,6 +2182,8 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
         : null,
       samtale: [...samtale],
       opgaver: [...aabneOpgaver.values()].map(({ anvend: _, ...o }) => o),
+      anbefalinger: anbefalinger.map((a) => ({ ...a })),
+      indstillinger: Object.fromEntries(maskiner.filter((x) => x.indstilling).map((x) => [x.m.id, { ...x.indstilling! }])),
       ordre: O
         ? {
             ordreNr: O.ordreNr,
@@ -1962,5 +2209,29 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     frem: (dtMs, nu) => { gaa(dtMs, nu, false); return uroNu; },
     svar: besvar,
     antalOpgaver: () => aabneOpgaver.size,
+    udfoer: (id) => {
+      const an = anbefalinger.find((x) => x.id === id);
+      if (!an || an.status !== "aaben") return;
+      const bord = maskiner.find((x) => x.m.id === an.maskine);
+      if (!bord?.indstilling) return;
+      an.status = "udfoert";
+      bord.indstilling[an.parameter] = an.tilVaerdi;
+      beslutninger++;
+      const enhed = an.parameter === "tvaers" ? "°" : " %";
+      const navn = an.parameter === "tvaers" ? "Tværhældning" : "Luft";
+      sig({
+        fra: "Operatør", til: an.fra, type: "handling", kilde: "menneske",
+        tekst: `${navn} på ${an.kort}: ${tal(an.fraVaerdi, 1)} → ${tal(an.tilVaerdi, 1)}${enhed}.`,
+      }, sidsteNu);
+      skriv({ t: sidsteNu, hvor: an.kort, tekst: `${navn} ${tal(an.fraVaerdi, 1)} → ${tal(an.tilVaerdi, 1)}${enhed}`, niveau: "info" });
+      vurderes.set(an.id, []);
+    },
+    afvis: (id) => {
+      const an = anbefalinger.find((x) => x.id === id);
+      if (!an || an.status !== "aaben") return;
+      an.status = "afvist";
+      anbefalIgenFra.set(an.maskine, sidsteNu + KASTEBORDET.roEfterNejS * 1000);
+      sig({ fra: "Operatør", til: an.fra, type: "beslutning", kilde: "menneske", tekst: `Afvist: ${an.parameter === "tvaers" ? "tværhældningen" : "luften"} på ${an.kort} bliver, hvor den er.` }, sidsteNu);
+    },
   };
 }

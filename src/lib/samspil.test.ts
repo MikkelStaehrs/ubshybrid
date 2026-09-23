@@ -25,7 +25,7 @@ interface Kig {
   tabt: number;
   proeveTrin: number;
   /** Maskinernes trin, og om de er slukket efter planen. */
-  maskiner: { kort: string; step: number; koerer: boolean | null; styret: boolean }[];
+  maskiner: { kort: string; step: number; koerer: boolean | null; styret: boolean; planlagt: boolean }[];
 }
 
 /**
@@ -51,7 +51,7 @@ function koerOrdre(valg: { seed?: number; tvungenFlaskehals?: boolean } = {}) {
     kig.push({
       t, fase: b.ordre!.fase, uro: b.uro, forsinkelseS: b.kaede!.forsinkelseS, tabt: b.kaede!.tabt,
       proeveTrin: b.ordre!.proeveTrin,
-      maskiner: b.maskiner.map((m) => ({ kort: m.kort, step: trin.get(m.id)!, koerer: m.koerer, styret: m.styret })),
+      maskiner: b.maskiner.map((m) => ({ kort: m.kort, step: trin.get(m.id)!, koerer: m.koerer, styret: m.styret, planlagt: m.planlagt })),
     });
     if (b.ordre!.fase === "faerdig") break;
   }
@@ -86,11 +86,13 @@ describe("ordren fra start til slut", () => {
   });
 
   it("stoppes forfra: står en maskine efter planen, står alle før den også", () => {
+    // Kun det planlagte stop tæller. En maskine kan stå af en anden grund,
+    // da udløbet begyndte — et spor, agenten havde stoppet.
     for (const k of forloeb.kig.filter((x) => x.fase === "udloeb")) {
       for (const b of k.maskiner) {
-        if (b.koerer) continue;
+        if (!b.planlagt) continue;
         for (const a of k.maskiner) {
-          if (a.step < b.step) assert.ok(!a.koerer, `${b.kort} er stoppet, men ${a.kort} før den kører`);
+          if (a.step < b.step) assert.ok(a.planlagt, `${b.kort} er stoppet efter planen, men ${a.kort} før den er ikke`);
         }
       }
     }
@@ -161,10 +163,13 @@ describe("agenterne imellem", () => {
     }
   });
 
-  it("en FV3-alarm vejes: to prøver i træk er et forslag, én er ingen handling", () => {
-    for (const b of forloeb.samtale.filter((x) => x.tekst.startsWith("FV3 "))) {
-      const svar = forloeb.samtale.find((x) => x.nr > b.nr && x.fra === "Operatøragent" && (x.tekst === "Ingen handling." || x.tekst.startsWith("Tjek luften")));
-      assert.ok(svar, `ingen afvejning af "${b.tekst}"`);
+  it("en anbefaling til operatøren er konkret: én indstilling, ét trin, med det forventede", () => {
+    const forslag = forloeb.samtale.filter((b) => b.type === "forslag" && /^(Hæv|Sænk) (tværhældningen|luften) på KB-/.test(b.tekst));
+    assert.ok(forslag.length > 0, "ordren gav ingen anbefaling at prøve reglen på");
+    for (const b of forslag) {
+      assert.equal(b.til, "Operatør");
+      assert.match(b.tekst, /fra [\d,]+ til [\d,]+/);
+      assert.match(b.grund ?? "", /Venter/);
     }
   });
 });

@@ -30,7 +30,7 @@ export interface Besked {
    * Hvem der tænkte: Claude, eller reglerne og deres skabelon. Fladen
    * skal kunne se forskel — det er hele pointen med at køre dem rigtigt.
    */
-  kilde?: "claude" | "regel";
+  kilde?: "claude" | "regel" | "menneske";
   /** Hvor længe Claude var om svaret. */
   ms?: number;
   model?: string;
@@ -41,6 +41,7 @@ export interface Besked {
  * Ét sted, så mærket siger det samme i loggen, i panelet og på skærm 2.
  */
 export function kildeTekst(b: Pick<Besked, "kilde" | "ms">, medTid = true): string {
+  if (b.kilde === "menneske") return "Menneske";
   if (b.kilde !== "claude") return "Regel";
   return medTid && b.ms !== undefined ? `Claude · ${(b.ms / 1000).toFixed(1).replace(".", ",")} s` : "Claude";
 }

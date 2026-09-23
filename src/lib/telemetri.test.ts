@@ -4,7 +4,7 @@ import sliberi from "../../data/lines/sliberi.json";
 import { layoutLine } from "./layout";
 import { FAULT_LOW_MA } from "./live-source";
 import {
-  graense, kanalerFor, maskinFart, samlLog, simulator, tomtBillede, INDKOERING_S, SIM,
+  bordFor, ekstraMaalereFor, graense, kanalerFor, maskinFart, samlLog, simulator, tomtBillede, INDKOERING_S, SIM,
   type Haendelse, type TelemetriBillede,
 } from "./telemetri";
 import type { LineData } from "./types";
@@ -180,12 +180,23 @@ describe("analysen og kastebordene", () => {
   });
 
   it("andet bord i sporet har markant mindre FV3, BIGF og BIGH — og nærmest ingen NOTS", () => {
+    // Alle fire er klassificeringer af frøet på bordet: de står i analysen,
+    // ikke som kanaler på maskinen.
+    const tung = (kort: string, id: "bigf" | "bigh" | "nots") =>
+      snit(kort, (b) => b.analyse.find((a) => a.kort === kort)?.tung?.[id]);
     for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
       assert.ok(fv(andet, 3) < fv(foerste, 3) * 0.5, `FV3 ${andet} mod ${foerste}`);
-      assert.ok(kanal(andet, "bigf") < kanal(foerste, "bigf") * 0.75, `BIGF ${andet}`);
-      assert.ok(kanal(andet, "bigh") < kanal(foerste, "bigh") * 0.6, `BIGH ${andet}`);
-      assert.ok(kanal(andet, "nots") < 1, `NOTS ${andet} er ${kanal(andet, "nots")}`);
-      assert.ok(kanal(andet, "nots") < kanal(foerste, "nots") * 0.2, `NOTS ${andet}`);
+      assert.ok(tung(andet, "bigf") < tung(foerste, "bigf") * 0.75, `BIGF ${andet}`);
+      assert.ok(tung(andet, "bigh") < tung(foerste, "bigh") * 0.6, `BIGH ${andet}`);
+      assert.ok(tung(andet, "nots") < 1, `NOTS ${andet} er ${tung(andet, "nots")}`);
+      assert.ok(tung(andet, "nots") < tung(foerste, "nots") * 0.2, `NOTS ${andet}`);
+    }
+  });
+
+  it("andet bord smider mindre ud i den lette ende", () => {
+    const udskud = (kort: string) => snit(kort, (b) => b.analyse.find((a) => a.kort === kort)?.udskudPct);
+    for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
+      assert.ok(udskud(andet) < udskud(foerste), `${andet}: ${udskud(andet)} mod ${udskud(foerste)}`);
     }
   });
 
@@ -223,14 +234,10 @@ describe("grænserne", () => {
     }
   });
 
-  it("andet kastebord har sine egne, strammere grænser", () => {
-    const kb = (navn: string) => kanalerFor(layout.machines.find((m) => m.name === navn)!);
+  it("andet kastebord melder NOTS ved en lavere grænse — det har fået, hvad det første rensede", () => {
+    const bord = (navn: string) => bordFor(layout.machines.find((m) => m.name === navn)!);
     for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
-      for (const id of ["bigf", "bigh", "nots"]) {
-        const a = kb(foerste).find((k) => k.id === id)!.alarmHoej!;
-        const b = kb(andet).find((k) => k.id === id)!.alarmHoej!;
-        assert.ok(b < a, `${andet} ${id}: ${b} er ikke strammere end ${a}`);
-      }
+      assert.ok(bord(andet).alarmNots < bord(foerste).alarmNots, andet);
     }
   });
 
@@ -248,11 +255,14 @@ describe("udsvinget", () => {
   const spredning = (dtMs: number) => {
     const sim = simulator(layout, { stopHverS: 1e9 });
     const v: number[] = [];
+    // Lige efter en start er dækket på vej op i fart. Det er ikke udsving.
+    let koerteSiden = 0;
     for (let t = 0; t < 30 * 60_000; t += dtMs) {
       const b = sim.skridt(dtMs, T0 + t);
-      if (t < 60_000) continue;
       const m = b.maskiner.find((x) => x.kort === "KB-2S")!;
-      if (m.koerer) v.push(m.kanaler.find((k) => k.spec.id === "dæk")!.value!);
+      koerteSiden = m.koerer ? koerteSiden + dtMs : 0;
+      if (t < 60_000 || koerteSiden < 30_000) continue;
+      v.push(m.kanaler.find((k) => k.spec.id === "dæk")!.value!);
     }
     const snit = v.reduce((a, b) => a + b, 0) / v.length;
     return Math.sqrt(v.reduce((a, b) => a + (b - snit) ** 2, 0) / v.length);
@@ -351,12 +361,16 @@ describe("anlægget som det står", () => {
 });
 
 describe("kanalerne passer til maskinerne", () => {
-  it("kastebordene har BIGF, BIGH og NOTS", () => {
+  it("kastebordene har driftstal — vibration, slag, hældning og luft — og ikke klassificeringer", () => {
+    // Det, der står på maskinen, er det, den stilles efter. Hvad der kommer
+    // ud, er output og står i analysen.
     const kb = layout.machines.filter((m) => /^kb[-\s]/i.test(m.name));
     assert.equal(kb.length, 4);
     for (const m of kb) {
       const ids = kanalerFor(m).map((k) => k.id);
-      for (const id of ["bigf", "bigh", "nots"]) assert.ok(ids.includes(id), `${m.name} mangler ${id}`);
+      for (const id of ["dæk", "slag", "tvaers", "langs", "luft"]) assert.ok(ids.includes(id), `${m.name} mangler ${id}`);
+      for (const id of ["bigf", "bigh", "nots"]) assert.ok(!ids.includes(id), `${m.name} viser ${id} som drift`);
+      assert.deepEqual(ekstraMaalereFor(m), ["analyzer"], "klassificeringen kommer fra et analyseudstyr");
     }
   });
 
