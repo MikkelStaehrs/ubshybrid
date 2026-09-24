@@ -63,6 +63,39 @@ describe("hele fabrikken", () => {
   });
 });
 
+describe("lageret over linjerne", () => {
+  const m = model();
+  const lager = m.blokke.find((b) => b.id === "warehouse")!;
+  const linjer = m.blokke.filter((b) => b.slags === "linje");
+
+  it("står som et bånd over hele rækken af linjer", () => {
+    assert.ok(lager.overLinjerne);
+    assert.ok(lager.x0 <= Math.min(...linjer.map((b) => b.x0)) && lager.x1 >= Math.max(...linjer.map((b) => b.x1)));
+    assert.ok(lager.z1 < Math.min(...linjer.map((b) => b.z0)), "lageret står ikke over linjerne");
+  });
+
+  it("en forbindelse til lageret går lodret op fra sit trin — ikke til midten af båndet", () => {
+    for (const b of m.buer.filter((x) => x.fraDel === "warehouse" || x.tilDel === "warehouse")) {
+      const anden = m.blokke.find((x) => x.id === (b.fraDel === "warehouse" ? b.tilDel : b.fraDel))!;
+      const paaLager = b.fraDel === "warehouse" ? b.fra : b.til;
+      assert.ok(paaLager[0] >= anden.x0 && paaLager[0] <= anden.x1, `${b.navn} rammer ikke lageret over ${anden.navn}`);
+    }
+  });
+
+  it("ens numre står i den rækkefølge, de er skrevet — Steeping før Packing", () => {
+    const x = (id: string) => m.blokke.find((b) => b.id === id)!.x0;
+    assert.ok(x("steeping") < x("packing"));
+    assert.ok(m.blokke.find((b) => b.id === "steeping")!.valgfri);
+  });
+
+  it("det sagte står som fundet, det udledte af mønstret som antaget", () => {
+    const sagt = m.buer.find((b) => b.id === "F-SLIBERI-WAREHOUSE")!;
+    const antaget = m.buer.find((b) => b.id === "F-COATING-WAREHOUSE")!;
+    assert.equal(sagt.antaget, false);
+    assert.equal(antaget.antaget, true);
+  });
+});
+
 describe("forbindelserne", () => {
   it("de håndholdte peger alle på noget, der findes", () => {
     assert.deepEqual(model().fejl, []);

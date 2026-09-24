@@ -87,7 +87,8 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
               />
             ))}
             {model.buer.filter((b) => vis[b.slags]).map((b) => (
-              <BueMesh key={b.id} bue={b} farve={theme[FARVE[b.slags]]} valgt={valgt === forbindelse(b)} />
+              // En antaget forbindelse har de antagne pilses farve, som på kortet.
+              <BueMesh key={b.id} bue={b} farve={theme[b.antaget ? "warn" : FARVE[b.slags]]} valgt={valgt === forbindelse(b)} />
             ))}
             <Kamera model={model} />
           </Canvas>
@@ -123,7 +124,7 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
           ))}
         </ul>
         <p className="fb-noegle">
-          <span className="fb-streg" /> findes · <span className="fb-streg is-stiplet" /> findes ikke endnu
+          <span className="fb-streg" /> findes · <span className="fb-streg is-stiplet" /> ikke endnu · <span className="fb-streg is-antaget" /> antaget
         </p>
         <ul className="fb-liste">
           {forbindelser.filter((b) => vis[b.slags]).map((b) => {
@@ -132,8 +133,8 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
             return (
               <li key={id}>
                 <button type="button" className={valgt === id ? "is-valgt" : undefined} onClick={() => setValgt(valgt === id ? null : id)}>
-                  <span className={`fb-streg s-${b.slags}${b.findes ? "" : " is-stiplet"}`} />
-                  <span className="fb-navn">{b.navn}</span>
+                  <span className={`fb-streg s-${b.slags}${b.antaget ? " is-antaget" : b.findes ? "" : " is-stiplet"}`} />
+                  <span className="fb-navn">{b.navn}{b.antaget && <em className="fb-antaget">Antaget</em>}</span>
                   <span className="fb-hvor">{navn(b.fraDel)} → {navn(b.tilDel)}</span>
                   {valgt === id && b.note && <span className="fb-note">{b.note}</span>}
                 </button>
@@ -191,6 +192,9 @@ function BlokMesh({ blok, theme, over, onOver, onVaelg }: {
   ], [blok.x0, blok.x1, blok.z0, blok.z1]);
   const findes = blok.slags === "rack" ? isDone(blok.status ?? "missing") : blok.tegnet;
   const farve = blok.slags === "rack" ? theme["ot-cabinet"] : theme.wall;
+  // Nummeret står ved navnet — det er rækkefølgen i produktionen.
+  const titel = `${blok.nr !== null ? `${blok.nr} · ` : ""}${blok.navn.toUpperCase()}`;
+  const skrift = Math.min(30, Math.max(12, w / 3.5));
   return (
     <group>
       {blok.tegnet && blok.slags !== "rack" && (
@@ -211,10 +215,15 @@ function BlokMesh({ blok, theme, over, onOver, onVaelg }: {
         </mesh>
       )}
       <Line points={kant} color={farve} lineWidth={findes ? 1.6 : 1.2} dashed={!findes} dashSize={1.2} gapSize={0.9} />
-      <FloorText text={blok.navn.toUpperCase()} color={theme.flow} size={Math.min(14, Math.max(7, w / 4))} position={[blok.x0 + Math.min(14, Math.max(7, w / 4)) / 2 + 1, 0.06, blok.z0 - 2.2]} />
-      {!blok.tegnet && (
-        <FloorText text="IKKE TEGNET" color={theme.flow} size={8} position={[cx, 0.06, cz]} />
-      )}
+      {blok.tegnet || blok.overLinjerne
+        ? <FloorText text={titel} color={theme.flow} size={skrift} position={[blok.x0 + skrift / 2 + 1, 0.06, blok.z0 - skrift / 8 - 1]} />
+        : (
+          // Uden maskiner er navnet det eneste i blokken — så står det midt i den.
+          <>
+            <FloorText text={titel} color={theme.flow} size={Math.min(w * 0.9, 30)} position={[cx, 0.06, cz - 2]} />
+            <FloorText text={blok.valgfri ? "IKKE ALTID MED" : "IKKE TEGNET"} color={theme.flow} size={Math.min(w * 0.6, 18)} position={[cx, 0.06, cz + 4]} />
+          </>
+        )}
       {blok.layout?.machines.map((m) => {
         const p = paaGrunden(blok, m);
         return (
@@ -245,18 +254,26 @@ function BueMesh({ bue, farve, valgt }: { bue: Bue; farve: string; valgt: boolea
   return <Line points={punkter} color={farve} lineWidth={valgt ? 3.2 : 1.8} dashed={!bue.findes} dashSize={1.4} gapSize={1} transparent opacity={valgt ? 1 : 0.85} />;
 }
 
+/** Panelet til højre, i pixels. Kameraet stiller grunden i resten. */
+const PANEL_PX = 360;
+
 /** Hele grunden i billedet ved start; derefter er kameraet brugerens. */
 function Kamera({ model }: { model: FabrikModel }) {
   const { camera, size } = useThree();
   const g = model.graenser;
-  const cx = (g.minX + g.maxX) / 2;
   const cz = (g.minZ + g.maxZ) / 2;
+  const panel = size.width > 900 ? PANEL_PX : 0;
+  const cam = camera as PerspectiveCamera;
+  const vfov = MathUtils.degToRad(cam.fov);
+  const hfov = size.height > 0 ? 2 * Math.atan(Math.tan(vfov / 2) * (size.width / size.height)) : vfov;
+  // Den bredde, grunden har at være i, og hvor langt væk kameraet skal stå.
+  const fri = size.width > 0 ? (size.width - panel) / size.width : 1;
+  const afstand = Math.max((g.maxX - g.minX) / (2 * Math.tan(hfov / 2) * fri), (g.maxZ - g.minZ) / (2 * Math.tan(vfov / 2))) * 1.15;
+  // Målet flyttes til højre, så grunden står midt i det fri felt til venstre.
+  const skub = size.width > 0 ? (panel / 2 / size.width) * 2 * afstand * Math.tan(hfov / 2) : 0;
+  const cx = (g.minX + g.maxX) / 2 + skub;
   useEffect(() => {
     if (size.width === 0 || size.height === 0) return;
-    const cam = camera as PerspectiveCamera;
-    const vfov = MathUtils.degToRad(cam.fov);
-    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * (size.width / size.height));
-    const afstand = Math.max((g.maxX - g.minX) / (2 * Math.tan(hfov / 2)), (g.maxZ - g.minZ) / (2 * Math.tan(vfov / 2))) * 1.25;
     cam.position.set(cx, afstand * 0.78, cz + afstand * 0.62);
     cam.lookAt(cx, 0, cz);
     // eslint-disable-next-line react-hooks/exhaustive-deps

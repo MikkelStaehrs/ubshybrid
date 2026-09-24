@@ -28,8 +28,15 @@ export interface FabrikDel {
   id: string;
   navn: string;
   slags: "linje" | "rum";
-  /** Linjens nummer, hvis den har et. Bestemmer pladsen i rækken. */
+  /** Linjens nummer, hvis den har et. Bestemmer pladsen i rækken; ens numre står i listens rækkefølge. */
   nr?: number;
+  /** Et trin, partiet ikke altid kommer igennem. */
+  valgfri?: boolean;
+  /**
+   * Et rum, der hører til hele produktionen frem for ét trin — lageret, som
+   * trinnene leverer til og henter fra. Det står som et bånd over linjerne.
+   */
+  overLinjerne?: boolean;
 }
 
 /** Den ene ende af en forbindelse: en linje eller et rum — og evt. bestemte maskiner i det. */
@@ -47,6 +54,11 @@ export interface Forbindelse {
   til: Ende;
   /** Findes i dag — ellers er den tænkt og tegnes stiplet. */
   findes: boolean;
+  /**
+   * Udledt af et mønster, driften har sagt, men ikke sagt om netop den her.
+   * Tegnes som de antagne pile på kortet, indtil nogen har bekræftet den.
+   */
+  antaget?: boolean;
   note?: string;
 }
 
@@ -66,6 +78,9 @@ export interface Blok {
   layout: Layout | null;
   /** Målt op mod fabrikkens nulpunkt. */
   maalfast: boolean;
+  valgfri: boolean;
+  /** Står som et bånd over linjerne, og forbindelserne går lodret op til det. */
+  overLinjerne: boolean;
   /** Rackets status, udledt. */
   status?: OtStatus;
 }
@@ -78,6 +93,7 @@ export interface Bue {
   findes: boolean;
   /** Udledt af OT-laget frem for skrevet i hånden. */
   udledt: boolean;
+  antaget: boolean;
   fra: [number, number];
   til: [number, number];
   fraDel: string;
@@ -98,6 +114,10 @@ const KANT = 3;
 /** En del uden tegning får en standardstørrelse. */
 const UTEGNET = { b: 36, d: 18 };
 const RACK = { b: 10, d: 6 };
+/** Dybden på et bånd over linjerne. */
+const BAAND = 12;
+/** Så langt fra hinanden ligger vejen op til båndet og vejen ned. */
+const SIDE = 3;
 
 export function fabrikModel(input: {
   linjer: Record<string, LineData>;
@@ -119,21 +139,27 @@ export function fabrikModel(input: {
       id: t.id, navn: t.data.line.name, slags: input.rum.has(t.id) ? "rum" : "linje", tegnet: true,
       nr: input.rum.has(t.id) ? null : t.data.line.order,
       x0: b.minX - KANT, z0: b.minZ - KANT, x1: b.maxX + KANT, z1: b.maxZ + KANT,
-      forskyd: [0, 0], layout: t.layout, maalfast: true,
+      forskyd: [0, 0], layout: t.layout, maalfast: true, valgfri: false, overLinjerne: false,
     });
   }
   const start = maalfaste.length > 0 ? Math.max(...blokke.map((b) => b.x1)) + MELLEM : 0;
 
   // Rækkerne: linjerne i nummerorden, rummene for sig. Tegnet eller ej.
-  type Kandidat = { id: string; navn: string; nr: number | null; layout: Layout | null; slags: "linje" | "rum" };
+  type Kandidat = {
+    id: string; navn: string; nr: number | null; layout: Layout | null; slags: "linje" | "rum";
+    valgfri: boolean; overLinjerne: boolean;
+  };
   const skematiske: Kandidat[] = [
     ...tegnede.filter((t) => t.data.line.positionMode !== "floorplan").map((t) => ({
       id: t.id, navn: t.data.line.name, nr: input.rum.has(t.id) ? null : t.data.line.order, layout: t.layout,
-      slags: (input.rum.has(t.id) ? "rum" : "linje") as "linje" | "rum",
+      slags: (input.rum.has(t.id) ? "rum" : "linje") as "linje" | "rum", valgfri: false, overLinjerne: false,
     })),
-    ...input.utegnede.filter((u) => !input.linjer[u.id]).map((u) => ({ id: u.id, navn: u.navn, nr: u.nr ?? null, layout: null, slags: u.slags })),
+    ...input.utegnede.filter((u) => !input.linjer[u.id]).map((u) => ({
+      id: u.id, navn: u.navn, nr: u.nr ?? null, layout: null, slags: u.slags, valgfri: !!u.valgfri, overLinjerne: !!u.overLinjerne,
+    })),
   ];
-  const orden = (a: Kandidat, b: Kandidat) => (a.nr ?? 999) - (b.nr ?? 999) || a.navn.localeCompare(b.navn, "da");
+  // Ens numre står i den rækkefølge, de er skrevet — sorteringen er stabil.
+  const orden = (a: Kandidat, b: Kandidat) => (a.nr ?? 999) - (b.nr ?? 999);
   const maal = (k: Kandidat) => k.layout
     ? { b: k.layout.bounds.maxX - k.layout.bounds.minX + 2 * KANT, d: k.layout.bounds.maxZ - k.layout.bounds.minZ + 2 * KANT }
     : UTEGNET;
@@ -147,18 +173,32 @@ export function fabrikModel(input: {
         forskyd: k.layout
           ? [x + KANT - k.layout.bounds.minX, zMidte - (k.layout.bounds.minZ + k.layout.bounds.maxZ) / 2]
           : [0, 0],
-        layout: k.layout, maalfast: false,
+        layout: k.layout, maalfast: false, valgfri: k.valgfri, overLinjerne: false,
       };
       blokke.push(blok);
       x += b + MELLEM;
     }
   };
   const linjeRaekke = skematiske.filter((k) => k.slags === "linje").sort(orden);
-  const rumRaekke = skematiske.filter((k) => k.slags === "rum").sort(orden);
+  const rumRaekke = skematiske.filter((k) => k.slags === "rum" && !k.overLinjerne).sort(orden);
   const dybde = (l: Kandidat[]) => Math.max(0, ...l.map((k) => maal(k).d));
   raekke(linjeRaekke, 0);
   const rumZ = dybde(linjeRaekke) / 2 + MELLEM + dybde(rumRaekke) / 2;
   raekke(rumRaekke, rumZ);
+
+  // Rum over linjerne — lageret — står som et bånd over hele rækken.
+  const linjeBlokke = blokke.filter((b) => b.slags === "linje");
+  let over = linjeBlokke.length > 0 ? Math.min(...linjeBlokke.map((b) => b.z0)) - MELLEM : -MELLEM;
+  for (const k of skematiske.filter((x) => x.overLinjerne)) {
+    const x0 = linjeBlokke.length > 0 ? Math.min(...linjeBlokke.map((b) => b.x0)) : start;
+    const x1 = linjeBlokke.length > 0 ? Math.max(...linjeBlokke.map((b) => b.x1)) : start + UTEGNET.b;
+    blokke.push({
+      id: k.id, navn: k.navn, slags: "rum", tegnet: !!k.layout, nr: null,
+      x0, z0: over - BAAND, x1, z1: over, forskyd: [0, 0], layout: null, maalfast: false,
+      valgfri: k.valgfri, overLinjerne: true,
+    });
+    over -= BAAND + MELLEM;
+  }
 
   // --- Data og netværk: udledt af OT-laget -----------------------------------------
   const infra = new Map<string, OtInfraNode>();
@@ -172,11 +212,14 @@ export function fabrikModel(input: {
   const rack = [...infra.values()].find((n) => n.type === "rack");
   const buer: Bue[] = [];
   if (rack) {
-    const x0 = Math.max(...blokke.map((b) => b.x1)) + MELLEM;
+    // Racket står for sig i rækken med rummene — det er ikke en del af
+    // produktionen, og så krydser databuerne ikke hele fabrikken.
+    const rum = blokke.filter((b) => b.slags === "rum" && !b.overLinjerne);
+    const x0 = (rum.length > 0 ? Math.max(...rum.map((b) => b.x1)) : start) + MELLEM;
     blokke.push({
       id: rack.id, navn: rack.name, slags: "rack", tegnet: true, nr: null,
-      x0, z0: -RACK.d / 2, x1: x0 + RACK.b, z1: RACK.d / 2, forskyd: [0, 0], layout: null, maalfast: false,
-      status: rack.status,
+      x0, z0: rumZ - RACK.d / 2, x1: x0 + RACK.b, z1: rumZ + RACK.d / 2, forskyd: [0, 0], layout: null, maalfast: false,
+      valgfri: false, overLinjerne: false, status: rack.status,
     });
     const midt = (b: Blok): [number, number] => [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2];
     const rackBlok = blokke.at(-1)!;
@@ -188,7 +231,7 @@ export function fabrikModel(input: {
       const brud = trin.find((s) => !isDone(s.status));
       const mssql = trin.find((s) => s.id === "mssql");
       buer.push({
-        id: `data:${id}`, slags: "data", navn: "Data til MSSQL", udledt: true,
+        id: `data:${id}`, slags: "data", navn: "Data til MSSQL", udledt: true, antaget: false,
         findes: !!mssql && isDone(mssql.status),
         note: brud ? `Kæden stopper ved ${brud.label}.` : "Kæden står hele vejen.",
         fra: [skab.pos[0] + blok.forskyd[0], skab.pos[2] + blok.forskyd[1]], til: midt(rackBlok),
@@ -200,7 +243,7 @@ export function fabrikModel(input: {
     const labBlok = blokke.find((b) => b.layout?.machines.some((m) => m.kind === "analysis"));
     if (lab && labBlok) {
       buer.push({
-        id: "data:lab", slags: "data", navn: "Svar til MSSQL", udledt: true, findes: isDone(lab.status),
+        id: "data:lab", slags: "data", navn: "Svar til MSSQL", udledt: true, antaget: false, findes: isDone(lab.status),
         note: isDone(lab.status) ? `${lab.name} leverer.` : `${lab.name} er ikke forbundet.`,
         fra: midt(labBlok), til: midt(rackBlok), fraDel: labBlok.id, tilDel: rack.id,
       });
@@ -227,10 +270,34 @@ export function fabrikModel(input: {
     }
     return ud;
   };
+  // Et bånd over linjerne rammes lige over den anden ende — ikke midt på
+  // båndet, der kan være hele fabrikken bredt.
+  const lodret = (e: Ende, liste: { w: string | null; p: [number, number] }[], anden: { p: [number, number] }[]) => {
+    const blok = blokke.find((b) => b.id === e.del);
+    if (!blok?.overLinjerne || e.wIds?.length || anden.length === 0) return liste;
+    const x = anden.reduce((s, a) => s + a.p[0], 0) / anden.length;
+    return [{ w: null, p: [Math.min(blok.x1, Math.max(blok.x0, x)), (blok.z0 + blok.z1) / 2] as [number, number] }];
+  };
+  // Til og fra båndet går side om side: op til venstre, ned til højre. Ellers
+  // lå de to retninger oven i hinanden, og den ene kunne ikke ses.
+  const sideOmSide = (f: Forbindelse, p: [number, number]): [number, number] => {
+    const op = blokke.find((b) => b.id === f.til.del)?.overLinjerne;
+    const ned = blokke.find((b) => b.id === f.fra.del)?.overLinjerne;
+    return op ? [p[0] - SIDE, p[1]] : ned ? [p[0] + SIDE, p[1]] : p;
+  };
+  // Mod båndet går en del uden bestemte maskiner fra sin overkant — ikke fra
+  // midten, hvor navnet står.
+  const overkant = (e: Ende, liste: { w: string | null; p: [number, number] }[], anden: Ende) => {
+    const blok = blokke.find((b) => b.id === e.del);
+    if (!blokke.find((b) => b.id === anden.del)?.overLinjerne || !blok || blok.overLinjerne || e.wIds?.length) return liste;
+    return liste.map((x) => ({ ...x, p: [x.p[0], blok.z0] as [number, number] }));
+  };
   for (const f of input.forbindelser) {
-    const fra = punkter(f.fra, f, "fra");
-    const til = punkter(f.til, f, "til");
-    if (fra.length === 0 || til.length === 0) continue;
+    const fraRaa = punkter(f.fra, f, "fra");
+    const tilRaa = punkter(f.til, f, "til");
+    if (fraRaa.length === 0 || tilRaa.length === 0) continue;
+    const fra = overkant(f.fra, lodret(f.fra, fraRaa, tilRaa), f.til);
+    const til = overkant(f.til, lodret(f.til, tilRaa, fraRaa), f.fra);
     // Flere maskiner i den ene ende: én bue fra hver, mod midten af den anden.
     const midten = (l: { p: [number, number] }[]): [number, number] =>
       [l.reduce((s, x) => s + x.p[0], 0) / l.length, l.reduce((s, x) => s + x.p[1], 0) / l.length];
@@ -238,7 +305,8 @@ export function fabrikModel(input: {
     for (const x of mange) {
       buer.push({
         id: x.w ? `${f.id}:${x.w}` : f.id, slags: f.slags, navn: f.navn, note: f.note, findes: f.findes, udledt: false,
-        fra: vendt ? en : x.p, til: vendt ? x.p : en, fraDel: f.fra.del, tilDel: f.til.del,
+        antaget: !!f.antaget,
+        fra: sideOmSide(f, vendt ? en : x.p), til: sideOmSide(f, vendt ? x.p : en), fraDel: f.fra.del, tilDel: f.til.del,
       });
     }
   }

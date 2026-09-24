@@ -366,6 +366,9 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fb-streg.s-data { --c: var(--ot-cabinet); }
 .fb-streg.s-mennesker { --c: var(--m-person); }
 .fb-streg.is-stiplet { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+/* Antaget: som de antagne pile på kortet. */
+.fb-streg.is-antaget { background: repeating-linear-gradient(90deg, var(--warn) 0 4px, transparent 4px 8px); }
+.fb-antaget { margin-left: 6px; font-style: normal; font-weight: 400; font-size: 11px; color: var(--warn); }
 .fm-legend p.fb-noegle { display: flex; align-items: center; gap: 6px; }
 .fb-liste { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; }
 .fb-liste button {

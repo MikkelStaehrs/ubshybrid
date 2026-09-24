@@ -179,7 +179,14 @@ står — det rigtige OT-lag, ikke fremskrivningen.
   skematiske stilles ved siden af. Intet ligger oven i hinanden; det har en
   test.
 - **Det, der ikke er tegnet, står stiplet** med sit navn (`UTEGNEDE` i
-  `data/fabrik.ts`), så forbindelser kan pege på det allerede nu.
+  `data/fabrik.ts`), så forbindelser kan pege på det allerede nu. Ens numre
+  står i den rækkefølge, de er skrevet; et trin, partiet ikke altid kommer
+  igennem, er `valgfri` (Steeping).
+- **Warehouse står over linjerne** (`overLinjerne`), sagt af driften: det er
+  ikke et trin i rækken, men det, trinnene leverer til og henter fra. Det er
+  et bånd over hele rækken, og en forbindelse går lodret op fra sit trins
+  overkant — til båndet til venstre, fra båndet til højre, så de to
+  retninger ikke ligger oven i hinanden.
 - **Fire slags forbindelser:** materialeflow, prøver, data og netværk,
   mennesker. Tre er håndholdte (`FORBINDELSER`), bundet til W-ID eller til
   en linje eller et rum som helhed. **Data og netværk udledes** af OT-laget:
@@ -192,8 +199,11 @@ står — det rigtige OT-lag, ikke fremskrivningen.
   tokens.
 - **En forbindelse, der peger på noget, der ikke findes, tegnes ikke — og
   det siges** i panelet. En test holder den håndholdte liste ren.
-- **Forbindelser opfindes ikke.** Kun det, driften har sagt, står i
-  `FORBINDELSER`.
+- **Forbindelser opfindes ikke.** Det, driften har sagt, står som fundet.
+  Det, der følger af et mønster, driften har sagt — "en slibning leveres
+  oftest til Warehouse, før den går i Pillering, osv." — står som
+  **antaget** (`antaget: true`) og tegnes som de antagne pile på kortet:
+  orange og stiplet, til nogen har bekræftet det.
 
 ## HUD'en på /ai
 
