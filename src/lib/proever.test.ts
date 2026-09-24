@@ -4,7 +4,7 @@ import sliberi from "../../data/lines/sliberi.json";
 import { FLOW_NOMINAL, FREMMEDE, KASTEBORDET, ORDRE, PROCES, PROEVER } from "../../data/fremskrivning";
 import { layoutLine } from "./layout";
 import {
-  ctPlan, ctProeve, efterJetpealer, efterSortering, fremmedIalt, iAlt, nytParti, skil, vurder,
+  ctPlan, ctProeve, efterJetpealer, efterSortering, fremmedIalt, iAlt, nytParti, skil, VIDEOMETER, vurder,
   type CtSvar, type Stroem,
 } from "./proever";
 import type { Besked } from "./samspil";
@@ -90,6 +90,13 @@ describe("prøverne", () => {
     const parti = nytParti(rng(3), 1);
     const c = ctProeve(skil(typisk(), 0, 0).mainline, parti, rng(4));
     assert.ok(Math.abs(c.fv.reduce((a, b) => a + b, 0) - 100) < 1e-9);
+  });
+
+  it("simuleringens plan peger kun på prøvesteder, driften har registreret", () => {
+    // Ét sted, et prøvested er defineret: data/proevesteder.ts. Planen er et
+    // skøn over rækkefølgen — ikke et sted at opfinde nye prøver.
+    for (const sted of ctPlan(layout, kortNavn)) assert.ok(sted.proevested, `${sted.navn} er ikke et prøvested`);
+    assert.ok(VIDEOMETER.proevested, "videometerprøven er ikke et prøvested");
   });
 
   it("den faste plan har alle fire kasteborde med tre strømme og begge jetpealere", () => {

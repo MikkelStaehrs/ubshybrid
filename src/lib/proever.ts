@@ -13,6 +13,7 @@
 //
 // Alle tal kommer fra data/fremskrivning.ts og er skøn.
 import { FREMMEDE, KASTEBORDET, PARTI, PROCES, PROEVER, type Fremmed } from "../../data/fremskrivning";
+import { PROEVESTEDER, type Proevested } from "../../data/proevesteder";
 import type { Layout, PlacedMachine } from "./layout";
 
 // ---------------------------------------------------------------------------
@@ -253,6 +254,13 @@ export interface ProeveSted {
   fraktion: Fraktion | null;
   /** Hvilket kastebord i sporet: 0 er det første. */
   bord: number | null;
+  /** Prøvestedet i data/proevesteder.ts — og dermed operationsnummeret. null: stedet er ikke registreret. */
+  proevested: Proevested | null;
+}
+
+/** Prøvestedet for en maskine og evt. en strøm, som driften har registreret det. */
+export function proevestedFor(wId: string, fraktion: Fraktion | null): Proevested | null {
+  return PROEVESTEDER.find((p) => p.hvor.wId === wId && (p.hvor.stroem ?? null) === fraktion) ?? null;
 }
 
 const KB = /^kb[-\s]/i;
@@ -275,14 +283,14 @@ export function ctPlan(layout: Layout, kort: (m: PlacedMachine) => string): Proe
     const [a, b] = id.split(":");
     if (a === "jetpealer") {
       const m = layout.machines.find((x) => JETPEALER.test(x.name) && x.lane === b);
-      if (m) steder.push({ id, navn: `Efter ${kort(m)}`, instrument: "ct", lane: b, maskine: m.id, fraktion: null, bord: null });
+      if (m) steder.push({ id, navn: `Efter ${kort(m)}`, instrument: "ct", lane: b, maskine: m.id, fraktion: null, bord: null, proevested: proevestedFor(m.wIds[0], null) });
       continue;
     }
     const m = layout.machines.find((x) => x.wIds.includes(a) && KB.test(x.name));
     if (!m || !m.lane) continue;
     const fraktion = b as Fraktion;
     const bord = (borde.get(m.lane) ?? []).findIndex((x) => x.id === m.id);
-    steder.push({ id, navn: `${FRAKTION[fraktion]} ${kort(m)}`, instrument: "ct", lane: m.lane, maskine: m.id, fraktion, bord });
+    steder.push({ id, navn: `${FRAKTION[fraktion]} ${kort(m)}`, instrument: "ct", lane: m.lane, maskine: m.id, fraktion, bord, proevested: proevestedFor(a, fraktion) });
   }
   return steder;
 }
@@ -291,6 +299,7 @@ export const FRAKTION: Record<Fraktion, string> = { heavy: "Heavy", light: "Ligh
 
 export const VIDEOMETER: ProeveSted = {
   id: "videometer", navn: "Videometer", instrument: "videometer", lane: null, maskine: null, fraktion: null, bord: null,
+  proevested: PROEVESTEDER.find((p) => p.analyse.instrument === "videometer" && p.slags === "proces") ?? null,
 };
 
 // ---------------------------------------------------------------------------

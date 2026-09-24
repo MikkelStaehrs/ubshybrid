@@ -10,6 +10,7 @@
 // håndholdte (data/fabrik.ts), bundet til W-ID eller til en linje eller et rum
 // som helhed. Data og netværk udledes af OT-laget: om en linjes skab når frem
 // til databasen, afgør pathState() — den samme dom som kæden på kortet.
+import { INSTRUMENT_NAVN, type Proevested } from "../../data/proevesteder";
 import { halfExtent, layoutLine, type Layout } from "./layout";
 import { isDone, pathState, type OtLayout } from "./ot";
 import type { LineData, OtInfraNode, OtStatus } from "./types";
@@ -98,11 +99,27 @@ export interface Bue {
   til: [number, number];
   fraDel: string;
   tilDel: string;
+  /** Prøvestederne, buen samler — så de kan lyse op, når den vælges. */
+  steder?: string[];
+}
+
+/** Prøverne på én maskine: ét mærkat, med hvert prøvested i det. */
+export interface ProeveMaerke {
+  id: string;
+  del: string;
+  wId: string;
+  /** Maskinens navn, som tegningen har det. Til skærmen. */
+  maskine: string;
+  p: [number, number];
+  /** Maskinens højde — mærkatet står over den. */
+  h: number;
+  steder: Proevested[];
 }
 
 export interface FabrikModel {
   blokke: Blok[];
   buer: Bue[];
+  proever: ProeveMaerke[];
   /** Forbindelser, der peger på noget, der ikke findes. De tegnes ikke — og det siges. */
   fejl: string[];
   graenser: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -124,6 +141,7 @@ export function fabrikModel(input: {
   rum: Set<string>;
   utegnede: FabrikDel[];
   forbindelser: Forbindelse[];
+  proevesteder: Proevested[];
   /** OT-laget for en tegnet linje eller et rum, hvis der er et. */
   ot: (id: string, layout: Layout) => OtLayout | null;
 }): FabrikModel {
@@ -311,11 +329,49 @@ export function fabrikModel(input: {
     }
   }
 
+  // --- Prøvestederne: ét mærkat pr. maskine, én bue pr. instrument ------------------
+  // Syv buer fra syv maskiner til samme rum var ikke til at læse. Stederne
+  // står som mærkater på maskinerne; buen samler dem pr. instrument.
+  const proever: ProeveMaerke[] = [];
+  const grupper = new Map<string, { steder: Proevested[]; tilDel: string; instrument: Proevested["analyse"]["instrument"]; del: string; slags: Proevested["slags"] }>();
+  for (const st of input.proevesteder) {
+    const blok = blokke.find((b) => b.id === st.hvor.del);
+    const maal = blokke.find((b) => b.id === st.analyse.del);
+    if (!blok || !blok.layout) { fejl.push(`${st.id}: "${st.hvor.del}" er ikke tegnet`); continue; }
+    if (!maal) { fejl.push(`${st.id}: "${st.analyse.del}" findes hverken som linje, rum eller utegnet del`); continue; }
+    const m = blok.layout.machines.find((x) => x.wIds.includes(st.hvor.wId));
+    if (!m) { fejl.push(`${st.id}: W-${st.hvor.wId} findes ikke i ${blok.navn}`); continue; }
+    const id = `${st.hvor.del}:${st.hvor.wId}`;
+    let mk = proever.find((x) => x.id === id);
+    if (!mk) {
+      mk = { id, del: st.hvor.del, wId: st.hvor.wId, maskine: m.name, p: [m.pos[0] + blok.forskyd[0], m.pos[2] + blok.forskyd[1]], h: m.size.h, steder: [] };
+      proever.push(mk);
+    }
+    mk.steder.push(st);
+    const g = `${st.hvor.del}:${st.analyse.del}:${st.analyse.instrument}:${st.slags}`;
+    const gr = grupper.get(g) ?? { steder: [], tilDel: st.analyse.del, instrument: st.analyse.instrument, del: st.hvor.del, slags: st.slags };
+    gr.steder.push(st);
+    grupper.set(g, gr);
+  }
+  for (const [g, gr] of grupper) {
+    const punkter = gr.steder.map((st) => proever.find((x) => x.id === `${st.hvor.del}:${st.hvor.wId}`)!.p);
+    const midt: [number, number] = [punkter.reduce((s, p) => s + p[0], 0) / punkter.length, punkter.reduce((s, p) => s + p[1], 0) / punkter.length];
+    const maal = blokke.find((b) => b.id === gr.tilDel)!;
+    const n = gr.steder.length;
+    buer.push({
+      id: `proeve:${g}`, slags: "proever", udledt: false, antaget: false, findes: true,
+      navn: `${INSTRUMENT_NAVN[gr.instrument]} · ${n} ${n === 1 ? "prøvested" : "prøvesteder"}`,
+      note: `${gr.slags === "ista" ? "ISTA-prøver" : "Procesprøver"}: ${gr.steder.map((st) => st.navn).join(", ")}.`,
+      fra: midt, til: [(maal.x0 + maal.x1) / 2, (maal.z0 + maal.z1) / 2],
+      fraDel: gr.del, tilDel: gr.tilDel, steder: gr.steder.map((st) => st.id),
+    });
+  }
+
   const graenser = {
     minX: Math.min(...blokke.map((b) => b.x0)), maxX: Math.max(...blokke.map((b) => b.x1)),
     minZ: Math.min(...blokke.map((b) => b.z0)), maxZ: Math.max(...blokke.map((b) => b.z1)),
   };
-  return { blokke, buer, fejl, graenser };
+  return { blokke, buer, proever, fejl, graenser };
 }
 
 /** Overlapper to blokke? Til testen — og til den, der flytter noget. */

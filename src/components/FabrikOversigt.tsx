@@ -1,11 +1,12 @@
 "use client";
-import { Line, MapControls } from "@react-three/drei";
+import { Html, Line, MapControls } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import { MathUtils, type PerspectiveCamera } from "three";
 import { FORBINDELSER, UTEGNEDE } from "../../data/fabrik";
+import { INSTRUMENT_NAVN, PROEVESTEDER, type Proevested } from "../../data/proevesteder";
 import { SITE } from "../lib/context";
-import { fabrikModel, paaGrunden, SLAGS_NAVN, type Blok, type Bue, type FabrikModel, type ForbindelseSlags } from "../lib/fabrik";
+import { fabrikModel, paaGrunden, SLAGS_NAVN, type Blok, type Bue, type FabrikModel, type ForbindelseSlags, type ProeveMaerke } from "../lib/fabrik";
 import type { Layout } from "../lib/layout";
 import { FABRIK_ID, LINES, type LineOption } from "../lib/lines";
 import { isDone, layoutOt, otLayerFor } from "../lib/ot";
@@ -56,25 +57,32 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
     rum: new Set(rooms.map((r) => r.id)),
     utegnede: UTEGNEDE,
     forbindelser: FORBINDELSER,
+    proevesteder: PROEVESTEDER,
     ot: otFor,
   }), [rooms]);
   const [vis, setVis] = useState<Record<ForbindelseSlags, boolean>>({ materiale: true, proever: true, data: true, mennesker: true });
   const [valgt, setValgt] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  /** Valgte prøvesteder — fra et mærkat eller fra listen. De lyser op på kortet. */
+  const [valgteSteder, setValgteSteder] = useState<string[]>([]);
+  const vaelgSteder = (ids: string[]) => { setValgt(null); setValgteSteder((f) => (f.join() === ids.join() ? [] : ids)); };
 
   const tegnede = model.blokke.filter((b) => b.tegnet && b.slags !== "rack").length;
   const utegnede = model.blokke.filter((b) => !b.tegnet).length;
-  // Én forbindelse kan være flere buer — én fra hver maskine.
-  const forbindelse = (b: Bue) => b.id.split(":").slice(0, b.udledt ? 2 : 1).join(":");
+  // Én forbindelse kan være flere buer — én fra hver maskine. En prøvebue er
+  // allerede samlet pr. instrument og er sin egen.
+  const forbindelse = (b: Bue) => (b.steder ? b.id : b.id.split(":").slice(0, b.udledt ? 2 : 1).join(":"));
   const forbindelser = [...new Map(model.buer.map((b) => [forbindelse(b), b])).values()];
-  const antal = (s: ForbindelseSlags) => forbindelser.filter((b) => b.slags === s).length;
+  // Prøverne tælles i prøvesteder — en bue samler mange.
+  const antal = (s: ForbindelseSlags) => (s === "proever" ? PROEVESTEDER.length : forbindelser.filter((b) => b.slags === s).length);
+  const lyser = (b: Bue) => valgt === forbindelse(b) || (!!b.steder && b.steder.some((id) => valgteSteder.includes(id)));
   const personer = model.blokke.reduce((n, b) => n + (b.layout?.machines.filter((m) => m.kind === "person").length ?? 0), 0);
 
   return (
     <div className="fm-root is-fabrik">
       <div className="fm-canvas" data-hovering={over ? "" : undefined}>
         {theme && (
-          <Canvas dpr={[1, 2]} camera={{ fov: 30, near: 0.5, far: 4000, position: [0, 120, 120] }} onPointerMissed={() => setValgt(null)}>
+          <Canvas dpr={[1, 2]} camera={{ fov: 30, near: 0.5, far: 4000, position: [0, 120, 120] }} onPointerMissed={() => { setValgt(null); setValgteSteder([]); }}>
             <Grund model={model} theme={theme} />
             {model.blokke.map((b) => (
               <BlokMesh
@@ -88,7 +96,15 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
             ))}
             {model.buer.filter((b) => vis[b.slags]).map((b) => (
               // En antaget forbindelse har de antagne pilses farve, som på kortet.
-              <BueMesh key={b.id} bue={b} farve={theme[b.antaget ? "warn" : FARVE[b.slags]]} valgt={valgt === forbindelse(b)} />
+              <BueMesh key={b.id} bue={b} farve={theme[b.antaget ? "warn" : FARVE[b.slags]]} valgt={lyser(b)} />
+            ))}
+            {vis.proever && model.proever.map((mk) => (
+              <ProeveMaerkat
+                key={mk.id}
+                mk={mk}
+                valgt={mk.steder.some((st) => valgteSteder.includes(st.id))}
+                onVaelg={() => vaelgSteder(mk.steder.map((st) => st.id))}
+              />
             ))}
             <Kamera model={model} />
           </Canvas>
@@ -132,7 +148,11 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
             const navn = (d: string) => model.blokke.find((x) => x.id === d)?.navn ?? d;
             return (
               <li key={id}>
-                <button type="button" className={valgt === id ? "is-valgt" : undefined} onClick={() => setValgt(valgt === id ? null : id)}>
+                <button
+                  type="button"
+                  className={valgt === id || lyser(b) ? "is-valgt" : undefined}
+                  onClick={() => { setValgteSteder(b.steder && valgt !== id ? b.steder : []); setValgt(valgt === id ? null : id); }}
+                >
                   <span className={`fb-streg s-${b.slags}${b.antaget ? " is-antaget" : b.findes ? "" : " is-stiplet"}`} />
                   <span className="fb-navn">{b.navn}{b.antaget && <em className="fb-antaget">Antaget</em>}</span>
                   <span className="fb-hvor">{navn(b.fraDel)} → {navn(b.tilDel)}</span>
@@ -142,6 +162,7 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
             );
           })}
         </ul>
+        {vis.proever && <ProeveListe valgte={valgteSteder} onVaelg={(id) => vaelgSteder([id])} />}
         {model.fejl.length > 0 && (
           <div className="fb-fejl" role="alert">
             {model.fejl.map((f) => <p key={f}>{f}</p>)}
@@ -156,6 +177,93 @@ export function FabrikOversigt({ lines, rooms, onSelectLine }: {
 }
 
 // ---------------------------------------------------------------------------
+
+/** Et tomt felt siger det selv — det gættes ikke. */
+const IKKE_UDFYLDT = "Ikke udfyldt";
+
+/**
+ * Prøverne på én maskine. Sammenklappet er det et lille mærke: antallet —
+ * eller operationsnummeret, når der kun er ét. Valgt folder det ud med
+ * maskinen og hvert prøvested. Mærket er HTML, så det kan læses i enhver
+ * zoom, og lille nok til, at syv på én linje ikke dækker hinanden.
+ */
+function ProeveMaerkat({ mk, valgt, onVaelg }: { mk: ProeveMaerke; valgt: boolean; onVaelg: () => void }) {
+  const ista = mk.steder.some((st) => st.slags === "ista");
+  const en = mk.steder.length === 1 ? mk.steder[0] : null;
+  const titel = `${mk.maskine}: ${mk.steder.map((st) => `${st.operationsnr ?? IKKE_UDFYLDT} ${st.navn}`).join(", ")}`;
+  // Html sætter kun z-index, når mærket flytter sig på skærmen. Nøglen
+  // monterer det forfra, når det vælges, så det valgte ligger øverst.
+  return (
+    <Html key={valgt ? "valgt" : "lukket"} position={[mk.p[0], mk.h + 1.2, mk.p[1]]} center zIndexRange={valgt ? [40, 30] : [20, 0]}>
+      <button
+        type="button"
+        className={`fb-pr${valgt ? " is-valgt" : ""}${ista ? " is-ista" : ""}`}
+        title={titel}
+        aria-label={titel}
+        onClick={onVaelg}
+      >
+        {valgt ? (
+          <>
+            <b>{mk.maskine}</b>
+            <span className="fb-pr-liste">
+              {mk.steder.map((st) => (
+                <span key={st.id}>
+                  <i>{st.operationsnr ?? "–"}</i>
+                  {/* Maskinen står allerede øverst; tilbage er strømmen. */}
+                  <span>{st.navn.startsWith(`${mk.maskine} `) ? st.navn.slice(mk.maskine.length + 1) : st.navn}</span>
+                </span>
+              ))}
+            </span>
+          </>
+        ) : (
+          <span className="fb-pr-tal">{en?.operationsnr ?? mk.steder.length}</span>
+        )}
+      </button>
+    </Html>
+  );
+}
+
+/** Prøvestederne i panelet, delt i proces og ISTA. Det valgte folder formål og hyppighed ud. */
+function ProeveListe({ valgte, onVaelg }: { valgte: string[]; onVaelg: (id: string) => void }) {
+  const grupper: { slags: Proevested["slags"]; navn: string }[] = [
+    { slags: "proces", navn: "Procesprøver" },
+    { slags: "ista", navn: "ISTA-prøver" },
+  ];
+  return (
+    <div className="fb-proever">
+      {grupper.map((g) => {
+        const liste = PROEVESTEDER.filter((st) => st.slags === g.slags);
+        return (
+          <section key={g.slags}>
+            <h3>{g.navn} <span className="fm-mono">{liste.length}</span></h3>
+            {liste.length === 0 ? <p>Ikke sagt endnu.</p> : (
+              <ul>
+                {liste.map((st) => {
+                  const aaben = valgte.length === 1 && valgte[0] === st.id;
+                  return (
+                    <li key={st.id}>
+                      <button type="button" className={valgte.includes(st.id) ? "is-valgt" : undefined} onClick={() => onVaelg(st.id)}>
+                        <span className={`fb-opnr${st.operationsnr ? "" : " is-tom"}`}>{st.operationsnr ?? IKKE_UDFYLDT}</span>
+                        <span className="fb-navn">{st.navn}</span>
+                        <span className="fb-hvor">{INSTRUMENT_NAVN[st.analyse.instrument]}</span>
+                        {aaben && (
+                          <span className="fb-note">
+                            {st.formaal}
+                            <br />Hyppighed: {st.hyppighed ?? IKKE_UDFYLDT}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 function Grund({ model, theme }: { model: FabrikModel; theme: SceneTheme }) {
   const g = model.graenser;

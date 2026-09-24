@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FORBINDELSER, UTEGNEDE } from "../../data/fabrik";
+import { PROEVESTEDER, type Proevested } from "../../data/proevesteder";
 import { fabrikModel, overlapper, type Forbindelse } from "./fabrik";
 import type { Layout } from "./layout";
 import { LINES } from "./lines";
@@ -23,7 +24,7 @@ const otRejst = (id: string, layout: Layout): OtLayout | null => {
   };
 };
 const model = (over: Partial<Parameters<typeof fabrikModel>[0]> = {}) =>
-  fabrikModel({ linjer: LINES, rum: RUM, utegnede: UTEGNEDE, forbindelser: FORBINDELSER, ot: otRigtig, ...over });
+  fabrikModel({ linjer: LINES, rum: RUM, utegnede: UTEGNEDE, forbindelser: FORBINDELSER, proevesteder: PROEVESTEDER, ot: otRigtig, ...over });
 
 describe("hele fabrikken", () => {
   it("har en blok for hver tegnet linje og hvert rum — og ingen ligger oven i en anden", () => {
@@ -112,16 +113,34 @@ describe("forbindelserne", () => {
     assert.match(m.fejl[1], /findes-ikke/);
   });
 
-  it("CT-prøverne går fra de maskiner, prøverne tages ved", () => {
+  it("prøvestederne står som ét mærkat pr. maskine — på maskinen", () => {
     const m = model();
     const s = m.blokke.find((b) => b.id === "sliberi")!;
-    const ct = m.buer.filter((b) => b.id.startsWith("F-CT:"));
-    assert.equal(ct.length, 6);
-    for (const b of ct) {
-      const w = b.id.split(":")[1];
-      const mk = s.layout!.machines.find((x) => x.wIds.includes(w))!;
-      assert.deepEqual(b.fra, [mk.pos[0] + s.forskyd[0], mk.pos[2] + s.forskyd[1]]);
+    assert.equal(m.proever.reduce((n, x) => n + x.steder.length, 0), PROEVESTEDER.length);
+    for (const mk of m.proever) {
+      const maskine = s.layout!.machines.find((x) => x.wIds.includes(mk.wId))!;
+      assert.deepEqual(mk.p, [maskine.pos[0] + s.forskyd[0], maskine.pos[2] + s.forskyd[1]]);
     }
+    // Et kastebord har tre: Heavy, Light og Mainline.
+    assert.equal(m.proever.find((x) => x.wId === "636")!.steder.length, 3);
+  });
+
+  it("én bue pr. instrument — ikke én pr. prøvested", () => {
+    const m = model();
+    const proeve = m.buer.filter((b) => b.slags === "proever");
+    const instrumenter = new Set(PROEVESTEDER.map((st) => `${st.hvor.del}:${st.analyse.instrument}:${st.slags}`));
+    assert.equal(proeve.length, instrumenter.size);
+    for (const b of proeve) assert.ok(b.steder && b.steder.length > 0);
+    assert.equal(proeve.reduce((n, b) => n + b.steder!.length, 0), PROEVESTEDER.length);
+  });
+
+  it("et prøvested på en maskine, der ikke findes, siges", () => {
+    const forkert: Proevested = { ...PROEVESTEDER[0], id: "x", hvor: { del: "sliberi", wId: "000" } };
+    assert.match(model({ proevesteder: [forkert] }).fejl.join(), /W-000/);
+  });
+
+  it("et operationsnummer gættes ikke — står det tomt, er det tomt", () => {
+    for (const st of PROEVESTEDER) assert.ok(st.operationsnr === null || /\S/.test(st.operationsnr), st.id);
   });
 
   it("data og netværk udledes: stiplet i dag, fuld streg, når kæden står", () => {

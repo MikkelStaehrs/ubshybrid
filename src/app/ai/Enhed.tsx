@@ -284,7 +284,12 @@ function Proever({ proever, sim }: { proever: ProeveSvar[]; sim: boolean }) {
             || (k === "Godt frø" && p.sted.fraktion === "light" && v > g.lightGodt));
           return (
             <div key={p.sted.id}>
-              <dt>{p.sted.fraktion ? FRAKTION[p.sted.fraktion] : "CT"}<span className="he-tid">{klokke(p.taget)}</span></dt>
+              <dt>
+                {p.sted.fraktion ? FRAKTION[p.sted.fraktion] : "CT"}
+                <span className="he-tid">{klokke(p.taget)}</span>
+                {/* Laboratoriets operationsnummer. Tomt er en streg — det gættes ikke. */}
+                <span className="he-tid">OP {p.sted.proevested?.operationsnr ?? "–"}</span>
+              </dt>
               <dd>
                 {tal3.map(([k, v, d, enhed]) => (
                   <span key={k} className={over(k, v) ? "is-over" : undefined}><b>{k}</b><span className="fm-num">{tal(v, d)}<i>{enhed}</i></span></span>

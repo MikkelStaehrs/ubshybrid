@@ -388,6 +388,66 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fb-hvor { grid-column: 2; font-size: 12px; color: var(--muted); }
 .fb-note { grid-column: 2; margin-top: 4px; font-size: 12px; line-height: 1.4; color: var(--ink); }
 .fb-fejl { margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: var(--warn-soft); }
+
+/* Prøvestederne: et lille mærke pr. maskine, i analyseudstyrets farve.
+   Procesprøver er fyldte; ISTA-prøver er omrids. Valgt folder det ud. */
+.fb-pr {
+  display: grid;
+  gap: 3px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--m-analysis);
+  border-radius: 9px;
+  background: var(--m-analysis);
+  color: var(--surface-solid);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-align: center;
+  cursor: pointer;
+}
+.fb-pr.is-ista { background: var(--surface-solid); color: var(--m-analysis); }
+.fb-pr.is-valgt {
+  padding: 5px 8px;
+  border-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--m-analysis) 25%, transparent);
+}
+.fb-pr-tal { font-family: var(--font-mono); }
+/* Det udfoldede kort står over maskinen, ikke oven på den og dens naboer. */
+.fb-pr.is-valgt { transform: translateY(calc(-50% - 10px)); }
+.fb-pr-liste {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 8px;
+  padding-top: 3px;
+  border-top: 1px solid var(--line);
+  font-weight: 500;
+}
+.fb-pr-liste > span { display: contents; }
+.fb-pr-liste i { font-style: normal; font-family: var(--font-mono); color: var(--muted); }
+.fb-proever { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.fb-proever h3 { margin: 0 0 4px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.fb-proever ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.fb-proever button {
+  display: grid;
+  grid-template-columns: 78px 1fr auto;
+  column-gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+}
+.fb-proever button:hover, .fb-proever button.is-valgt { background: var(--surface-2); border-color: var(--line); }
+.fb-proever .fb-note { grid-column: 1 / -1; }
+.fb-opnr { font-family: var(--font-mono); font-size: 12px; }
+.fb-opnr.is-tom { color: var(--muted); font-family: inherit; font-size: 11px; }
 .fm-legend .fb-fejl p { margin: 0; color: var(--ink); }
 
 /* --- Legend -------------------------------------------------------------- */

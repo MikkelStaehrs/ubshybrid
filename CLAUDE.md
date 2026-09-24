@@ -19,7 +19,8 @@ Den vigtigste skelnen i repoet. Bland de to, og arbejde går tabt.
 | `data/line-config.ts` | Håndholdt — normtakt, stopdefinition, stopårsager |
 | `data/agents.ts` | Håndholdt — agenterne |
 | `data/fremskrivning.ts` | Håndholdt — fremskrivningens antagelser: kanaler, driftspunkter, alarmgrænser |
-| `data/fabrik.ts` | Håndholdt — afdelinger uden tegning, og materialeflow, prøver og mennesker mellem delene |
+| `data/fabrik.ts` | Håndholdt — afdelinger uden tegning, og materialeflow og mennesker mellem delene |
+| `data/proevesteder.ts` | Håndholdt — prøvestederne: operationsnummer, proces eller ISTA, formål, hvor de tages og analyseres |
 
 Alt håndholdt bindes til maskinerne på **W-ID**, aldrig på tegningens celle-id
 eller på maskinens navn. En hændelse, en sensor eller en override skal følge
@@ -188,8 +189,9 @@ står — det rigtige OT-lag, ikke fremskrivningen.
   overkant — til båndet til venstre, fra båndet til højre, så de to
   retninger ikke ligger oven i hinanden.
 - **Fire slags forbindelser:** materialeflow, prøver, data og netværk,
-  mennesker. Tre er håndholdte (`FORBINDELSER`), bundet til W-ID eller til
-  en linje eller et rum som helhed. **Data og netværk udledes** af OT-laget:
+  mennesker. Materialeflow og mennesker er håndholdte (`FORBINDELSER`),
+  bundet til W-ID eller til en linje eller et rum som helhed. Prøverne
+  kommer fra `data/proevesteder.ts` (se nedenfor). **Data og netværk udledes** af OT-laget:
   om en linjes skab når frem til MSSQL, afgør `pathState()`, og
   laboratoriets svar følger `INF-LAB`. Skrev vi dem i hånden, ville de lyve,
   så snart kæden blev rejst. Det har en test.
@@ -204,6 +206,14 @@ står — det rigtige OT-lag, ikke fremskrivningen.
   oftest til Warehouse, før den går i Pillering, osv." — står som
   **antaget** (`antaget: true`) og tegnes som de antagne pile på kortet:
   orange og stiplet, til nogen har bekræftet det.
+- **Et prøvested er et mærke på maskinen, ikke en bue.** Syv buer fra syv
+  maskiner til samme rum var ikke til at læse. Hver maskine med prøver får
+  ét lille mærke — antallet, eller operationsnummeret, når der kun er ét —
+  og buen samler stederne pr. instrument: "CT-scanner · 14 prøvesteder".
+  Klik på mærket folder det ud over maskinen med hvert sted; mærket, buen og
+  rækken i panelets prøveliste lyser sammen. Procesprøver er fyldte,
+  ISTA-prøver omrids. Mærket er HTML, så det kan læses i enhver zoom. Én bue
+  pr. instrument og mærket på maskinen har tests.
 
 ## HUD'en på /ai
 
@@ -531,6 +541,20 @@ simuleringen skal vise.
   som den forudsætter kæden. Laboratoriet er ikke et led i signalkæden:
   prøverne går ikke gennem skabet.
 
+**Prøvestederne står ét sted: `data/proevesteder.ts`.** Kortet tegner dem,
+og simuleringens plan peger på dem — en test holder, at hvert sted i
+`PROEVER.ctPlan` og videometerets prøve er et registreret prøvested. Planen
+er et skøn over rækkefølgen, ikke et sted at opfinde nye prøver. Et
+prøvested bindes til W-ID, og på et kastebord til strømmen.
+
+- **To slags, sagt af driften.** *Procesprøver* er dem, vi handler på
+  maskinerne efter løbende. *ISTA-prøver* er de officielle. Listen over
+  ISTA-prøverne er tom, til driften har sagt, hvor de tages.
+- **Operationsnummeret er laboratoriets.** Det står i panelet, på mærket og
+  ved prøven i enheden. Står det tomt, står der "Ikke udfyldt" i panelet og
+  en streg på det udfoldede mærke og i enheden ("OP –") — det gættes ikke,
+  og det har en test. Det samme gælder hyppigheden.
+
 **Prøvetagningsagenten** (`engine: "kode"`) følger planen og melder hvert
 svar — CT til sporets linjeagent, videometer til Operatøragenten — med,
 hvornår prøven blev taget, og hvornår der kommer et svar fra samme sted igen.
@@ -724,7 +748,9 @@ nummer. Får den en tegning, registreres den som en linje med samme id (se
 
 En forbindelse skrives i `FORBINDELSER`: slags, et navn på højst fire ord,
 fra og til (en linje eller et rum, og evt. W-ID'er) og om den findes i dag.
-Data og netværk skrives ikke — de udledes af OT-laget.
+Data og netværk skrives ikke — de udledes af OT-laget. Prøver skrives heller
+ikke her: et prøvested skrives i `data/proevesteder.ts` med maskinens W-ID
+(og strømmen på et kastebord), og buen følger af sig selv.
 
 ### Nyt signal
 
@@ -795,6 +821,12 @@ har sagt tallet.
 - **Laboratoriets svar er et `dataset`, ikke et signal** — og det er ikke
   forbundet. Hvordan CT'ens og videometerets svar kommer ind i databasen, og
   i hvilket format, er ikke afklaret.
+- **Operationsnumrene og ISTA-prøverne mangler.** Procesprøverne står med
+  "Ikke udfyldt", og ISTA-listen er tom. Hvor en ISTA-prøve tages, hvad den
+  hedder, og hvor den analyseres, ved driften.
+- **Prøvebuerne ender midt i Analytics**, ikke ved instrumentet. Videometeret
+  og CT-scanneren står i tegningen, men uden W-ID — og en bue bindes ikke til
+  et navn eller et celle-id. Får de W-ID'er, kan buen ende ved instrumentet.
 - **CT-scanneren er regnet optaget alle 20 minutter.** Er noget af tiden
   forberedelse, der kan ske ved siden af, kan laboratoriet tage flere prøver
   i timen, end simuleringen viser. Tjek det, før planen lægges.

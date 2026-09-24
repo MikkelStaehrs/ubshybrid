@@ -37,7 +37,7 @@ const viaLageret = (fra: string, til: string, navn: string, note?: string): Forb
   note: note ?? "Antaget ud fra mønstret: trinnene leverer til Warehouse og henter derfra. Ikke bekræftet for netop dette trin.",
 });
 
-/** Materialeflow, prøver og mennesker mellem delene. */
+/** Materialeflow og mennesker mellem delene. */
 export const FORBINDELSER: Forbindelse[] = [
   {
     id: "F-SLIBERI-WAREHOUSE", slags: "materiale", navn: "Slibning til lager",
@@ -57,23 +57,5 @@ export const FORBINDELSER: Forbindelse[] = [
   viaLageret("warehouse", "packing", "Lager til packing"),
   viaLageret("packing", "warehouse", "Packing til lager"),
   viaLageret("warehouse", "shipping", "Lager til shipping"),
-  {
-    id: "F-VIDEOMETER",
-    slags: "proever",
-    navn: "Prøve før fordeleren",
-    fra: { del: "sliberi" },
-    til: { del: "analytics" },
-    findes: true,
-    note: "500 g, før partiet fordeles på sporene. Videometeret finder foreign seeds efter art og slibeskader. Ca. 20 min.",
-  },
-  {
-    id: "F-CT",
-    slags: "proever",
-    navn: "CT-prøver",
-    // Jetpealer N og S, og de fire kasteborde.
-    fra: { del: "sliberi", wIds: ["790", "789", "636", "746", "635", "745"] },
-    til: { del: "analytics" },
-    findes: true,
-    note: "Efter jetpealerne og fra kastebordenes Heavy, Light og Mainline. Én CT-scanner, ca. 20 min pr. prøve.",
-  },
+  // Prøverne står i data/proevesteder.ts — ét sted, et prøvested er defineret.
 ];
