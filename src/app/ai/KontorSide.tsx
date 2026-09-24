@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { SIMULERING } from "../../../data/fremskrivning";
 import { SITE } from "../../lib/context";
@@ -167,9 +166,11 @@ export function KontorSide() {
       </header>
 
       {!hoertNoget ? (
+        // Intet link til linjeskærmen herfra: åbnet på kontorets maskine ville
+        // den tage kanalen fra storskærmen. Kontoret følger af sig selv, når
+        // linjeskærmen starter.
         <section className="hud-panel sl-venter">
           <p className="hp-afventer"><span className="hp-afventer-mark" aria-hidden />Venter på linjeskærmen</p>
-          <Link href="/ai/demo" className="hud-switch" target="_blank">Åbn linjeskærmen</Link>
         </section>
       ) : (
         <div className="sl-kolonner is-tre">
