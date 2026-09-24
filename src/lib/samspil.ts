@@ -66,6 +66,7 @@ export const AGENT = {
   drift: "Driftsagent",
   data: "Dataagent",
   vagt: "Kædevagt",
+  proever: "Prøvetagningsagent",
   linje: (lane: string) => `Linjeagent Spor ${lane}`,
 } as const;
 
@@ -151,8 +152,17 @@ export interface Ordreregnskab {
   maksForsinkelseS: number;
   tabt: number;
   sensorfejl: number;
-  /** Gennemsnitlig FV3 pr. kastebord. */
-  fv3: { kort: string; snit: number }[];
+  /** Laboratoriet: prøverne, det sidste bords Mainline pr. spor, foreign seeds og sorteringen. */
+  lab: {
+    ct: number;
+    videometer: number;
+    sprunget: number;
+    /** Multigerm i det seneste svar fra det sidste bords Mainline. null uden svar. */
+    produkt: { lane: string; multi: number | null }[];
+    fremmedMaks: { stk: number; kasse: number } | null;
+    /** Hvor længe der blev sorteret kraftigt. */
+    kraftigS: number;
+  };
   beslutninger: number;
   beskeder: number;
 }
@@ -178,7 +188,11 @@ export function ordreRapport(r: Ordreregnskab): string[] {
       ? "MSSQL fulgte med hele vejen"
       : `MSSQL bagud ${r.mssqlEpisoder} gang${r.mssqlEpisoder === 1 ? "" : "e"} · højst ${tal(r.maksForsinkelseS)} s · ${tal(r.tabt)} rækker tabt`,
     r.sensorfejl === 0 ? "Flowmåleren var inde hele vejen" : `Flowmåleren ude ${r.sensorfejl} gang${r.sensorfejl === 1 ? "" : "e"}`,
-    `FV3 · ${r.fv3.map((f) => `${f.kort} ${tal(f.snit, 1)} %`).join(" · ")}`,
+    `Laboratoriet · ${r.lab.ct} CT-prøver · ${r.lab.videometer} videometer${r.lab.sprunget > 0 ? ` · ${r.lab.sprunget} sprunget over` : ""}`,
+    `Mainline ud · ${r.lab.produkt.map((x) => `spor ${x.lane} ${x.multi === null ? "intet svar" : `multigerm ${tal(x.multi, 1)} %`}`).join(" · ")}`,
+    r.lab.fremmedMaks === null
+      ? "Ingen videometerprøver"
+      : `Foreign seeds højst ${r.lab.fremmedMaks.stk} pr. prøve (kasse ${r.lab.fremmedMaks.kasse})${r.lab.kraftigS > 0 ? ` · kraftig sortering ${varighed(r.lab.kraftigS)}` : ""}`,
     `${r.beslutninger} beslutninger · ${r.beskeder} beskeder mellem agenterne`,
   ];
 }

@@ -14,7 +14,7 @@ import { ChainCircuit } from "./ChainCircuit";
 import { Hologram } from "./Hologram";
 import {
   AgentCores, DriftPanel, FlowPanel, FokusPanel, Haendelser, KlimaPanel,
-  KvalitetPanel, OrdrePanel, Overskrift, Readout,
+  LaboratoriePanel, OrdrePanel, Overskrift, Readout,
 } from "./HudPanels";
 import { AnbefalingerPanel, EnhedPanel } from "./Enhed";
 import { Afkod } from "./Instrumenter";
@@ -178,7 +178,7 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
 
       <div className="hud-right">
         <AgentCores model={model} nr={5} still={still} ai={billede.ai} sim={billede.simuleret} samtale={samtale} />
-        <KvalitetPanel billede={billede} nr={6} still={still} />
+        <LaboratoriePanel billede={billede} nr={6} still={still} />
         {styring && (
           <AnbefalingerPanel
             anbefalinger={billede.anbefalinger}

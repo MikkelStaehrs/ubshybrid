@@ -64,6 +64,17 @@ const sliberi: OtInfraNode[] = [
     requiredFor: ["dashboard"],
     note: "Bestilt. Den eneste brik, der er sat i gang.",
   },
+  {
+    id: "INF-LAB",
+    type: "lab",
+    name: "Laboratoriet: CT og videometer",
+    location: "Analytics-rummet",
+    status: "missing",
+    // Ikke et led i signalkæden: prøverne tages i hånden, og svarene kommer
+    // fra laboratoriets egne maskiner — ikke gennem skabet.
+    requiredFor: [],
+    note: "Én CT-scanner og et videometer. Svarene skal ind i databasen, før en agent kan læse dem.",
+  },
 ];
 
 export const OT_INFRASTRUCTURE: Record<string, OtInfraNode[]> = { sliberi };

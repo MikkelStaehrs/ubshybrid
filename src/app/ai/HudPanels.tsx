@@ -1,5 +1,6 @@
 "use client";
-import { ANALYSE, FLASKEHALS, KASTEBORD } from "../../../data/fremskrivning";
+import { Fragment } from "react";
+import { FLASKEHALS, KASTEBORD, KASTEBORDET, PROEVER } from "../../../data/fremskrivning";
 import { kr } from "../../lib/agent-cost";
 import { AGENT_ENGINE_LABEL, lineOpsFor } from "../../lib/agents";
 import { kasserKoert, ledNavn, type HudAgent, type HudLink, type HudModel, type HudOrdre, type LinkTone } from "../../lib/ai-hud";
@@ -420,50 +421,75 @@ export function KlimaPanel({ billede, historik, nr, still }: {
  * NOTS og det, der gik til den lette ende. Det er output — hvad bordet gør
  * ved frøet — og står derfor her og ikke på maskinen.
  */
-export function KvalitetPanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
-  const tider = billede.analyse.map((a) => a.proeveT).filter((t): t is number => t !== null);
-  const sidst = tider.length > 0 ? Math.max(...tider) : null;
+/**
+ * Laboratoriet: hvad CT-scanneren og videometeret har gang i, og det seneste
+ * svar fra hvert kastebord. Et svar er en prøve — taget på et bestemt
+ * tidspunkt og først kendt tyve minutter efter. Derfor står tiden ved hvert tal.
+ *
+ * Kastebordene vises på det, de vurderes efter: multigerm i Mainline og godt
+ * frø i Heavy og Light. Et tal uden for bordets grænse er rav — det kan en
+ * agent rette. Det sidste bords Mainline er frøet, der forlader linjen; er
+ * det uden for, er det en fejl og rødt, som en kanal over sin alarmgrænse.
+ */
+export function LaboratoriePanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
+  const lab = billede.laboratorie;
+  const vm = lab.seneste.filter((p) => p.videometer).sort((a, b) => b.taget - a.taget)[0] ?? null;
+  const borde = billede.maskiner.filter((m) => KASTEBORD.test(m.navn));
+  const svar = (id: string, f: "mainline" | "heavy" | "light") => lab.seneste.find((p) => p.sted.maskine === id && p.sted.fraktion === f) ?? null;
+  const kraftig = Object.values(billede.sortering).some((x) => x === "kraftig");
+  const tom = !lab.ct.igang && !lab.videometer.igang && lab.seneste.length === 0;
   return (
-    <Panel
-      label="Kvalitet · kasteborde"
-      nr={nr}
-      still={still}
-      right={billede.simuleret ? <Sim /> : undefined}
-    >
-      {billede.analyse.every((a) => a.andele === null) ? <Afventer /> : (
-        <div className="hp-fv">
-          <div className="hp-fv-hoved">
-            <span />
-            {ANALYSE.klasser.map((k) => <span key={k}>{k}</span>)}
+    <Panel label="Laboratoriet" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
+      {tom ? <Afventer /> : (
+        <div className="hp-lab">
+          <div className="hp-lab-instr">
+            <span className="hp-lab-navn">CT</span>
+            {lab.ct.igang
+              ? <span className="hp-lab-igang">{lab.ct.igang.sted.navn}<i className="fm-num">svar {klokke(lab.ct.igang.svarT)}</i></span>
+              : <span className="hp-lab-ledig">Ledig</span>}
           </div>
-          {billede.analyse.map((a) => {
-            const m = billede.maskiner.find((x) => x.id === a.id);
-            const tilstand = m?.styret ? " is-styret" : m?.koerer === false ? " is-stop" : "";
-            return (
-              <div key={a.id} className={`hp-fv-rk${a.alarm ? " is-alarm" : ""}${tilstand}`}>
-                <span className="hp-kb-navn">{a.kort}</span>
-                {ANALYSE.klasser.map((k, i) => (
-                  <span key={k} className={`hp-fv-tal d-${i}`}>
-                    {a.andele ? <><Tal v={a.andele[i]} d={1} /><i>%</i></> : "–"}
-                  </span>
-                ))}
-                <span className="hp-fv-baand">
-                  {a.andele?.map((p, i) => (
-                    <span key={ANALYSE.klasser[i]} className={`m-del d-${i}`} style={{ width: `${p}%` }} />
-                  ))}
+          <div className="hp-lab-instr">
+            <span className="hp-lab-navn">Videometer</span>
+            {lab.videometer.igang
+              ? <span className="hp-lab-igang">Kasse {lab.videometer.igang.kasse + 1}<i className="fm-num">svar {klokke(lab.videometer.igang.svarT)}</i></span>
+              : <span className="hp-lab-ledig">Ledig</span>}
+          </div>
+          {vm?.videometer && (
+            <p className={`hp-lab-vm fm-num${vm.videometer.fremmedIalt > PROEVER.videometer.fremmedHoej ? " is-over" : ""}`}>
+              Kasse {(vm.kasse ?? 0) + 1} · {vm.videometer.fremmedIalt} foreign seeds <i>{klokke(vm.taget)}</i>
+            </p>
+          )}
+          <div className="hp-lab-borde">
+            <span />
+            <span>Mainline<br />multigerm</span>
+            <span>Heavy<br />godt frø</span>
+            <span>Light<br />godt frø</span>
+            {borde.map((m) => {
+              const main = svar(m.id, "mainline");
+              const heavy = svar(m.id, "heavy");
+              const light = svar(m.id, "light");
+              const bord = main?.sted.bord ?? heavy?.sted.bord ?? light?.sted.bord ?? 0;
+              const g = KASTEBORDET.graenser[Math.min(bord, KASTEBORDET.graenser.length - 1)];
+              const sidst = bord === KASTEBORDET.graenser.length - 1;
+              // Hvert tal står med sin prøvetid: et svar kan være timer gammelt.
+              const celle = (p: typeof main, v: number | null, graense: number, d: number, fejl = false) => (
+                <span className={`hp-lab-v fm-num${v !== null && v > graense ? (fejl ? " is-fejl" : " is-over") : ""}`}>
+                  {v === null || !p ? "–" : <>{v.toFixed(d).replace(".", ",")}<i>%</i><em className="hp-lab-t">{klokke(p.taget)}</em></>}
                 </span>
-                {a.tung && (
-                  <span className="hp-fv-tung fm-num">
-                    <span>BIGF <b>{komma1(a.tung.bigf)}</b></span>
-                    <span>BIGH <b>{komma1(a.tung.bigh)}</b></span>
-                    <span>NOTS <b>{komma1(a.tung.nots)}</b></span>
-                    {a.udskudPct !== null && <span>Udskud <b>{komma1(a.udskudPct)}</b></span>}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-          {sidst && <p className="hp-note">Seneste prøve {klok(sidst)}</p>}
+              );
+              return (
+                <Fragment key={m.id}>
+                  <span className="hp-kb-navn">{m.kort}</span>
+                  {celle(main, main?.ct ? main.ct.bigf + main.ct.bigh : null, g.multi, 1, sidst)}
+                  {celle(heavy, heavy?.ct ? heavy.ct.godt : null, g.heavyGodt, 0)}
+                  {celle(light, light?.ct ? light.ct.godt : null, g.lightGodt, 0)}
+                </Fragment>
+              );
+            })}
+          </div>
+          <p className="hp-note">
+            Sortering {kraftig ? "kraftig" : "normal"} · {lab.ct.taget} CT · {lab.videometer.taget} videometer
+          </p>
         </div>
       )}
     </Panel>

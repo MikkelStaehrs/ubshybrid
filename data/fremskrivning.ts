@@ -14,17 +14,23 @@
 // tal på skærmen altid har en måler bag sig, en kanal i skabet og en plads i
 // kæden. Står der en kanal her uden måler, kan den ikke komme igennem.
 //
-// Åbne spørgsmål til driften, besvaret med et gæt indtil videre:
-//   - FV0–FV3 er læst som fire klasser i en analyseprøve fra hvert kastebord,
-//     der summer til 100 %. FV0 og FV1 dominerer; FV3 er det, kastebordene
-//     renser ud. Er de noget andet, skal `ANALYSE` laves om.
-//   - BIGF, BIGH og NOTS er, som FV, klassificeringer af frøet på bordet —
-//     læst som andele af prøven fra den tunge ende. Er det mængder (kg/t),
-//     skal enheden skiftes.
-//   - Andet kastebord i hvert spor (KB-3NN, KB-2SS) får det, første har
-//     renset: markant mindre FV3, BIGF og BIGH, og nærmest ingen NOTS.
-//   - Hvordan indstillingerne på et kastebord flytter klassificeringen og
-//     udskuddet, står i KASTEBORDET. Det er det groveste gæt i filen.
+// Sagt af driften:
+//   - Prøverne tages i hånden og analyseres i Analytics-rummet: et videometer
+//     før fordeleren (500 g, ca. 20 min) og én CT-scanner, som alle
+//     CT-prøver deler (ca. 20 min pr. prøve). CT tages lige efter
+//     jetpealerne i hvert spor og på alle fire kasteborde: Heavy, Light og
+//     Mainline. Planen er fast.
+//   - FV0–FV3 er kvaliteten af det gode frø. Alt fra FV0 til FV3 er godt;
+//     der styres ikke efter FV. Det, der ikke skal med, er multigerm
+//     (BIGF/BIGH), foreign seeds (NOTS), sten og ler.
+//   - Finder videometeret foreign seeds tidligt, sorteres der kraftigere på
+//     Carter og Alfa.
+//
+// Åbne spørgsmål, besvaret med et gæt indtil videre:
+//   - Alle tal for partiet, processen, kastebordets skillemodel og grænserne
+//     i PARTI, PROCES, KASTEBORDET og PROEVER.
+//   - At CT-scanneren er optaget de fulde 20 minutter af hver prøve.
+//   - Hvordan tværhældning og luft deler arbejdet mellem Heavy og Light.
 //   - Der er ingen bånd som selvstændige maskiner på linjen. Transporten
 //     ligger i kanterne mellem maskinerne og vises som materialestrøm.
 
@@ -71,12 +77,6 @@ export interface KanalGruppe {
   /** Regulært udtryk mod maskinens navn. */
   navn?: RegExp;
   kanaler: KanalSpec[];
-  /**
-   * Målere på maskinen, hvis tal ikke er drift — et analyseudstyr, der
-   * klassificerer frøet. De står i OT-laget og i kæden, men ikke som kanaler
-   * på maskinen.
-   */
-  ekstraMaalere?: string[];
 }
 
 const motortemperatur: KanalSpec = {
@@ -103,8 +103,7 @@ export const KANALER: KanalGruppe[] = [
     navn: KASTEBORD,
     // Det, et kastebord stilles efter, og som driften ser på under kørslen.
     // Hældningen, slagtallet og luften kan ændres undervejs; nominal er
-    // udgangspunktet. Hvad der kommer ud — klassificeringen af frøet — er
-    // output og står i analysen, ikke her.
+    // udgangspunktet. Hvad der kommer ud, måles i laboratoriet — ikke her.
     kanaler: [
       // Et rystebord ryster med vilje. Grænsen er ikke vibrationens — og
       // ryster dækket for lidt, sorterer bordet ikke.
@@ -115,7 +114,6 @@ export const KANALER: KanalGruppe[] = [
       { id: "langs", label: "Langs", unit: "°", maaler: "inclinometer", nominal: 1.5, spredning: 0.02, min: 0, max: 6, alarmLav: 0.3, alarmHoej: 4, decimaler: 1, traeghed: 0.15 },
       { id: "luft", label: "Luft", unit: "%", maaler: "drive", nominal: 65, spredning: 1, min: 0, max: 100, alarmLav: 40, alarmHoej: 90, decimaler: 0, hvile: 0, traeghed: 0.25 },
     ],
-    ekstraMaalere: ["analyzer"],
   },
   {
     navn: /jet\s?pe[ae]ler/i,
@@ -188,75 +186,99 @@ export const HAL: KanalSpec[] = [
   { id: "fugt", label: "Luftfugtighed", unit: "% RH", maaler: "humidity", nominal: 52, spredning: 2.5, min: 0, max: 100, alarmHoej: 65, decimaler: 0, traeghed: 0.02 },
 ];
 
-/**
- * Analyseprøven fra hvert kastebord. Fire klasser, der summer til 100 %.
- * Rækkefølgen er FV0 … FV3.
- *
- * FV0 og FV1 dominerer. FV3 er det, kastebordene skal rense ud — derfor er
- * det FV3, der melder, og derfor har andet bord i sporet langt mindre af den.
- */
-export const ANALYSE = {
-  klasser: ["FV0", "FV1", "FV2", "FV3"] as const,
-  /** Første kastebord i sporet. */
-  andele: [46, 33, 13, 8],
-  /** Andet kastebord i sporet: det har fået, hvad det første har renset. */
-  afvigelser: {
-    "746": [53, 37, 7.5, 2.5], // KB-3NN
-    "745": [52, 38, 7.5, 2.5], // KB-2SS
-  } as Record<string, number[]>,
-  /**
-   * Frø i én prøve. Udsvinget fra prøve til prøve er det, en prøve af den
-   * størrelse giver — en klasse på 2 % svinger mindre end en på 46 %.
-   */
-  froePrProeve: 400,
-  /** Over den her andel FV3 er prøven værd at se på. */
-  alarmFV3: 12,
-};
-
 /** Maskiner, der afviger fra deres slags. Nøglet på W-ID. */
 export const AFVIGELSER: Record<string, Partial<Record<string, Partial<KanalSpec>>>> = {};
 
+// ---------------------------------------------------------------------------
+// Partiet, processen og prøverne
+
+/** Arterne, videometeret kender. "Unknown" er det, det ikke kan bestemme. */
+export const FREMMEDE = [
+  "Unknown", "Natskygge", "Koriander", "Katost", "Håret knopskulpe", "Agersnerle", "Pileurt", "Burresnerre",
+] as const;
+export type Fremmed = (typeof FREMMEDE)[number];
+
 /**
- * Kastebordet: hvad indstillingerne gør ved frøet.
+ * Partiet: det, der ligger i kasserne. Et parti ligger fast — det er det
+ * samme frø hele ordren. Kasserne afviger lidt fra hinanden, og et stykke af
+ * ordren kan være urent. Andele i procent af partiet, talt i frø og partikler.
+ */
+export const PARTI = {
+  fvKlasser: ["FV0", "FV1", "FV2", "FV3"] as const,
+  /** Det gode frø fordelt på kvalitet, i procent af det gode frø. */
+  fv: [46, 33, 13, 8],
+  /** Multigerm i procent af partiet, og hvor stor en del af det, der er BIGF. */
+  multigerm: 4.5,
+  bigfAndel: 0.72,
+  /** Foreign seeds i alt, i procent af partiet, og fordelingen på arter. */
+  fremmed: 0.05,
+  fremmedArter: {
+    Unknown: 0.08, Natskygge: 0.22, Koriander: 0.04, Katost: 0.14,
+    "Håret knopskulpe": 0.08, Agersnerle: 0.12, Pileurt: 0.2, Burresnerre: 0.12,
+  } as Record<Fremmed, number>,
+  sten: 0.25,
+  ler: 0.4,
+  /** Frø med slibeskader, i procent af det gode frø. */
+  slibeskader: 1.8,
+  /** Fra ordre til ordre: én standardafvigelse, som andel af niveauet. */
+  ordreVariation: 0.2,
+  /** Fra kasse til kasse i samme ordre. */
+  kasseVariation: 0.06,
+  /**
+   * Et urent stykke: nogle kasser i træk med langt flere foreign seeds —
+   * oftest tidligt. Chancen pr. ordre, hvor mange kasser, og hvor mange
+   * gange så mange.
+   */
+  urent: { chance: 0.7, kasser: [3, 5] as [number, number], gange: [4, 7] as [number, number], foersteKasse: [2, 9] as [number, number] },
+  /** Frø pr. gram — til at gøre en andel om til et antal i en prøve. */
+  froePrGram: 70,
+};
+
+/** Det, maskinerne mellem vippestolene og kastebordene gør ved strømmen. */
+export const PROCES = {
+  /** Jetpealeren sliber låg og kim løs: let materiale, i procent af strømmen. */
+  jetpealerLet: 3.5,
+  /**
+   * Carter og Alfa sorterer foreign seeds fra. Andelen, der fjernes, og det
+   * gode frø, det koster, i procent af det gode frø.
+   */
+  sortering: {
+    normal: { fremmed: 0.55, godtTab: 0.8 },
+    kraftig: { fremmed: 0.85, godtTab: 2.5 },
+  },
+  /** Minutter fra en kasse tippes, til frøet er nået hertil. */
+  transitMin: { jetpealer: 8, kastebord: [18, 21] as [number, number] },
+};
+
+/**
+ * Kastebordet: tre strømme ud. Heavy tager de store frø, multigerm og sten;
+ * Light tager løse låg, kim, ler og de små frø; resten er Mainline.
  *
- * Tværhældningen og luften bestemmer, hvor skarpt bordet skiller. Mere
- * hældning eller mere luft sender mere til den lette ende: mindre FV3, BIGH
- * og NOTS i den tunge ende — men mere godt frø i udskuddet. Det er den
- * afvejning, en linjeagent anbefaler efter.
- *
- * Alle sammenhænge her er skøn. De skal forbi driften, og en rigtig agent
- * ville lære dem af historikken frem for at få dem her.
+ * Tværhældningen styrer den tunge ende, luften den lette. Mere af det ene
+ * eller det andet renser Mainline — og sender mere godt frø ud. Det er den
+ * afvejning, en linjeagent anbefaler efter. Alle tal er skøn.
  */
 export const KASTEBORDET = {
+  /** Andelen af hver slags, der går til Heavy og Light ved standardindstillingerne. */
+  heavy: { godt: 0.025, multi: 0.62, fremmed: 0.3, sten: 0.95, ler: 0.05, let: 0.02 },
+  light: { godt: 0.03, multi: 0.02, fremmed: 0.25, sten: 0, ler: 0.85, let: 0.85 },
+  /** Pr. grad tværhældning væk fra udgangspunktet: så meget mere til Heavy. */
+  heavyPrGrad: { godt: 0.02, multi: 0.15, fremmed: 0.05, sten: 0.02, ler: 0, let: 0 },
+  /** Pr. 10 procentpoint luft: så meget mere til Light. */
+  lightPrTiLuft: { godt: 0.018, multi: 0, fremmed: 0.04, sten: 0, ler: 0.04, let: 0.05 },
   /**
-   * Udgangspunktet pr. bord, ved bordets egne standardindstillinger. BIGF,
-   * BIGH og NOTS i procent af prøven fra den tunge ende; udskud i procent af
-   * det, bordet fik. Første bord i sporet; det andet har fået, hvad det første
-   * har renset.
+   * Grænserne, en linjeagent anbefaler efter, pr. bord i sporet: det første
+   * og det andet. Mainline: højst så meget multigerm og let materiale.
+   * Heavy og Light: højst så stor en andel godt frø — ellers smides for
+   * meget ud. Andet bord får renere frø ind, så dets Heavy og Light er mere
+   * godt frø af sig selv.
    */
-  bord: {
-    standard: { bigf: 68, bigh: 21, nots: 4.2, udskud: 12, alarmNots: 8 },
-    "746": { bigf: 38, bigh: 8, nots: 0.3, udskud: 7, alarmNots: 1.5 },
-    "745": { bigf: 39, bigh: 8.5, nots: 0.3, udskud: 7, alarmNots: 1.5 },
-  } as Record<string, { bigf: number; bigh: number; nots: number; udskud: number; alarmNots: number }>,
-  /** Pr. grad tværhældning væk fra udgangspunktet. */
-  prGradTvaers: { udskud: 3, fv3: -2, bigh: -3, nots: -0.8 },
-  /** Pr. 10 procentpoint luft væk fra udgangspunktet. */
-  prTiLuft: { udskud: 2, fv3: -1.2, bigh: -2, nots: -0.5 },
-  /**
-   * Frøet, der kommer ind, er ikke det samme hele ordren. Et parti med flere
-   * lette frø giver mere FV3 og mere udskud ved de samme indstillinger — og
-   * så er det indstillingerne, der skal følge med.
-   */
-  parti: { spredning: 1, traeghed: 0.0015, fv3: 1.6, udskud: 1.8 },
-  /** Så meget over bordets normale FV3, før en linjeagent anbefaler at skille skarpere. */
-  fv3Tolerance: 2.5,
-  /** Over så meget udskud anbefaler den at skille blødere — hvis FV3 kan tåle det. */
-  maksUdskudPct: 16,
+  graenser: [
+    { multi: 2.5, let: 1.0, heavyGodt: 60, lightGodt: 60 },
+    { multi: 1.0, let: 0.3, heavyGodt: 85, lightGodt: 94 },
+  ],
   /** Et trin, en anbefaling flytter en indstilling. */
   trin: { tvaers: 0.3, luft: 5 },
-  /** Så mange prøver efter en ændring, før virkningen gøres op. */
-  proeverFoerVurdering: 3,
   /** En anbefaling, ingen har taget stilling til, bortfalder efter så lang tid. */
   anbefalingGyldigS: 600,
   /**
@@ -264,6 +286,43 @@ export const KASTEBORDET = {
    * længe. En agent, der gentager sig hvert andet minut, bliver ikke hørt.
    */
   roEfterNejS: 1800,
+};
+
+/**
+ * Prøverne. Videometeret og CT-scanneren står i Analytics-rummet; prøverne
+ * tages i hånden. CT-scanneren er én, og alle CT-prøver står i kø til den.
+ */
+export const PROEVER = {
+  videometer: {
+    minutter: 20,
+    gram: 500,
+    /** En prøve af hver anden kasse, fra den første. */
+    hverKasse: 2,
+    /** Over så mange foreign seeds pr. prøve sorteres der kraftigere… */
+    fremmedHoej: 35,
+    /** …og under så mange i to prøver i træk kan der sorteres normalt igen. */
+    fremmedLav: 28,
+    /** Over så mange procent slibeskader er det værd at se på. */
+    slibeskaderHoej: 4,
+  },
+  ct: {
+    minutter: 20,
+    /** Frø i én CT-prøve. Udsvinget er det, en prøve af den størrelse giver. */
+    froe: 1000,
+  },
+  /** Så længe efter ordrens start tages den første CT-prøve — frøet skal nå frem. */
+  foersteCtMin: 15,
+  /**
+   * Den faste plan: CT-prøverne i den rækkefølge, de tages. Scanneren tager
+   * den næste, så snart den er ledig; står maskinen, springes den over.
+   * Kastebordene er nøglet på W-ID, jetpealerne på spor.
+   */
+  ctPlan: [
+    "jetpealer:N", "jetpealer:S",
+    "636:mainline", "635:mainline", "746:mainline", "745:mainline",
+    "636:heavy", "635:heavy", "636:light", "635:light",
+    "746:heavy", "745:heavy", "746:light", "745:light",
+  ],
 };
 
 // ---------------------------------------------------------------------------

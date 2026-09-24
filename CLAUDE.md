@@ -272,9 +272,10 @@ taler selv på netværket (`signal: "feltbus"`). `channelReport()` springer
 dem over; talte de med, forudsatte fremskrivningen kort, ingen skal bruge.
 
 **Tallene er simulerede, og det står på dem.** Temperatur, fugt, hastighed,
-omdrejninger, kastebordenes vibration, slag, hældning og luft, FV0–FV3 og
-BIGF/BIGH/NOTS kommer fra simulatoren i
-`src/lib/telemetri.ts`, som læser sine antagelser fra `data/fremskrivning.ts`.
+omdrejninger og kastebordenes vibration, slag, hældning og luft kommer fra
+simulatoren i `src/lib/telemetri.ts`; laboratoriets svar — FV0–FV3,
+BIGF/BIGH, NOTS, foreign seeds og slibeskader — fra prøvemodellen i
+`src/lib/proever.ts`. Begge læser deres antagelser fra `data/fremskrivning.ts`.
 Ret antagelserne dér — ikke i koden. Kanalerne og flowet tager et eksakt
 skridt, ikke en tilnærmelse: udsvinget er det samme, uanset hvor tit siden
 tikker, så en bærbar, der hakker, ikke rammer grænser, som en, der ikke
@@ -343,11 +344,12 @@ siges til et menneske.
 
 | Agent | Ser | Gør |
 |---|---|---|
-| Linjeagent N/S | Et stop på vej, frø der bliver varmt, FV3 | Melder, med tallene og en prognose |
+| Linjeagent N/S | Et stop på vej, frø der bliver varmt, kastebordenes prøver | Melder med tallene og en prognose; anbefaler kastebordene |
+| Prøvetagningsagent | Prøveplanen, CT og videometer | Melder hvert svar til dem, der skal handle på det |
 | Kædevagt | At MSSQL ikke kan følge med | Melder til Dataagenten |
 | Dataagent | Rækker mod kapacitet, målere, der falder ud | Foreslår og sætter prøveraten |
 | Driftsagent | Buffere og frøtemperatur | Stopper og starter spor efter faste regler |
-| Operatøragent | Alle de andre | Afvejer, beslutter, fortæller operatøren |
+| Operatøragent | Alle de andre, videometerets foreign seeds | Afvejer, beslutter, anbefaler sorteringen, fortæller operatøren |
 
 Som standard er beskederne **regler og skabeloner** (`src/lib/samspil.ts`),
 mærket SIM og REGEL. Hver beslutning og hvert forslag har en begrundelse med
@@ -394,8 +396,6 @@ koster penge pr. kald, og derfor er det et valg i adressen.
 - **Et spor startes bagfra og stoppes forfra.** Så fødes ingen buffer, før
   maskinen efter den kører, og intet står fuldt til næste ordre. En maskine,
   der er slukket efter planen, er ikke en fejl (`styret`). Begge har tests.
-- **Én FV3-prøve er ikke en trend.** Den meldes som en iagttagelse. En
-  anbefaling kræver to prøver i træk — se kastebordene nedenfor.
 
 `frem()` tager et skridt uden at bygge et billede, til mellemskridtene, når
 tiden går hurtigt. Støjen i billedet trækkes, før billedet bygges, så et
@@ -443,52 +443,103 @@ hver sin maskine.
 
 `/ai/demo/log` sender videre til kontoret.
 
+### Prøverne og laboratoriet
+
+**Maskinen viser drift, laboratoriet viser frøet.** Det, der står på en
+maskine — på mærkatet, i enheden — er det, den stilles og køres efter: på et
+kastebord dækkets vibration, slag, tværhældning, langshældning og luft. Hvad
+frøet består af, ved ingen, før nogen har taget en prøve. En test holder
+klassificeringerne væk fra maskinens kanaler.
+
+**Prøverne tages i hånden og analyseres i Analytics-rummet** (sagt af
+driften). Videometeret tager 500 g før fordeleren og finder foreign seeds
+efter art og slibeskader. CT-scanneren tager efter jetpealerne i hvert spor
+og kastebordenes tre strømme: Heavy (store frø, multigerm, sten), Light
+(løse låg, kim, ler, små frø) og Mainline. Begge tager ca. 20 minutter pr.
+prøve, og **der er én CT-scanner**: alle CT-prøver står i kø til den. Det er
+tre CT-prøver i timen — en fuld runde gennem den faste plan (`PROEVER.ctPlan`)
+tager 4 t 40 min. Det er ikke en fejl i modellen, men den flaskehals,
+simuleringen skal vise.
+
+- **Et svar er en prøve, ikke en måling nu.** Det viser strømmen, da prøven
+  blev taget, og kommer 20 minutter efter. Tiden står ved hvert svar.
+- **Partiet ligger fast** (`nytParti()`). Det er det samme frø hele ordren;
+  kasserne afviger lidt, og et stykke kan være urent. Et svar svinger så
+  meget, som en prøve af den størrelse gør — og ikke mere. Før fløj tallene
+  op og ned fra minut til minut, og det passede ikke til virkeligheden. Det
+  har en test.
+- **Frøet tager tid om at nå frem** (`PROCES.transitMin`). Når videometerets
+  svar kommer, er frøet fra den kasse allerede forbi Carter og Alfa — og det
+  siger agenten. Det, der kommer efter, når den nå.
+- **Intet forsvinder.** Heavy, Light og Mainline er det, bordet fik. Det har
+  en test, som rækkerne i kæden.
+- **En maskine, der står, springes over i planen.** Der tages ingen prøve af
+  ingenting.
+- **Rav eller rødt.** Et svar uden for et bords grænse er rav: det er noget,
+  en agent kan rette, og den anbefaler det. Det sidste bords Mainline er
+  frøet, der forlader linjen — er det uden for, er det en fejl og rødt, som
+  en kanal over sin alarmgrænse. Hændelsen følger med: advarsel og alarm.
+  Det har en test.
+- **Laboratoriet er ikke forbundet i dag** (`INF-LAB` i
+  `data/ot-infrastructure.ts`). Prøvetagningsagenten står derfor som
+  manglende i den rigtige visning; fremskrivningen forudsætter forbindelsen,
+  som den forudsætter kæden. Laboratoriet er ikke et led i signalkæden:
+  prøverne går ikke gennem skabet.
+
+**Prøvetagningsagenten** (`engine: "kode"`) følger planen og melder hvert
+svar — CT til sporets linjeagent, videometer til Operatøragenten — med,
+hvornår prøven blev taget, og hvornår der kommer et svar fra samme sted igen.
+Den vejer intet; det gør de andre.
+
+**FV styrer ingenting.** FV0–FV3 er kvaliteten af det gode frø, og alt fra
+FV0 til FV3 er godt (sagt af driften). Det, der ikke skal med, er multigerm,
+foreign seeds, sten og ler. FV står i svarene, men ingen anbefaling og ingen
+alarm bygger på det. Det har en test.
+
 ### Kastebordene
 
-**Maskinen viser drift, analysen viser output.** Det, der står på en maskine
-— på mærkatet, i enheden — er det, den stilles og køres efter: på et
-kastebord dækkets vibration, slag, tværhældning, langshældning og luft.
-FV0–FV3, BIGF, BIGH, NOTS og udskud er klassificeringer af frøet, der
-kommer ud, og står i analysen (`Analyse.andele`, `tung`, `udskudPct`). En
-test holder klassificeringerne væk fra maskinens kanaler. Analyseudstyret er
-en måler på bordet (`ekstraMaalere`), så fremskrivningen stadig sætter det,
-der leverer tallene.
+**Bordet vurderes på renhed og tab** (`vurder()` i `src/lib/proever.ts`),
+ud fra de seneste svar fra dets tre strømme: for meget multigerm eller let
+materiale i Mainline, for meget godt frø i Heavy eller Light. Grænserne står
+i `KASTEBORDET.graenser`, én for det første og én for det andet bord i
+sporet. **Tværhældningen styrer den tunge ende, luften den lette** — mere af
+det ene eller det andet renser Mainline og sender mere godt frø ud. Hvor
+meget, står i `KASTEBORDET` — skøn, som resten af fremskrivningens tal. Et
+normalt parti holder sig inden for grænserne ved standardindstillingerne;
+det har en test, ellers anbefalede en agent noget hver gang.
 
-**Indstillingen styrer skillet.** Hældning og luft sættes under kørslen
-(`indstillinger` i billedet), og målingen følger efter med kanalens
-træghed. Mere tværhældning eller mere luft skiller skarpere: mindre FV3
-i den tunge ende, mere udskud i den lette. Hvor meget pr. grad og pr. ti
-procent luft står i `KASTEBORDET` i `data/fremskrivning.ts` — skøn, som
-resten af fremskrivningens tal. Partiet vandrer langsomt, så et bord, der
-skilte fint for en time siden, kan skille for blødt nu.
-
-**Agenten anbefaler, et menneske udfører.** Linjeagenten ser prøverne og
-anbefaler én indstilling ét trin (`KASTEBORDET.trin`), med det forventede.
+**Agenten anbefaler, et menneske udfører.** Linjeagenten anbefaler én
+indstilling ét trin (`KASTEBORDET.trin`), med det, den venter, der sker.
 Anbefalingen står i enheden, i Anbefalinger-panelet og på kontoret med
 **Udfør** og **Afvis**; ingen hældning flytter sig, før nogen trykker. Det,
-operatøren eller formanden gør, står i samtalen som `kilde: "menneske"`. Efter
-`proeverFoerVurdering` prøver gør agenten virkningen op mod det forventede.
-Tager ingen stilling, bortfalder den efter `anbefalingGyldigS` — og bremser
-kun tiden det første minut, så en glemt anbefaling ikke holder simuleringen i
-langsom gang.
+operatøren eller formanden gør, står i samtalen som `kilde: "menneske"`.
+Virkningen gøres op på det første svar fra bordet, der er taget efter
+ændringen — med prøvens usikkerhed ved, for ét svar er én prøve. Tager ingen
+stilling, bortfalder den efter `anbefalingGyldigS` — og bremser kun tiden
+det første minut.
 
-- **To prøver i træk, samme vej.** For meget FV3 over bordets normale
-  giver "hæv"; for meget udskud med FV3 i orden giver "sænk".
-- **Aldrig på et bord, der ikke står, hvor det er sat.** Lige efter en start
-  er luften på vej op, og bordet skiller dårligt af den grund. Prøver, hvor
-  hældning eller luft er mere end et halvt trin fra det satte
-  (`staarSomSat()`), står i analysen, men melder ingen FV3- eller
-  NOTS-alarm og tæller hverken til en anbefaling eller til opgørelsen af en
-  — som en maskine i indkøring, der ikke melder "for langsom". Begge dele
-  har tests.
+- **Kun svar fra efter den seneste ændring,** og fra et bord, der stod, hvor
+  det var sat (`staarSomSat()`). Et svar fra før siger intet om det, der
+  står nu.
+- **En afvejning er ikke et trin.** Peger to fund hver sin vej på samme
+  indstilling — for meget multigerm i Mainline og for meget godt frø i
+  Heavy — siger agenten det til formanden og spørger, hvad der vejer tungest,
+  i stedet for at skrue frem og tilbage. Det samme, når en indstilling er ved
+  sin grænse.
 - **Inden for grænserne.** En anbefaling går aldrig over kanalens alarmgrænse
   minus et trin.
 - **Ét skridt ad gangen.** Ingen ny anbefaling til et bord, før virkningen af
   den sidste udførte er gjort op — ellers ved ingen, hvad der virkede.
 - **Et nej bliver hørt.** Afviser operatøren, eller bortfalder anbefalingen,
-  får bordet ro i `roEfterNejS`. En agent, der gentager sig hvert andet
-  minut, bliver ikke hørt — og i `?agenter=claude` koster hver gentagelse et
-  kald. Begge har tests.
+  får bordet ro i `roEfterNejS`. Alle fire har tests.
+
+**Sorteringen på Carter og Alfa** (sagt af driften). Finder videometeret
+flere foreign seeds end `fremmedHoej`, anbefaler Operatøragenten kraftig
+sortering i begge spor; er to prøver i træk under `fremmedLav`, normal igen
+— kraftig sortering koster godt frø (`PROCES.sortering`). Båndet imellem
+er hysterese, som ved kører/står. Virkningen kan ikke gøres op: en CT-prøve
+er for lille til at se de få foreign seeds, der slipper igennem, og det
+siger anbefalingen.
 
 **Enheden.** Tryk på en maskine — på mærkatet eller i scenen — og kameraet
 låser på den, og enheden erstatter fokuspanelet: drift med grænser og
@@ -679,16 +730,21 @@ har sagt tallet.
   total udledt af den er et estimat og skal blive ved med at hedde det.
 - **Hysteresen og de fem/to procent er valgt, ikke målt.** De skal forbi
   driften sammen med stopgrænsen.
-- **Fremskrivningens kanaler er gæt.** FV0–FV3 er læst som fire klasser i en
-  prøve fra hvert kastebord, der summer til 100 %, hvor FV0 og FV1 dominerer
-  og FV3 er det, bordene renser ud; BIGF/BIGH/NOTS som andele af den tunge
-  side. At andet bord i sporet har markant mindre af det hele og nærmest
-  ingen NOTS, er sagt af driften — tallene for det er valgt. Alt det, og
-  alle driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
+- **Fremskrivningens tal er gæt.** Hvordan prøverne tages, er sagt af
+  driften; tallene er valgt: partiets sammensætning og variation, det urene
+  stykke, jetpealerens løse materiale, sorteringens virkning, kastebordets
+  skillemodel og grænserne, prøveplanen og transittiderne. Alt det, og alle
+  driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
   driften, før nogen tager tallene for pålydende.
-- **Hvor BIGF, BIGH og FV kommer fra, er ikke afklaret.** Demoen antager ét
-  analyseudstyr på feltbussen pr. kastebord. Er det laboratoriets prøver, er
-  det et `dataset` og ikke et signal.
+- **Laboratoriets svar er et `dataset`, ikke et signal** — og det er ikke
+  forbundet. Hvordan CT'ens og videometerets svar kommer ind i databasen, og
+  i hvilket format, er ikke afklaret.
+- **CT-scanneren er regnet optaget alle 20 minutter.** Er noget af tiden
+  forberedelse, der kan ske ved siden af, kan laboratoriet tage flere prøver
+  i timen, end simuleringen viser. Tjek det, før planen lægges.
+- **Planen er fast.** Et svar fra et kastebord efter en ændring kan tage
+  timer. Kan laboratoriet tage en ekstra prøve, når en agent beder om det,
+  er det en ændring af planen — ikke af modellen.
 - **Ordren har ingen kilde.** Ordre nr., genetik, varietet, estimeret kg og
   kasser skal komme fra ordresystemet. Hvilket, hvordan og i hvilket format
   er ikke afklaret; det ved driften. Demoen læser kasserne som dem, der

@@ -22,6 +22,23 @@ const byId = (id: string): Agent => {
   return a;
 };
 
+describe("Prøvetagningsagenten", () => {
+  const lab = (st: ReturnType<typeof agentState>) => st.inputs.find((i) => i.input.dataset === "laboratorie")!;
+
+  it("mangler laboratoriet i dag — CT og videometer er ikke forbundet", () => {
+    const st = agentState(byId("AG-SLIB-PROEVE"), layout, real);
+    assert.equal(st.status, "missing");
+    assert.equal(lab(st).have, 0);
+    assert.match(lab(st).detail, /ikke forbundet/);
+  });
+
+  it("laboratoriet leverer, når det er forbundet — og det er ikke et led i signalkæden", () => {
+    assert.equal(lab(agentState(byId("AG-SLIB-PROEVE"), layout, whole)).have, 1);
+    const node = real.infrastructure.find((n) => n.type === "lab")!;
+    assert.deepEqual(node.requiredFor, [], "prøverne går ikke gennem skabet");
+  });
+});
+
 describe("beslutning styrer status", () => {
   it("en idé er idé uanset inputs", () => {
     const idea = byId("AG-SLIB-SKIFT");

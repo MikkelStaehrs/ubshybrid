@@ -157,6 +157,29 @@ const sliberi: Agent[] = [
   },
 
   {
+    id: "AG-SLIB-PROEVE",
+    name: "Prøvetagningsagent",
+    role: "proever",
+    til: "Formand",
+    svarerPaa: "Hvad viser prøverne — og hvornår kommer det næste svar?",
+    // Følger den faste plan: videometeret tager hver anden kasse, før den
+    // fordeles; CT-scanneren tager efter jetpealerne og kastebordenes tre
+    // strømme, én prøve ad gangen. Den melder svarene til dem, der skal
+    // handle på dem, og springer en maskine over, der står.
+    job: "Følger prøveplanen og melder svarene fra CT og videometer til linjeagenterne og Operatøragenten.",
+    scope: { kind: "line" },
+    inputs: [
+      { type: "motor-run", required: true, need: "Driftssignal (DI) pr. maskine — en prøve tages kun fra en maskine, der kører" },
+      { dataset: "laboratorie", required: true, need: "CT og videometer forbundet til databasen" },
+    ],
+    // Planen og køen er regler. Det, der skal vejes, gør linjeagenterne og
+    // Operatøragenten.
+    engine: "kode",
+    cadence: "Ved hvert svar",
+    beslutning: "besluttet",
+  },
+
+  {
     id: "AG-SLIB-OPERATOER",
     name: "Operatøragent",
     role: "koordinering",

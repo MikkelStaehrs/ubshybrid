@@ -4,7 +4,7 @@ import sliberi from "../../data/lines/sliberi.json";
 import { layoutLine } from "./layout";
 import { FAULT_LOW_MA } from "./live-source";
 import {
-  bordFor, ekstraMaalereFor, graense, kanalerFor, maskinFart, samlLog, simulator, tomtBillede, INDKOERING_S, SIM,
+  graense, kanalerFor, maskinFart, samlLog, simulator, tomtBillede, INDKOERING_S, SIM,
   type Haendelse, type TelemetriBillede,
 } from "./telemetri";
 import type { LineData } from "./types";
@@ -138,84 +138,10 @@ describe("regler, der går igen fra resten af kortet", () => {
     }
   });
 
-  it("analysens fire klasser summer til hundrede", () => {
-    for (const b of forloeb.filter((_, i) => i % 200 === 0)) {
-      for (const a of b.analyse) {
-        if (!a.andele) continue;
-        const sum = a.andele.reduce((x, y) => x + y, 0);
-        assert.ok(Math.abs(sum - 100) < 1e-9, `${a.kort}: ${sum}`);
-      }
-    }
-  });
-
   it("oppetiden er en andel, ikke et gæt", () => {
     const slut = forloeb[forloeb.length - 1];
     assert.ok(slut.oppetidPct !== null);
     assert.ok(slut.oppetidPct! > 0 && slut.oppetidPct! <= 100);
-  });
-});
-
-describe("analysen og kastebordene", () => {
-  /** Gennemsnittet af en størrelse over hele forløbet, pr. maskine. */
-  const snit = (kort: string, hent: (b: TelemetriBillede) => number | null | undefined) => {
-    const v = forloeb.map(hent).filter((x): x is number => typeof x === "number");
-    assert.ok(v.length > 0, `${kort} har ingen tal`);
-    return v.reduce((a, b) => a + b, 0) / v.length;
-  };
-  const fv = (kort: string, i: number) => snit(kort, (b) => b.analyse.find((a) => a.kort === kort)?.andele?.[i]);
-  const kanal = (kort: string, id: string) =>
-    snit(kort, (b) => b.maskiner.find((m) => m.kort === kort)?.kanaler.find((k) => k.spec.id === id)?.value);
-
-  it("tager prøve fra hvert kastebord, ikke fra sporet", () => {
-    const kb = layout.machines.filter((m) => /^kb[-\s]/i.test(m.name)).map((m) => m.name).sort();
-    assert.deepEqual(forloeb[0].analyse.map((a) => a.kort).sort(), kb);
-  });
-
-  it("FV0 og FV1 dominerer", () => {
-    for (const a of forloeb[0].analyse) {
-      const [f0, f1, f2, f3] = [0, 1, 2, 3].map((i) => fv(a.kort, i));
-      assert.ok(f0 + f1 > 70, `${a.kort}: FV0+FV1 er ${f0 + f1}`);
-      assert.ok(Math.min(f0, f1) > Math.max(f2, f3), `${a.kort}: ${[f0, f1, f2, f3]}`);
-    }
-  });
-
-  it("andet bord i sporet har markant mindre FV3, BIGF og BIGH — og nærmest ingen NOTS", () => {
-    // Alle fire er klassificeringer af frøet på bordet: de står i analysen,
-    // ikke som kanaler på maskinen.
-    const tung = (kort: string, id: "bigf" | "bigh" | "nots") =>
-      snit(kort, (b) => b.analyse.find((a) => a.kort === kort)?.tung?.[id]);
-    for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
-      assert.ok(fv(andet, 3) < fv(foerste, 3) * 0.5, `FV3 ${andet} mod ${foerste}`);
-      assert.ok(tung(andet, "bigf") < tung(foerste, "bigf") * 0.75, `BIGF ${andet}`);
-      assert.ok(tung(andet, "bigh") < tung(foerste, "bigh") * 0.6, `BIGH ${andet}`);
-      assert.ok(tung(andet, "nots") < 1, `NOTS ${andet} er ${tung(andet, "nots")}`);
-      assert.ok(tung(andet, "nots") < tung(foerste, "nots") * 0.2, `NOTS ${andet}`);
-    }
-  });
-
-  it("andet bord smider mindre ud i den lette ende", () => {
-    const udskud = (kort: string) => snit(kort, (b) => b.analyse.find((a) => a.kort === kort)?.udskudPct);
-    for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
-      assert.ok(udskud(andet) < udskud(foerste), `${andet}: ${udskud(andet)} mod ${udskud(foerste)}`);
-    }
-  });
-
-  it("et bord, der står, tager ingen ny prøve", () => {
-    // Der løber intet frø forbi analysen. En ny prøve ville være opdigtet.
-    const sim = simulator(layout, { planlagteStop: [{ wid: "636", fraS: 100, varighedS: 150 }], stopHverS: 1e9 });
-    const t: (number | null)[] = [];
-    for (let i = 0; i < 4 * 260; i++) {
-      const b = sim.skridt(DT, T0 + i * DT);
-      const m = b.maskiner.find((x) => x.wIds.includes("636"))!;
-      if (m.koerer === false) t.push(b.analyse.find((a) => a.id === m.id)!.proeveT);
-    }
-    assert.ok(t.length > 4 * 60, "bordet stod ikke længe nok til at prøve reglen");
-    assert.equal(new Set(t).size, 1, "der kom en prøve, mens bordet stod");
-  });
-
-  it("kun FV3 melder — det er den, bordene renser ud", () => {
-    const alarmer = forloeb.flatMap((b) => b.haendelser).filter((h) => h.tekst.startsWith("FV"));
-    for (const h of alarmer) assert.match(h.tekst, /^FV3 /);
   });
 });
 
@@ -231,13 +157,6 @@ describe("grænserne", () => {
           assert.ok(k.alarmLav < k.nominal && k.nominal < k.alarmHoej, `${m.name}: ${k.label} står uden for sit eget bånd`);
         }
       }
-    }
-  });
-
-  it("andet kastebord melder NOTS ved en lavere grænse — det har fået, hvad det første rensede", () => {
-    const bord = (navn: string) => bordFor(layout.machines.find((m) => m.name === navn)!);
-    for (const [foerste, andet] of [["KB-3N", "KB-3NN"], ["KB-2S", "KB-2SS"]]) {
-      assert.ok(bord(andet).alarmNots < bord(foerste).alarmNots, andet);
     }
   });
 
@@ -318,8 +237,11 @@ describe("loggen", () => {
 
   it("husker mere end billedet", () => {
     // Billedet har de seneste; loggen det, der er sket, siden siden åbnede.
+    // Tre kvarter med flaskehalsen fremme: nok til, at der er sket mere,
+    // end billedet kan huske.
     let log: Haendelse[] = [];
-    for (const b of tvungetForloeb()) log = samlLog(log, b.haendelser);
+    const sim = simulator(layout, { tvungenFlaskehals: true });
+    for (let n = 0; n < 4 * 60 * 45; n++) log = samlLog(log, sim.skridt(DT, T0 + n * DT).haendelser);
     assert.ok(log.length > SIM.logLaengde, `loggen har kun ${log.length}`);
     assert.ok(log.some((x) => /Buffer fuld/.test(x.tekst)));
   });
@@ -353,9 +275,11 @@ describe("anlægget som det står", () => {
     for (const k of b.hal) assert.equal(k.value, null);
   });
 
-  it("har ingen kæde-tal og ingen analyse", () => {
+  it("har ingen kæde-tal og ingen prøver", () => {
+    // Laboratoriet er ikke forbundet. Et svar her ville være opdigtet.
     assert.equal(b.kaede, null);
-    for (const a of b.analyse) assert.equal(a.andele, null);
+    assert.equal(b.laboratorie.seneste.length, 0);
+    assert.equal(b.laboratorie.ct.igang, null);
     assert.equal(b.oppetidPct, null);
   });
 });
@@ -363,14 +287,13 @@ describe("anlægget som det står", () => {
 describe("kanalerne passer til maskinerne", () => {
   it("kastebordene har driftstal — vibration, slag, hældning og luft — og ikke klassificeringer", () => {
     // Det, der står på maskinen, er det, den stilles efter. Hvad der kommer
-    // ud, er output og står i analysen.
+    // ud, måles i laboratoriet.
     const kb = layout.machines.filter((m) => /^kb[-\s]/i.test(m.name));
     assert.equal(kb.length, 4);
     for (const m of kb) {
       const ids = kanalerFor(m).map((k) => k.id);
       for (const id of ["dæk", "slag", "tvaers", "langs", "luft"]) assert.ok(ids.includes(id), `${m.name} mangler ${id}`);
       for (const id of ["bigf", "bigh", "nots"]) assert.ok(!ids.includes(id), `${m.name} viser ${id} som drift`);
-      assert.deepEqual(ekstraMaalereFor(m), ["analyzer"], "klassificeringen kommer fra et analyseudstyr");
     }
   });
 

@@ -1,9 +1,10 @@
 "use client";
 import { useEffect } from "react";
-import { ANALYSE, DRIFTSAGENT } from "../../../data/fremskrivning";
+import { DRIFTSAGENT, KASTEBORDET, PARTI } from "../../../data/fremskrivning";
 import type { OtLayout } from "../../lib/ot";
-import { kildeTekst, tal, type Besked } from "../../lib/samspil";
-import { graense, type Anbefaling, type Haendelse, type MaskinLaesning, type TelemetriBillede } from "../../lib/telemetri";
+import { kildeTekst, klokke, tal, type Besked } from "../../lib/samspil";
+import { FRAKTION, type CtSvar, type Fraktion } from "../../lib/proever";
+import { graense, type Anbefaling, type Haendelse, type MaskinLaesning, type ProeveSvar, type TelemetriBillede, type Virkning } from "../../lib/telemetri";
 import { klok, Panel, Sim } from "./HudPanels";
 import { Bjaelke, Kurve, Tal } from "./Instrumenter";
 import type { Historik } from "./useTelemetri";
@@ -41,12 +42,16 @@ export function EnhedPanel({ m, billede, historik, log, samtale, ot, onLuk, onUd
     alarm: "Alarm", planlagt: "Slukket efter plan", styret: "Stoppet af AI", staar: "Stoppet", koerer: "Kører", ukendt: "Afventer",
   }[tilstand];
   const ind = billede.indstillinger[m.id] ?? null;
-  const analyse = billede.analyse.find((a) => a.id === m.id) ?? null;
-  const aaben = billede.anbefalinger.find((a) => a.maskine === m.id && a.status === "aaben") ?? null;
-  const tidligere = billede.anbefalinger.filter((a) => a.maskine === m.id && a.status !== "aaben").slice(0, 2);
+  // Carter og Alfa sorterer foreign seeds fra; deres anbefaling er sorteringens.
+  const sorterer = SORTERER.test(m.navn);
+  const hoererTil = (a: Anbefaling) => a.maskine === m.id || (sorterer && a.maskine === "sortering");
+  const aaben = billede.anbefalinger.find((a) => hoererTil(a) && a.status === "aaben") ?? null;
+  const tidligere = billede.anbefalinger.filter((a) => hoererTil(a) && a.status !== "aaben").slice(0, 2);
+  const proever = billede.laboratorie.seneste.filter((p) => p.sted.maskine === m.id && p.ct);
   const maalere = ot?.sensors.filter((s) => m.wIds.includes(s.machineId)) ?? [];
   const hvad = log.filter((h) => h.hvor === m.kort).slice(0, 6);
-  const sagt = samtale.filter((b) => b.tekst.includes(m.kort)).slice(0, 4);
+  // Hele navnet: KB-3NN er ikke KB-3N.
+  const sagt = samtale.filter((b) => naevner(b.tekst, m.kort)).slice(0, 4);
 
   return (
     <section className={`hud-enhed t-${tilstand}`} aria-label={`Enhed ${m.kort}`}>
@@ -114,22 +119,16 @@ export function EnhedPanel({ m, billede, historik, log, samtale, ot, onLuk, onUd
             </>
           )}
 
-          {analyse?.andele && (
+          {sorterer && m.lane && billede.sortering[m.lane] && (
             <>
-              <h3 className="he-h">Klassificering {analyse.proeveT !== null && <span className="he-tid">{klok(analyse.proeveT)}</span>}</h3>
-              <div className="he-klasser">
-                {ANALYSE.klasser.map((k, i) => (
-                  <span key={k} className={i === 3 && analyse.andele![3] > ANALYSE.alarmFV3 ? "is-alarm" : undefined}>
-                    <b>{k}</b><Tal v={analyse.andele![i]} d={1} /><i>%</i>
-                  </span>
-                ))}
-                {analyse.tung && (["bigf", "bigh", "nots"] as const).map((k) => (
-                  <span key={k}><b>{k.toUpperCase()}</b><Tal v={analyse.tung![k]} d={1} /><i>%</i></span>
-                ))}
-                {analyse.udskudPct !== null && <span><b>Udskud</b><Tal v={analyse.udskudPct} d={1} /><i>%</i></span>}
-              </div>
+              <h3 className="he-h">Sortering</h3>
+              <p className={`he-sortering${billede.sortering[m.lane] === "kraftig" ? " is-kraftig" : ""}`}>
+                {billede.sortering[m.lane] === "kraftig" ? "Kraftig" : "Normal"}
+              </p>
             </>
           )}
+
+          {proever.length > 0 && <Proever proever={proever} sim={sim} />}
 
           {aaben && <AnbefalingKort a={aaben} onUdfoer={onUdfoer} onAfvis={onAfvis} />}
           {tidligere.map((a) => <AnbefalingKort key={a.id} a={a} />)}
@@ -215,9 +214,11 @@ export function AnbefalingKort({ a, onUdfoer, onAfvis }: {
   onUdfoer?: (id: number) => void;
   onAfvis?: (id: number) => void;
 }) {
-  const navn = a.parameter === "tvaers" ? "Tværs" : "Luft";
-  const enhed = a.parameter === "tvaers" ? "°" : " %";
-  const d = a.parameter === "tvaers" ? 1 : 0;
+  const navn = a.parameter === "tvaers" ? "Tværs" : a.parameter === "luft" ? "Luft" : "Sortering";
+  const vaerdi = (v: number) => a.parameter === "sortering"
+    ? (v === 1 ? "kraftig" : "normal")
+    : `${tal(v, a.parameter === "tvaers" ? 1 : 0)}${a.parameter === "tvaers" ? "°" : " %"}`;
+  const hoved = a.virkning[0];
   const status = { aaben: "Anbefaling", udfoert: "Udført", afvist: "Afvist", udloebet: "Bortfaldet" }[a.status];
   return (
     <div className={`he-anbefaling s-${a.status}`}>
@@ -226,13 +227,11 @@ export function AnbefalingKort({ a, onUdfoer, onAfvis }: {
         <span className="he-fra">{a.fra}</span>
         <span className="he-tid">{klok(a.t)}</span>
       </div>
-      <p className="he-anb-hvad"><b>{a.kort}</b> · {navn} {tal(a.fraVaerdi, d)} → {tal(a.tilVaerdi, d)}{enhed}</p>
-      <p className="he-anb-forventet fm-num">
-        Venter FV3 {a.forventet.fv3 >= 0 ? "+" : ""}{tal(a.forventet.fv3, 1)} · udskud {a.forventet.udskud >= 0 ? "+" : ""}{tal(a.forventet.udskud, 1)} pp
-      </p>
-      {a.efter && (
+      <p className="he-anb-hvad"><b>{a.kort}</b> · {navn} {vaerdi(a.fraVaerdi)} → {vaerdi(a.tilVaerdi)}</p>
+      <p className="he-anb-forventet fm-num">Venter {a.virkning.map(ventet).join(" · ")}</p>
+      {hoved?.efter !== undefined && (
         <p className="he-anb-efter fm-num">
-          Blev FV3 {tal(a.foer.fv3, 1)} → {tal(a.efter.fv3, 1)} % · udskud {tal(a.foer.udskud, 1)} → {tal(a.efter.udskud, 1)} %
+          Blev {hoved.navn.toLowerCase()} {hoved.foer !== null ? `${tal(hoved.foer, 1)} → ` : ""}{tal(hoved.efter, 1)} %
         </p>
       )}
       {a.status === "aaben" && onUdfoer && onAfvis && (
@@ -243,6 +242,73 @@ export function AnbefalingKort({ a, onUdfoer, onAfvis }: {
       )}
     </div>
   );
+}
+
+/** Står navnet i teksten som et helt navn — ikke som begyndelsen på et andet? */
+function naevner(tekst: string, navn: string): boolean {
+  const del = (c: string | undefined) => !!c && /[\w-]/.test(c);
+  for (let i = tekst.indexOf(navn); i >= 0; i = tekst.indexOf(navn, i + 1)) {
+    if (!del(tekst[i - 1]) && !del(tekst[i + navn.length])) return true;
+  }
+  return false;
+}
+
+/** "multigerm i mainline -0,2 pp", "foreign seeds videre -67 %". */
+function ventet(v: Virkning): string {
+  const enhed = v.enhed === "%-rel" ? " %" : " pp";
+  return `${v.navn.toLowerCase()} ${v.forventet >= 0 ? "+" : ""}${tal(v.forventet, v.enhed === "%-rel" ? 0 : 1)}${enhed}`;
+}
+
+const SORTERER = /carter|alfa/i;
+
+/**
+ * Enhedens seneste svar fra laboratoriet: på et kastebord de tre strømme,
+ * på en jetpealer strømmen efter den. Hvert svar står med, hvornår prøven
+ * blev taget — et svar er en prøve, ikke en måling lige nu.
+ */
+function Proever({ proever, sim }: { proever: ProeveSvar[]; sim: boolean }) {
+  const orden: (Fraktion | null)[] = ["mainline", "heavy", "light", null];
+  const liste = [...proever].sort((a, b) => orden.indexOf(a.sted.fraktion) - orden.indexOf(b.sted.fraktion));
+  return (
+    <>
+      <h3 className="he-h">Prøver {sim && <Sim />}</h3>
+      <dl className="he-proever">
+        {liste.map((p) => {
+          const c = p.ct!;
+          const g = p.sted.bord !== null ? KASTEBORDET.graenser[Math.min(p.sted.bord, KASTEBORDET.graenser.length - 1)] : null;
+          const tal3 = raekke(p.sted.fraktion, c);
+          const over = (k: string, v: number) => !!g && (
+            (k === "Multigerm" && p.sted.fraktion === "mainline" && v > g.multi)
+            || (k === "Let" && p.sted.fraktion === "mainline" && v > g.let)
+            || (k === "Godt frø" && p.sted.fraktion === "heavy" && v > g.heavyGodt)
+            || (k === "Godt frø" && p.sted.fraktion === "light" && v > g.lightGodt));
+          return (
+            <div key={p.sted.id}>
+              <dt>{p.sted.fraktion ? FRAKTION[p.sted.fraktion] : "CT"}<span className="he-tid">{klokke(p.taget)}</span></dt>
+              <dd>
+                {tal3.map(([k, v, d, enhed]) => (
+                  <span key={k} className={over(k, v) ? "is-over" : undefined}><b>{k}</b><span className="fm-num">{tal(v, d)}<i>{enhed}</i></span></span>
+                ))}
+                {p.sted.fraktion !== "heavy" && p.sted.fraktion !== "light" && (
+                  <span className="he-fv fm-num">{PARTI.fvKlasser.map((k, i) => `${k} ${tal(c.fv[i], 0)}`).join(" · ")}</span>
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </>
+  );
+}
+
+/** De tal, der betyder noget i hver strøm. */
+function raekke(f: Fraktion | null, c: CtSvar): [string, number, number, string][] {
+  const multi = c.bigf + c.bigh;
+  if (f === "mainline") return [["Multigerm", multi, 1, "%"], ["Let", c.let, 1, "%"], ["Godt frø", c.godt, 1, "%"]];
+  if (f === "heavy") return [["Godt frø", c.godt, 0, "%"], ["Multigerm", multi, 0, "%"], ["Sten", c.sten, 1, "%"]];
+  if (f === "light") return [["Godt frø", c.godt, 0, "%"], ["Let", c.let, 0, "%"], ["Ler", c.ler, 1, "%"]];
+  // Foreign seeds er sjældne: et antal i prøven siger mere end en procent.
+  return [["BIGF", c.bigf, 1, "%"], ["BIGH", c.bigh, 1, "%"], ["NOTS", c.notsStk, 0, "stk"]];
 }
 
 /**

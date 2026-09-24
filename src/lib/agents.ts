@@ -65,6 +65,7 @@ export const AGENT_ROLE_LABEL: Record<AgentRole, string> = {
   styring: "Styring",
   data: "Data",
   koordinering: "Koordinering",
+  proever: "Prøvetagning",
 };
 
 /**
@@ -284,7 +285,23 @@ function resolveInput(
     };
   }
 
-  // 4) En datakilde, målt som dækning over scopet — som driftssignalerne.
+  // 4a) Laboratoriet: CT og videometer leverer, når de er forbundet til
+  // databasen. Ét sted — ikke en dækning over maskinerne.
+  if (input.dataset === "laboratorie") {
+    const lab = ot?.infrastructure.find((n) => n.type === "lab");
+    const leverer = !!lab && isDone(lab.status);
+    return {
+      input,
+      label: "Laboratoriets prøver",
+      have: leverer ? 1 : 0,
+      total: 1,
+      detail: leverer ? `${lab!.name} leverer` : lab ? `${lab.name} er ikke forbundet` : "Intet laboratorie registreret",
+      blockedBy: leverer || !lab ? [] : [lab.name],
+      chainBlocked: false,
+    };
+  }
+
+  // 4b) En datakilde, målt som dækning over scopet — som driftssignalerne.
   if (input.dataset) {
     const total = scope.length;
     const have = scope.filter((m) => historyFor(m.wIds).length > 0).length;

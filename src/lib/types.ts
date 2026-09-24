@@ -348,7 +348,7 @@ export interface SensorIdea {
 /** Leddene i datavejen, fra måling til skærm. */
 export type OtPathStep = "sensor" | "io" | "kobler" | "edge" | "mssql" | "dashboard";
 
-export type OtInfraType = "uplink" | "rack" | "vlan" | "edge" | "link" | "cloud";
+export type OtInfraType = "uplink" | "rack" | "vlan" | "edge" | "link" | "cloud" | "lab";
 
 export interface OtInfraNode {
   id: string;
@@ -447,7 +447,7 @@ export interface LineOps {
  * ind i driften. Det skel skal kunne ses, for det er ikke det samme at sende
  * en rapport som at stoppe en linje.
  */
-export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt" | "styring" | "data" | "koordinering";
+export type AgentRole = "linjeagent" | "tvaergaaende" | "vagt" | "styring" | "data" | "koordinering" | "proever";
 
 /**
  * Hvor langt nogen har taget stilling til agenten.
@@ -499,10 +499,12 @@ export interface AgentInput {
   /** Led i datavejen — kun for kædevagten. */
   chainStep?: OtPathStep;
   /**
-   * En datakilde frem for et signal. Måles som dækning over agentens scope,
-   * ligesom driftssignalerne: hvor mange af maskinerne har noget at vise.
+   * En datakilde frem for et signal. Vedligeholdshistorikken måles som
+   * dækning over agentens scope, ligesom driftssignalerne: hvor mange af
+   * maskinerne har noget at vise. Laboratoriet — CT og videometer — leverer,
+   * når det er forbundet til databasen.
    */
-  dataset?: "maintenance";
+  dataset?: "maintenance" | "laboratorie";
   /**
    * Materialestrømmen ind i agentens scope, målt før den første maskine den
    * ejer. Agenten peger ikke på et bestemt tag: flytter måleren sig, eller

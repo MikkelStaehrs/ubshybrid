@@ -163,14 +163,21 @@ describe("agenterne imellem", () => {
     }
   });
 
-  it("en anbefaling til operatøren er konkret: én indstilling, ét trin, med det forventede", () => {
-    const forslag = forloeb.samtale.filter((b) => b.type === "forslag" && /^(Hæv|Sænk) (tværhældningen|luften) på KB-/.test(b.tekst));
+  it("en anbefaling til operatøren er konkret: hvad, hvor meget — og tallene bag", () => {
+    // Et kastebord flyttes ét trin; sorteringen skifter mellem normal og kraftig.
+    const forslag = forloeb.samtale.filter((b) => b.type === "forslag" && /^((Hæv|Sænk) (tværhældningen|luften) på KB-|Sortér )/.test(b.tekst));
     assert.ok(forslag.length > 0, "ordren gav ingen anbefaling at prøve reglen på");
     for (const b of forslag) {
       assert.equal(b.til, "Operatør");
-      assert.match(b.tekst, /fra [\d,]+ til [\d,]+/);
-      assert.match(b.grund ?? "", /Venter/);
+      if (b.tekst.startsWith("Sortér")) assert.match(b.grund ?? "", /foreign seeds/);
+      else assert.match(b.tekst, /fra [\d,]+ til [\d,]+/);
+      assert.match(b.grund ?? "", /\d/, `"${b.tekst}" har ingen tal bag`);
     }
+  });
+
+  it("FV styrer ingenting: alt fra FV0 til FV3 er godt frø", () => {
+    for (const b of forloeb.samtale.filter((x) => x.type === "forslag")) assert.doesNotMatch(`${b.tekst} ${b.grund ?? ""}`, /FV\d/);
+    assert.ok(!forloeb.samtale.some((x) => /^FV3 /.test(x.tekst)), "en FV3-alarm er tilbage");
   });
 });
 
@@ -258,12 +265,19 @@ describe("tal og tider i beskederne", () => {
     const linjer = ordreRapport({
       ordreNr: "X", kg: 12000, kasser: 24, startT: 0, slutT: 12 * 3_600_000, oppetidPct: 97.5,
       sporStop: [{ lane: "N", fra: 0, til: 600_000, aarsag: "x" }], maskinstop: 2, mssqlEpisoder: 0,
-      maksForsinkelseS: 0, tabt: 0, sensorfejl: 1, fv3: [{ kort: "KB-3N", snit: 8 }], beslutninger: 5, beskeder: 40,
+      maksForsinkelseS: 0, tabt: 0, sensorfejl: 1, beslutninger: 5, beskeder: 40,
+      lab: {
+        ct: 40, videometer: 12, sprunget: 2, fremmedMaks: { stk: 102, kasse: 3 }, kraftigS: 3 * 3600,
+        produkt: [{ lane: "N", multi: 0.52 }, { lane: "S", multi: null }],
+      },
     });
     assert.equal(linjer[0], "12.000 kg · 24 kasser · 12 t 0 min");
     assert.match(linjer[1], /^1,00 t\/hr i snit · oppetid 97,5 %$/);
     assert.match(linjer[2], /spor N stod 1 gang, 10 min 0 s · spor S stod ikke/);
     assert.equal(linjer[3], "MSSQL fulgte med hele vejen");
+    assert.equal(linjer[5], "Laboratoriet · 40 CT-prøver · 12 videometer · 2 sprunget over");
+    assert.equal(linjer[6], "Mainline ud · spor N multigerm 0,5 % · spor S intet svar");
+    assert.equal(linjer[7], "Foreign seeds højst 102 pr. prøve (kasse 3) · kraftig sortering 3 t 0 min");
   });
 
   it("samtalen husker hver besked én gang, nyeste først", () => {
