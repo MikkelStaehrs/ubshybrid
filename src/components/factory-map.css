@@ -353,6 +353,40 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fm-tag.is-selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .fm-tag.is-selected .fm-tag-id { color: var(--accent-ink); opacity: 0.8; }
 
+/* --- Hele fabrikken ---------------------------------------------------------
+   Forbindelserne har tingenes egne farver: materialet som strømmen, prøverne
+   som analyseudstyret, data som skabet, mennesker som personerne. Stiplet
+   betyder "findes ikke endnu", som resten af kortet. */
+.fm-legend.fb-panel { left: auto; right: var(--gutter); width: 320px; max-height: calc(100% - 170px); overflow-y: auto; }
+.fb-slags label { display: flex; align-items: center; gap: 8px; width: 100%; cursor: pointer; }
+.fb-slags input { margin: 0; accent-color: var(--accent); }
+.fb-streg { --c: var(--muted); display: inline-block; width: 22px; height: 3px; border-radius: 1px; background: var(--c); flex: none; }
+.fb-streg.s-materiale { --c: var(--flow); }
+.fb-streg.s-proever { --c: var(--m-analysis); }
+.fb-streg.s-data { --c: var(--ot-cabinet); }
+.fb-streg.s-mennesker { --c: var(--m-person); }
+.fb-streg.is-stiplet { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.fm-legend p.fb-noegle { display: flex; align-items: center; gap: 6px; }
+.fb-liste { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.fb-liste button {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  column-gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+}
+.fb-liste button:hover, .fb-liste button.is-valgt { background: var(--surface-2); border-color: var(--line); }
+.fb-liste .fb-streg { grid-row: 1 / span 3; margin-top: 8px; }
+.fb-navn { font-weight: 600; }
+.fb-hvor { grid-column: 2; font-size: 12px; color: var(--muted); }
+.fb-note { grid-column: 2; margin-top: 4px; font-size: 12px; line-height: 1.4; color: var(--ink); }
+.fb-fejl { margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: var(--warn-soft); }
+.fm-legend .fb-fejl p { margin: 0; color: var(--ink); }
+
 /* --- Legend -------------------------------------------------------------- */
 .fm-legend {
   position: absolute;

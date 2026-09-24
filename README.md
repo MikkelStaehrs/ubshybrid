@@ -157,6 +157,10 @@ Ud over de nummererede linjer kan der være **rum**, der hører til hele fabrikk
 tilføjes `ROOM_IDS` i `src/lib/lines.ts`. Så ligger de i deres egen gruppe i
 vælgeren og kan nås uanset hvilken linje man står på.
 
+**Hele fabrikken** øverst i vælgeren viser alle linjer og rum på én grund og
+forbindelserne mellem dem: materialeflow, prøver, data og mennesker.
+Afdelinger uden tegning og de håndholdte forbindelser står i `data/fabrik.ts`.
+
 Et rum tegnes uden pile. Er der ikke en eneste pil i tegningen, forstår parseren
 den som et rum og gætter hverken forbindelser eller brokker sig over løse
 maskiner. Spor-, flow- og trin-visningen skjuler sig selv, når der ikke er noget

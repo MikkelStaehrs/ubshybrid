@@ -7,6 +7,7 @@ import {
 } from "../lib/agents";
 import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
 import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
+import { LinjeVaelger } from "./LinjeVaelger";
 import type { LineOption } from "../lib/lines";
 import {
   describeDate, formatCost, historyFor, lastOfType,
@@ -261,7 +262,8 @@ export function FactoryMap({
   // Fælleszonen vælges for sig — den ejes ikke af nogen agent.
   const [inletSel, setInletSel] = useState(false);
   const isRoom = !!rooms?.some((r) => r.id === data.line.id);
-  const showPicker = (lines?.length ?? 0) + (rooms?.length ?? 0) > 1 && !!onSelectLine;
+  // Med hele fabrikken er der altid noget at vælge imellem.
+  const showPicker = !!onSelectLine;
 
   // OT-installationen findes kun for de linjer, der har fået den projekteret.
   const otData = useMemo(() => otLayerFor(data.line.id), [data.line.id]);
@@ -440,27 +442,7 @@ export function FactoryMap({
           <div className="fm-eyebrow">
             {site} ·{" "}
             {showPicker ? (
-              <select
-                className="fm-linepick"
-                aria-label="Vælg linje eller rum"
-                value={data.line.id}
-                onChange={(e) => onSelectLine!(e.target.value)}
-              >
-                {!!lines?.length && (
-                  <optgroup label="Linjer">
-                    {lines.map((l) => (
-                      <option key={l.id} value={l.id}>Linje {l.order} – {l.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {!!rooms?.length && (
-                  <optgroup label="Rum">
-                    {rooms.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+              <LinjeVaelger vaerdi={data.line.id} lines={lines ?? []} rooms={rooms ?? []} onVaelg={onSelectLine!} />
             ) : isRoom ? (
               <>{data.line.name}</>
             ) : (

@@ -19,6 +19,7 @@ Den vigtigste skelnen i repoet. Bland de to, og arbejde går tabt.
 | `data/line-config.ts` | Håndholdt — normtakt, stopdefinition, stopårsager |
 | `data/agents.ts` | Håndholdt — agenterne |
 | `data/fremskrivning.ts` | Håndholdt — fremskrivningens antagelser: kanaler, driftspunkter, alarmgrænser |
+| `data/fabrik.ts` | Håndholdt — afdelinger uden tegning, og materialeflow, prøver og mennesker mellem delene |
 
 Alt håndholdt bindes til maskinerne på **W-ID**, aldrig på tegningens celle-id
 eller på maskinens navn. En hændelse, en sensor eller en override skal følge
@@ -164,6 +165,35 @@ pr. kørsel. Det skal kunne ses i fladen, før nogen slår noget til.
 
 **`til` og `svarerPaa`** er påkrævede. En agent uden modtager og uden ét
 spørgsmål, den besvarer, har intet formål — og så er den ikke færdigtænkt.
+
+## Hele fabrikken
+
+"Hele fabrikken" øverst i vælgeren lægger alle linjer og rum på én grund og
+viser forbindelserne mellem dem. Den skal gøre det muligt at se sammenhænge,
+når alle afdelinger og linjer kommer på. Oversigten viser anlægget, som det
+står — det rigtige OT-lag, ikke fremskrivningen.
+
+- **Placeringen er skematisk, indtil fabrikken er målt op.** Linjerne står i
+  nummerorden, rummene for sig (`fabrikModel()` i `src/lib/fabrik.ts`). En
+  linje, der er målt op mod fabrikkens nulpunkt, står, hvor den står, og de
+  skematiske stilles ved siden af. Intet ligger oven i hinanden; det har en
+  test.
+- **Det, der ikke er tegnet, står stiplet** med sit navn (`UTEGNEDE` i
+  `data/fabrik.ts`), så forbindelser kan pege på det allerede nu.
+- **Fire slags forbindelser:** materialeflow, prøver, data og netværk,
+  mennesker. Tre er håndholdte (`FORBINDELSER`), bundet til W-ID eller til
+  en linje eller et rum som helhed. **Data og netværk udledes** af OT-laget:
+  om en linjes skab når frem til MSSQL, afgør `pathState()`, og
+  laboratoriets svar følger `INF-LAB`. Skrev vi dem i hånden, ville de lyve,
+  så snart kæden blev rejst. Det har en test.
+- **Fuld streg findes, stiplet findes ikke endnu** — som resten af kortet.
+  Farven er tingens egen: materialet som strømmen, prøverne som
+  analyseudstyret, data som skabet, mennesker som personerne. Ingen nye
+  tokens.
+- **En forbindelse, der peger på noget, der ikke findes, tegnes ikke — og
+  det siges** i panelet. En test holder den håndholdte liste ren.
+- **Forbindelser opfindes ikke.** Kun det, driften har sagt, står i
+  `FORBINDELSER`.
 
 ## HUD'en på /ai
 
@@ -670,6 +700,17 @@ bruger `inlet: "materiale"` og ikke `signalId: "FT-743"`: flytter måleren
 sig igen, skal inputtet stadig passe. Et `signalId` er til, når det er
 præcis den måler, der skal bruges.
 
+### Ny afdeling eller forbindelse
+
+Er afdelingen ikke tegnet endnu, så skriv den i `UTEGNEDE` i
+`data/fabrik.ts`: et id, et navn og — er det en nummereret linje — dens
+nummer. Får den en tegning, registreres den som en linje med samme id (se
+"Ny linje"), og posten slettes.
+
+En forbindelse skrives i `FORBINDELSER`: slags, et navn på højst fire ord,
+fra og til (en linje eller et rum, og evt. W-ID'er) og om den findes i dag.
+Data og netværk skrives ikke — de udledes af OT-laget.
+
 ### Nyt signal
 
 I `data/ot-layer.ts` under `sensors`. Husk `catalogType` — uden den kan en
@@ -771,6 +812,10 @@ har sagt tallet.
   valgt. Med de nuværende tal i `KAEDE` er databasen loftet ved omkring 225
   signaler — tjek det, når udstyret vælges, for det er dér, anlægget ville
   løbe tør først.
+- **Infrastrukturen er registreret pr. linje** (`OT_INFRASTRUCTURE.sliberi`),
+  men racket og laboratoriet hører til hele fabrikken. Oversigten tæller hver
+  knude én gang, men når linje nr. 2 får et OT-lag, bør de flyttes op til
+  fabrikken.
 - **Den tværgående agent venter på linje nr. 2.** Der er ikke noget at gå på
   tværs af endnu.
 - **Fase 4 er et Python-script på serveren**, der henter `/api/context`,

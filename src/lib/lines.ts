@@ -33,3 +33,6 @@ export const ROOM_OPTIONS: LineOption[] = entries.filter(([id]) => ROOM_IDS.has(
 
 /** Visningen der åbnes først. */
 export const DEFAULT_LINE = LINE_OPTIONS[0].id;
+
+/** Hele fabrikken på én grund: alle linjer og rum, og forbindelserne mellem dem. */
+export const FABRIK_ID = "fabrik";

@@ -211,7 +211,7 @@ function paintedText(text: string, color: string) {
   return t;
 }
 
-function FloorText({ text, color, position, size = 6 }: { text: string; color: string; position: [number, number, number]; size?: number }) {
+export function FloorText({ text, color, position, size = 6 }: { text: string; color: string; position: [number, number, number]; size?: number }) {
   // Tegn igen når webfonten er indlæst.
   const [fontsReady, setFontsReady] = useState(false);
   useEffect(() => { document.fonts?.ready.then(() => setFontsReady(true)); }, []);
