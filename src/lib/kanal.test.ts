@@ -46,6 +46,7 @@ const status = (t: number): SimStatus => ({
   t, valgt: "auto", gang: 90, ordre: null, uro: [],
   agenter: { motor: "regler", kald: 0, brugtKr: 0, loftKr: 0, venter: [], stoppet: null, fejl: null, seed: 743 },
   anbefalinger: [],
+  proever: null,
 });
 const h = (t: number, tekst = `h${t}`): Haendelse => ({ t, hvor: null, tekst, niveau: "info" });
 const b = (nr: number): Besked => ({ nr, t: nr, fra: "Driftsagent", til: "Alle", type: "iagttagelse", tekst: `b${nr}` });

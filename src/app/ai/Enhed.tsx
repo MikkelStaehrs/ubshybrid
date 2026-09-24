@@ -1,9 +1,9 @@
 "use client";
 import { useEffect } from "react";
-import { DRIFTSAGENT, KASTEBORDET, PARTI } from "../../../data/fremskrivning";
+import { DRIFTSAGENT, PARTI } from "../../../data/fremskrivning";
 import type { OtLayout } from "../../lib/ot";
 import { kildeTekst, klokke, tal, type Besked } from "../../lib/samspil";
-import { FRAKTION, type CtSvar, type Fraktion } from "../../lib/proever";
+import { ctMulti, ctPris, FRAKTION, graenseFor, type CtSvar, type Fraktion } from "../../lib/proever";
 import { graense, type Anbefaling, type Haendelse, type MaskinLaesning, type ProeveSvar, type TelemetriBillede, type Virkning } from "../../lib/telemetri";
 import { klok, Panel, Sim } from "./HudPanels";
 import { Bjaelke, Kurve, Tal } from "./Instrumenter";
@@ -42,7 +42,7 @@ export function EnhedPanel({ m, billede, historik, log, samtale, ot, onLuk, onUd
     alarm: "Alarm", planlagt: "Slukket efter plan", styret: "Stoppet af AI", staar: "Stoppet", koerer: "Kører", ukendt: "Afventer",
   }[tilstand];
   const ind = billede.indstillinger[m.id] ?? null;
-  // Carter og Alfa sorterer foreign seeds fra; deres anbefaling er sorteringens.
+  // Triøren sorterer foreign seeds fra; dens anbefaling er sorteringens.
   const sorterer = SORTERER.test(m.navn);
   const hoererTil = (a: Anbefaling) => a.maskine === m.id || (sorterer && a.maskine === "sortering");
   const aaben = billede.anbefalinger.find((a) => hoererTil(a) && a.status === "aaben") ?? null;
@@ -218,7 +218,8 @@ export function AnbefalingKort({ a, onUdfoer, onAfvis }: {
   const vaerdi = (v: number) => a.parameter === "sortering"
     ? (v === 1 ? "kraftig" : "normal")
     : `${tal(v, a.parameter === "tvaers" ? 1 : 0)}${a.parameter === "tvaers" ? "°" : " %"}`;
-  const hoved = a.virkning[0];
+  // Det, CT'en kan måle, er det, virkningen gøres op på. Tabet i kg står som ventet.
+  const hoved = a.virkning.find((v) => v.noegle);
   const status = { aaben: "Anbefaling", udfoert: "Udført", afvist: "Afvist", udloebet: "Bortfaldet" }[a.status];
   return (
     <div className={`he-anbefaling s-${a.status}`}>
@@ -253,13 +254,15 @@ function naevner(tekst: string, navn: string): boolean {
   return false;
 }
 
-/** "multigerm i mainline -0,2 pp", "foreign seeds videre -67 %". */
+/** "multigerm i ready +0,01 pp", "godt frø tabt -1,3 kg/t", "foreign seeds videre -75 %". */
 function ventet(v: Virkning): string {
-  const enhed = v.enhed === "%-rel" ? " %" : " pp";
-  return `${v.navn.toLowerCase()} ${v.forventet >= 0 ? "+" : ""}${tal(v.forventet, v.enhed === "%-rel" ? 0 : 1)}${enhed}`;
+  const enhed = v.enhed === "%-rel" ? " %" : v.enhed === "kg/t" ? " kg/t" : " pp";
+  // Et lille procentpoint skal kunne ses: 0,006 er ikke nul.
+  const d = v.enhed === "%-rel" ? 0 : v.enhed === "kg/t" || Math.abs(v.forventet) >= 0.1 ? 1 : 2;
+  return `${v.navn.toLowerCase()} ${v.forventet >= 0 ? "+" : ""}${tal(v.forventet, d)}${enhed}`;
 }
 
-const SORTERER = /carter|alfa/i;
+const SORTERER = /triør|trioer/i;
 
 /**
  * Enhedens seneste svar fra laboratoriet: på et kastebord de tre strømme,
@@ -267,7 +270,7 @@ const SORTERER = /carter|alfa/i;
  * blev taget — et svar er en prøve, ikke en måling lige nu.
  */
 function Proever({ proever, sim }: { proever: ProeveSvar[]; sim: boolean }) {
-  const orden: (Fraktion | null)[] = ["mainline", "heavy", "light", null];
+  const orden: (Fraktion | null)[] = ["ready", "heavy", "light", null];
   const liste = [...proever].sort((a, b) => orden.indexOf(a.sted.fraktion) - orden.indexOf(b.sted.fraktion));
   return (
     <>
@@ -275,13 +278,11 @@ function Proever({ proever, sim }: { proever: ProeveSvar[]; sim: boolean }) {
       <dl className="he-proever">
         {liste.map((p) => {
           const c = p.ct!;
-          const g = p.sted.bord !== null ? KASTEBORDET.graenser[Math.min(p.sted.bord, KASTEBORDET.graenser.length - 1)] : null;
+          const g = p.sted.bord !== null ? graenseFor(p.sted.bord) : null;
           const tal3 = raekke(p.sted.fraktion, c);
-          const over = (k: string, v: number) => !!g && (
-            (k === "Multigerm" && p.sted.fraktion === "mainline" && v > g.multi)
-            || (k === "Let" && p.sted.fraktion === "mainline" && v > g.let)
-            || (k === "Godt frø" && p.sted.fraktion === "heavy" && v > g.heavyGodt)
-            || (k === "Godt frø" && p.sted.fraktion === "light" && v > g.lightGodt));
+          // Kun Ready har en grænse. En høj pris i siderne er noget at åbne for, ikke en fejl.
+          const over = (k: string, v: number) => !!g && p.sted.fraktion === "ready" && (
+            (k === "Multigerm" && v > g.readyMulti) || (k === "Fragmenter" && v > g.readyFrag));
           return (
             <div key={p.sted.id}>
               <dt>
@@ -306,14 +307,21 @@ function Proever({ proever, sim }: { proever: ProeveSvar[]; sim: boolean }) {
   );
 }
 
-/** De tal, der betyder noget i hver strøm. */
+/**
+ * De tal, der betyder noget i hver strøm — det, den rigtige CT viser. Heavy og
+ * Light ryger ud, så prisen står ved dem: gode frø pr. uønsket.
+ */
 function raekke(f: Fraktion | null, c: CtSvar): [string, number, number, string][] {
-  const multi = c.bigf + c.bigh;
-  if (f === "mainline") return [["Multigerm", multi, 1, "%"], ["Let", c.let, 1, "%"], ["Godt frø", c.godt, 1, "%"]];
-  if (f === "heavy") return [["Godt frø", c.godt, 0, "%"], ["Multigerm", multi, 0, "%"], ["Sten", c.sten, 1, "%"]];
-  if (f === "light") return [["Godt frø", c.godt, 0, "%"], ["Let", c.let, 0, "%"], ["Ler", c.ler, 1, "%"]];
+  const multi = ctMulti(c);
+  if (f === "ready") return [["Multigerm", multi, 1, "%"], ["Fragmenter", c.frag, 1, "%"], ["Godt frø", c.godt, 1, "%"]];
+  if (f === "heavy") return [["Godt frø", c.godt, 1, "%"], ["Multigerm", multi, 1, "%"], ["Pr. uønsket", ctPris(c), 0, "frø"]];
+  if (f === "light") return [["Godt frø", c.godt, 1, "%"], ["Tomme", c.tom, 1, "%"], ["Pr. uønsket", ctPris(c), 0, "frø"]];
   // Foreign seeds er sjældne: et antal i prøven siger mere end en procent.
-  return [["BIGF", c.bigf, 1, "%"], ["BIGH", c.bigh, 1, "%"], ["NOTS", c.notsStk, 0, "stk"]];
+  // Frøvægten viser fordelerens deling: små frø i det ene spor, store i det andet.
+  return [
+    ["BIGF", c.bigf, 1, "%"], ["BIGH", c.bigh, 1, "%"], ["TWIN", c.twin, 1, "%"], ["NOTS", c.notsStk, 0, "stk"],
+    ...(c.mg !== null ? [["Frøvægt", c.mg, 1, "mg"] as [string, number, number, string]] : []),
+  ];
 }
 
 /**

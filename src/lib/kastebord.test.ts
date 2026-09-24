@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import sliberi from "../../data/lines/sliberi.json";
 import { FLOW_NOMINAL, KASTEBORDET, ORDRE } from "../../data/fremskrivning";
 import { layoutLine } from "./layout";
-import { nytParti, type Parti } from "./proever";
+import { godt, multi, nytParti, type Parti, type Stroem } from "./proever";
 import type { Besked } from "./samspil";
 import {
   kanalerFor, rng, samlLog, samlSamtale, simulator,
@@ -17,15 +17,18 @@ const ordre = { ordreNr: ORDRE.ordreNr, estimeretKg: ORDRE.estimeretKg, kasser: 
 
 /**
  * Et parti med langt mere multigerm end normalt. Det første bord i hvert
- * spor kan ikke holde sin Mainline ren ved standardindstillingerne — så en
+ * spor kan ikke holde sin Ready ren ved standardindstillingerne — så en
  * test ved, at der kommer en anbefaling, i stedet for at håbe på det.
  */
-function multigermParti(faktor = 1.8, seed = 11): Parti {
+function multigermParti(faktor = 3, seed = 11): Parti {
   const p = nytParti(rng(seed), ORDRE.kasser);
   for (const k of p.kasser) {
-    const ekstra = k.multi * (faktor - 1);
-    k.multi += ekstra;
-    k.godt -= ekstra;
+    const ekstra = multi(k) * (faktor - 1);
+    const rest = 1 - ekstra / godt(k);
+    k.bigf *= faktor;
+    k.bigh *= faktor;
+    k.twin *= faktor;
+    k.fv = k.fv.map((x) => x * rest) as Stroem["fv"];
   }
   return p;
 }
@@ -52,12 +55,12 @@ function koer(hver: (b: TelemetriBillede, sim: Simulator) => boolean | void, par
 const bordAnbefaling = (a: Anbefaling) => a.parameter === "tvaers" || a.parameter === "luft";
 
 /** Kør, til den første anbefaling til et kastebord står åben. */
-function tilFoersteAnbefaling(passer: (a: Anbefaling) => boolean = () => true) {
+function tilFoersteAnbefaling(passer: (a: Anbefaling) => boolean = () => true, parti = multigermParti()) {
   let fundet: Anbefaling | null = null;
   const r = koer((b) => {
     fundet = b.anbefalinger.find((a) => a.status === "aaben" && bordAnbefaling(a) && passer(a)) ?? null;
     return fundet !== null;
-  });
+  }, parti);
   assert.ok(fundet, "ordren gav ingen anbefaling til et kastebord");
   return { ...r, anbefaling: fundet as Anbefaling };
 }
@@ -65,16 +68,33 @@ function tilFoersteAnbefaling(passer: (a: Anbefaling) => boolean = () => true) {
 describe("et kastebord vurderes", () => {
   it("på renhed og tab — ikke på FV", () => {
     const { anbefaling: a, samtale } = tilFoersteAnbefaling();
-    // For meget multigerm i Mainline: bordet skal sende mere til Heavy.
+    // For meget multigerm i Ready: bordet skal sende mere til Heavy.
     assert.equal(a.parameter, "tvaers");
     assert.ok(a.tilVaerdi > a.fraVaerdi);
-    assert.equal(a.virkning[0].navn, "Multigerm i Mainline");
-    assert.ok(a.virkning[0].foer! > KASTEBORDET.graenser[0].multi, `multigerm ${a.virkning[0].foer}`);
-    // Hvad der ventes: mindre multigerm, mere godt frø i Heavy.
+    assert.equal(a.virkning[0].navn, "Multigerm i Ready");
+    assert.ok(a.virkning[0].foer! > KASTEBORDET.graenser[0].readyMulti, `multigerm ${a.virkning[0].foer}`);
+    // Hvad der ventes: mindre multigerm — og flere kg godt frø ud.
     assert.ok(a.virkning[0].forventet < 0 && a.virkning[1].forventet > 0);
+    assert.equal(a.virkning[1].enhed, "kg/t");
     const forslag = samtale.find((b) => b.type === "forslag" && /^(Hæv|Sænk) /.test(b.tekst) && b.tekst.includes(a.kort))!;
-    assert.match(forslag.grund ?? "", /multigerm i Mainline/i);
+    assert.match(forslag.grund ?? "", /multigerm i Ready/i);
+    assert.match(forslag.grund ?? "", /kg godt frø mere ud i timen/);
     assert.doesNotMatch(`${forslag.tekst} ${forslag.grund}`, /FV\d/);
+  });
+
+  it("et normalt parti: bordet åbnes, for Heavy og Light er næsten kun godt frø", () => {
+    // Heavy og Light ryger ud. Har Ready luft, og smider en side mange gode
+    // frø ud pr. uønsket, åbnes bordet — og det, der ventes, er kiloene.
+    const { anbefaling: a, samtale } = tilFoersteAnbefaling(() => true, nytParti(rng(11), ORDRE.kasser));
+    assert.ok(a.tilVaerdi < a.fraVaerdi, `${a.parameter} ${a.fraVaerdi} → ${a.tilVaerdi}`);
+    assert.equal(a.virkning[0].navn, "Godt frø tabt");
+    assert.equal(a.virkning[0].enhed, "kg/t");
+    assert.ok(a.virkning[0].forventet < 0);
+    // Det, CT'en kan måle, står med — det er dét, virkningen gøres op på.
+    assert.ok(a.virkning.some((v) => v.noegle && v.fraktion === "ready"));
+    const forslag = samtale.find((b) => b.type === "forslag" && b.tekst.startsWith("Sænk") && b.tekst.includes(a.kort))!;
+    assert.match(forslag.grund ?? "", /gode frø ud pr\. uønsket/);
+    assert.match(forslag.grund ?? "", /kg godt frø mindre ud i timen/);
   });
 
   it("på et svar fra laboratoriet, der lige er kommet", () => {
@@ -86,14 +106,14 @@ describe("et kastebord vurderes", () => {
 });
 
 describe("et svar uden for grænsen", () => {
-  it("er en advarsel på det første bord og en alarm på det sidste — produktet", () => {
-    // Det første bord kan en agent rette. Det sidste bords Mainline er det,
+  it("er en advarsel på det første bord og en alarm på det sidste — færdigvaren", () => {
+    // Det første bord kan en agent rette. Det sidste bords Ready er det,
     // der forlader linjen: uden for grænsen er det en fejl.
-    const { log } = koer(() => false, multigermParti(2.6), 8 * 3600);
-    const ct = log.filter((h) => h.tekst.startsWith("CT · Mainline · multigerm"));
+    const { log } = koer(() => false, multigermParti(3), 8 * 3600);
+    const ct = log.filter((h) => h.tekst.startsWith("CT · Ready · multigerm"));
     const kb = (navn: string) => layout.machines.find((m) => m.name === navn)!;
     const bord = (h: Haendelse) => ["KB-3NN", "KB-2SS"].includes(h.hvor ?? "") ? 1 : 0;
-    const over = (h: Haendelse) => Number(h.tekst.match(/multigerm ([\d,]+)/)![1].replace(",", ".")) > KASTEBORDET.graenser[bord(h)].multi;
+    const over = (h: Haendelse) => Number(h.tekst.match(/multigerm ([\d,]+)/)![1].replace(",", ".")) > KASTEBORDET.graenser[bord(h)].readyMulti;
     const foerste = ct.filter((h) => bord(h) === 0 && over(h));
     const sidste = ct.filter((h) => bord(h) === 1 && over(h));
     assert.ok(foerste.length > 0 && sidste.length > 0, `for få svar uden for: ${foerste.length} og ${sidste.length}`);
@@ -141,9 +161,11 @@ describe("en anbefaling til et kastebord", () => {
       if (x?.gjortOp) break;
     }
     assert.ok(x?.gjortOp, "virkningen blev ikke gjort op");
-    assert.notEqual(x!.virkning[0].efter, undefined);
-    const main = efter.laboratorie.seneste.find((p) => p.sted.maskine === a.maskine && p.sted.fraktion === "mainline")!;
-    assert.ok(main.taget >= x!.udfoertT!, "opgjort på et svar fra før ændringen");
+    assert.notEqual(x!.virkning.find((v) => v.noegle)!.efter, undefined);
+    // Kiloene kan CT'en ikke måle. De står som ventet.
+    assert.equal(x!.virkning.find((v) => !v.noegle)!.efter, undefined);
+    const ready = efter.laboratorie.seneste.find((p) => p.sted.maskine === a.maskine && p.sted.fraktion === "ready")!;
+    assert.ok(ready.taget >= x!.udfoertT!, "opgjort på et svar fra før ændringen");
     assert.ok(efter.samtale.some((m) => m.type === "rapport" && m.tekst.startsWith(`Efter ændringen på ${a.kort}`)));
   });
 
@@ -200,7 +222,7 @@ describe("en anbefaling til et kastebord", () => {
         }
         if (a.status === "aaben" && b.t - a.t >= 180_000) sim.udfoer(a.id);
       }
-    }, multigermParti(2.4));
+    }, nytParti(rng(11), ORDRE.kasser));
     assert.ok(proevet > 0, "ingen anbefaling fulgte en udført");
   });
 

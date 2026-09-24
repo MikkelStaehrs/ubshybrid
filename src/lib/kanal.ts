@@ -18,6 +18,7 @@
 // forespørgsler lande i to forskellige instanser, og så ser kontoret intet —
 // dér skal Upstash til. Kontoret siger selv, hvilket lager kanalen bruger.
 import type { Besked } from "./samspil";
+import type { ProeveOverblik } from "./proeveoverblik";
 import type { Anbefaling, Haendelse, Motor, OrdreStatus, Uro } from "./telemetri";
 
 /** Hvor hurtigt tiden går. "auto" er hurtigt, når alt er roligt, og langsomt, når ikke. */
@@ -52,6 +53,8 @@ export interface SimStatus {
   agenter: AgentStatus;
   /** De åbne anbefalinger og de seneste afgjorte. Kontoret kan også sige ja og nej. */
   anbefalinger: Anbefaling[];
+  /** Prøvetagningen: CT-køen, kastebordenes svar og tab, videometeret. null uden ordre. */
+  proever: ProeveOverblik | null;
 }
 
 /** Det, kontoret kan bede linjeskærmen om. */

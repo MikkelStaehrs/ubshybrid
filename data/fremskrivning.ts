@@ -19,18 +19,29 @@
 //     før fordeleren (500 g, ca. 20 min) og én CT-scanner, som alle
 //     CT-prøver deler (ca. 20 min pr. prøve). CT tages lige efter
 //     jetpealerne i hvert spor og på alle fire kasteborde: Heavy, Light og
-//     Mainline. Planen er fast.
+//     Ready. Planen er fast.
+//   - Maskinerne i sporet, i rækkefølge: fordeleren deler frøet i to
+//     størrelser, jetpealeren sliber, Triøren tager pinde, korn og andre
+//     uønskede emner, Alfa sorterer i størrelse, Carter tager bigerm og
+//     tvillinger, og to kasteborde — det første forbedrer kvaliteten, det
+//     sidste sikrer den.
+//   - Heavy og Light ryger ud. Kun Ready går videre og bliver færdigvare.
 //   - FV0–FV3 er kvaliteten af det gode frø. Alt fra FV0 til FV3 er godt;
 //     der styres ikke efter FV. Det, der ikke skal med, er multigerm
-//     (BIGF/BIGH), foreign seeds (NOTS), sten og ler.
+//     (BIGF/BIGH/TWIN), foreign seeds (NOTS), sten og ler.
 //   - Finder videometeret foreign seeds tidligt, sorteres der kraftigere på
-//     Carter og Alfa.
+//     Triørerne.
+//
+// Målt: kastebordenes tre strømme er kalibreret på 549 rigtige CT-prøver fra
+// juni til december 2025 (se KASTEBORDET.maalt).
 //
 // Åbne spørgsmål, besvaret med et gæt indtil videre:
-//   - Alle tal for partiet, processen, kastebordets skillemodel og grænserne
-//     i PARTI, PROCES, KASTEBORDET og PROEVER.
+//   - Hvor meget der går til Heavy og Light. CT'en ser, hvad strømmene
+//     består af, ikke hvor meget der løber i dem. Det skal vejes.
+//   - Resten af tallene for partiet og processen i PARTI og PROCES, og
+//     grænserne i KASTEBORDET.
 //   - At CT-scanneren er optaget de fulde 20 minutter af hver prøve.
-//   - Hvordan tværhældning og luft deler arbejdet mellem Heavy og Light.
+//   - Hvor meget tværhældning og luft flytter.
 //   - Der er ingen bånd som selvstændige maskiner på linjen. Transporten
 //     ligger i kanterne mellem maskinerne og vises som materialestrøm.
 
@@ -202,14 +213,21 @@ export type Fremmed = (typeof FREMMEDE)[number];
  * Partiet: det, der ligger i kasserne. Et parti ligger fast — det er det
  * samme frø hele ordren. Kasserne afviger lidt fra hinanden, og et stykke af
  * ordren kan være urent. Andele i procent af partiet, talt i frø og partikler.
+ *
+ * FV-fordelingen, de tomme frø og fordelingen af multigerm er læst af
+ * CT-prøverne: det, der når det første kastebord. Multigerm i kasserne er
+ * regnet tilbage gennem Carter (PROCES.carter).
  */
 export const PARTI = {
   fvKlasser: ["FV0", "FV1", "FV2", "FV3"] as const,
-  /** Det gode frø fordelt på kvalitet, i procent af det gode frø. */
-  fv: [46, 33, 13, 8],
-  /** Multigerm i procent af partiet, og hvor stor en del af det, der er BIGF. */
-  multigerm: 4.5,
-  bigfAndel: 0.72,
+  /** Det gode frø fordelt på kvalitet, i procent af det gode frø. Målt. */
+  fv: [3.7, 90.0, 5.9, 0.4],
+  /** Multigerm i procent af partiet — før Carter har taget sit. */
+  multigerm: 4.1,
+  /** Hvad multigerm er, målt: BIGF, BIGH og tvillinger (TWIN; TRIP er regnet med). */
+  multiArter: { bigf: 0.6, bigh: 0.18, twin: 0.22 },
+  /** Tomme frø (EMP), i procent af partiet. Målt. */
+  tom: 0.19,
   /** Foreign seeds i alt, i procent af partiet, og fordelingen på arter. */
   fremmed: 0.05,
   fremmedArter: {
@@ -236,47 +254,113 @@ export const PARTI = {
 
 /** Det, maskinerne mellem vippestolene og kastebordene gør ved strømmen. */
 export const PROCES = {
-  /** Jetpealeren sliber låg og kim løs: let materiale, i procent af strømmen. */
-  jetpealerLet: 3.5,
   /**
-   * Carter og Alfa sorterer foreign seeds fra. Andelen, der fjernes, og det
-   * gode frø, det koster, i procent af det gode frø.
+   * Fordeleren deler frøet i to størrelser — de små til spor N, de store til
+   * spor S. Frøvægten pr. spor er målt: median mg pr. frø i CT-prøverne.
+   * Ellers er sporene kalibreret ens.
+   */
+  froeMg: { N: 8.7, S: 10.2 } as Record<string, number>,
+  /**
+   * Jetpealeren sliber låg og kim løs. CT'en tæller det som små fragmenter;
+   * i procent af frøene, som det når det første kastebord. Målt.
+   */
+  jetpealerLet: 0.7,
+  /**
+   * Triøren tager foreign seeds — med pinde, korn og andre uønskede emner.
+   * Andelen, der fjernes, og det gode frø, det koster, i procent af det gode
+   * frø. Kraftig sortering er det, Operatøragenten anbefaler, når
+   * videometeret finder mange.
    */
   sortering: {
-    normal: { fremmed: 0.55, godtTab: 0.8 },
-    kraftig: { fremmed: 0.85, godtTab: 2.5 },
+    normal: { fremmed: 0.8, godtTab: 0.8 },
+    kraftig: { fremmed: 0.95, godtTab: 2.5 },
   },
+  /**
+   * Carter tager bigerm og tvillinger: andelen af multigerm, og det gode frø,
+   * det koster. Andelen er sat, så det, der når kastebordet, er det, CT'en
+   * har set dér.
+   */
+  carter: { multi: 0.7, godtTab: 0.5 },
   /** Minutter fra en kasse tippes, til frøet er nået hertil. */
   transitMin: { jetpealer: 8, kastebord: [18, 21] as [number, number] },
 };
 
+/** Det, CT'en har set i én strøm, i procent af frøene. */
+export interface CtMaalt {
+  fv: [number, number, number, number];
+  tom: number;
+  bigf: number;
+  bigh: number;
+  twin: number;
+  /** Små fragmenter — løse låg og kim. Ikke frø; i procent af frøene. */
+  frag: number;
+}
+
 /**
- * Kastebordet: tre strømme ud. Heavy tager de store frø, multigerm og sten;
- * Light tager løse låg, kim, ler og de små frø; resten er Mainline.
+ * Kastebordet: tre strømme ud. Heavy tager multigerm og sten; Light tager
+ * løse låg og kim, ler og de svageste frø; resten er Ready, der går videre.
+ * Heavy og Light ryger ud.
  *
- * Tværhældningen styrer den tunge ende, luften den lette. Mere af det ene
- * eller det andet renser Mainline — og sender mere godt frø ud. Det er den
- * afvejning, en linjeagent anbefaler efter. Alle tal er skøn.
+ * Tværhældningen styrer, hvor meget der går til Heavy, luften, hvor meget
+ * der går til Light. Hvad der går med, følger af det, CT'en har set.
  */
 export const KASTEBORDET = {
-  /** Andelen af hver slags, der går til Heavy og Light ved standardindstillingerne. */
-  heavy: { godt: 0.025, multi: 0.62, fremmed: 0.3, sten: 0.95, ler: 0.05, let: 0.02 },
-  light: { godt: 0.03, multi: 0.02, fremmed: 0.25, sten: 0, ler: 0.85, let: 0.85 },
-  /** Pr. grad tværhældning væk fra udgangspunktet: så meget mere til Heavy. */
-  heavyPrGrad: { godt: 0.02, multi: 0.15, fremmed: 0.05, sten: 0.02, ler: 0, let: 0 },
-  /** Pr. 10 procentpoint luft: så meget mere til Light. */
-  lightPrTiLuft: { godt: 0.018, multi: 0, fremmed: 0.04, sten: 0, ler: 0.04, let: 0.05 },
+  /**
+   * MÅLT: de tre strømme fra hvert bord, samlet over 549 CT-prøver fra juni
+   * til december 2025. Det første bord i sporene er KB4 og KB5 i dataene
+   * (KB-3N og KB-2S nu), det sidste KB4A og KB5A (KB-3NN og KB-2SS). NOTS er
+   * for sjældne i prøverne til at kalibrere på — 75 i 300.000 frø.
+   */
+  maalt: {
+    foerste: {
+      heavy: { fv: [3.131, 90.489, 3.006, 0.046], tom: 0.033, bigf: 2.642, bigh: 0.187, twin: 0.459, frag: 0.272 },
+      ready: { fv: [3.685, 88.876, 5.789, 0.273], tom: 0.168, bigf: 0.699, bigh: 0.233, twin: 0.267, frag: 0.684 },
+      light: { fv: [3.48, 83.371, 10.849, 1.295], tom: 0.998, bigf: 0.003, bigh: 0.003, twin: 0, frag: 1.272 },
+    },
+    sidste: {
+      heavy: { fv: [3.139, 88.653, 3.305, 0.029], tom: 0.024, bigf: 4.275, bigh: 0.091, twin: 0.455, frag: 0.225 },
+      ready: { fv: [3.587, 89.428, 5.452, 0.22], tom: 0.095, bigf: 0.903, bigh: 0.111, twin: 0.201, frag: 0.442 },
+      light: { fv: [3.304, 86.256, 9.419, 0.754], tom: 0.267, bigf: 0, bigh: 0, twin: 0, frag: 0.944 },
+    },
+  } satisfies Record<"foerste" | "sidste", Record<"heavy" | "ready" | "light", CtMaalt>>,
+  /**
+   * SKØN, IKKE MÅLT: hvor stor en del af tilløbet, der går til Heavy og til
+   * Light ved standardindstillingerne. CT'en ser, hvad strømmene består af,
+   * ikke hvor meget der løber i dem — og hvert kilo, simuleringen regner
+   * tabt, hviler på det her tal. Vej sidestrømmene, og skriv det målte her.
+   */
+  masse: {
+    foerste: { heavy: 0.03, light: 0.03 },
+    sidste: { heavy: 0.03, light: 0.03 },
+  },
+  /**
+   * Det, CT'en ikke ser: hvor mange gange tættere sten, ler og foreign seeds
+   * står i Heavy og i Light end i tilløbet. Skøn.
+   */
+  beriget: {
+    sten: { heavy: 30, light: 0 },
+    ler: { heavy: 0.5, light: 25 },
+    fremmed: { heavy: 5, light: 0 },
+  },
+  /** Pr. grad tværhældning væk fra udgangspunktet: så meget mere til Heavy, relativt. Skøn. */
+  heavyPrGrad: 0.3,
+  /** Pr. 10 procentpoint luft: så meget mere til Light, relativt. Skøn. */
+  lightPrTiLuft: 0.35,
   /**
    * Grænserne, en linjeagent anbefaler efter, pr. bord i sporet: det første
-   * og det andet. Mainline: højst så meget multigerm og let materiale.
-   * Heavy og Light: højst så stor en andel godt frø — ellers smides for
-   * meget ud. Andet bord får renere frø ind, så dets Heavy og Light er mere
-   * godt frø af sig selv.
+   * og det sidste. Skøn.
+   *
+   * Ready: højst så meget multigerm og så mange små fragmenter — ellers
+   * lukkes bordet et trin. Heavy og Light: prisen, i gode frø smidt ud pr.
+   * uønsket frø eller fragment fjernet. Er den over grænsen, og har Ready
+   * luft (`margen`), åbnes bordet et trin: så går færre gode frø ud.
    */
   graenser: [
-    { multi: 2.5, let: 1.0, heavyGodt: 60, lightGodt: 60 },
-    { multi: 1.0, let: 0.3, heavyGodt: 85, lightGodt: 94 },
+    { readyMulti: 2.5, readyFrag: 1.5, pris: 20 },
+    { readyMulti: 2.0, readyFrag: 1.2, pris: 20 },
   ],
+  /** Ready har luft, når den er under så stor en del af sin grænse. */
+  margen: 0.7,
   /** Et trin, en anbefaling flytter en indstilling. */
   trin: { tvaers: 0.3, luft: 5 },
   /** En anbefaling, ingen har taget stilling til, bortfalder efter så lang tid. */
@@ -307,8 +391,8 @@ export const PROEVER = {
   },
   ct: {
     minutter: 20,
-    /** Frø i én CT-prøve. Udsvinget er det, en prøve af den størrelse giver. */
-    froe: 1000,
+    /** Frø i én CT-prøve — som i de rigtige. Udsvinget er det, en prøve af den størrelse giver. */
+    froe: 650,
   },
   /** Så længe efter ordrens start tages den første CT-prøve — frøet skal nå frem. */
   foersteCtMin: 15,
@@ -319,7 +403,7 @@ export const PROEVER = {
    */
   ctPlan: [
     "jetpealer:N", "jetpealer:S",
-    "636:mainline", "635:mainline", "746:mainline", "745:mainline",
+    "636:ready", "635:ready", "746:ready", "745:ready",
     "636:heavy", "635:heavy", "636:light", "635:light",
     "746:heavy", "745:heavy", "746:light", "745:light",
   ],

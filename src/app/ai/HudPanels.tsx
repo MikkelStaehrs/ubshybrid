@@ -8,6 +8,7 @@ import {
   flowLimits, rateFrom, runSegments, RUN_STATE_LABEL, type RunState,
 } from "../../lib/flow";
 import type { KanalSpec } from "../../../data/fremskrivning";
+import { ctMulti, ctPris, graenseFor, type Fraktion } from "../../lib/proever";
 import { kildeTekst, klokke, varighed, type Besked } from "../../lib/samspil";
 import { graense, type MaskinLaesning, type OrdreStatus, type TelemetriBillede } from "../../lib/telemetri";
 import { Afkod, Bjaelke, Kurve, Maaler, Oscilloskop, Tal } from "./Instrumenter";
@@ -426,16 +427,17 @@ export function KlimaPanel({ billede, historik, nr, still }: {
  * svar fra hvert kastebord. Et svar er en prøve — taget på et bestemt
  * tidspunkt og først kendt tyve minutter efter. Derfor står tiden ved hvert tal.
  *
- * Kastebordene vises på det, de vurderes efter: multigerm i Mainline og godt
- * frø i Heavy og Light. Et tal uden for bordets grænse er rav — det kan en
- * agent rette. Det sidste bords Mainline er frøet, der forlader linjen; er
- * det uden for, er det en fejl og rødt, som en kanal over sin alarmgrænse.
+ * Kastebordene vises på det, de vurderes efter: multigerm i Ready og prisen
+ * i Heavy og Light — gode frø smidt ud pr. uønsket. Et Ready uden for bordets
+ * grænse er rav — det kan en agent rette. Det sidste bords Ready er
+ * færdigvaren; er det uden for, er det en fejl og rødt. En høj pris er ikke
+ * en fejl, men noget at åbne bordet for, og har ingen farve.
  */
 export function LaboratoriePanel({ billede, nr, still }: { billede: TelemetriBillede; nr: number; still?: boolean }) {
   const lab = billede.laboratorie;
   const vm = lab.seneste.filter((p) => p.videometer).sort((a, b) => b.taget - a.taget)[0] ?? null;
   const borde = billede.maskiner.filter((m) => KASTEBORD.test(m.navn));
-  const svar = (id: string, f: "mainline" | "heavy" | "light") => lab.seneste.find((p) => p.sted.maskine === id && p.sted.fraktion === f) ?? null;
+  const svar = (id: string, f: Fraktion) => lab.seneste.find((p) => p.sted.maskine === id && p.sted.fraktion === f) ?? null;
   const kraftig = Object.values(billede.sortering).some((x) => x === "kraftig");
   const tom = !lab.ct.igang && !lab.videometer.igang && lab.seneste.length === 0;
   return (
@@ -461,34 +463,34 @@ export function LaboratoriePanel({ billede, nr, still }: { billede: TelemetriBil
           )}
           <div className="hp-lab-borde">
             <span />
-            <span>Mainline<br />multigerm</span>
-            <span>Heavy<br />godt frø</span>
-            <span>Light<br />godt frø</span>
+            <span>Ready<br />multigerm</span>
+            <span>Heavy<br />pr. uønsket</span>
+            <span>Light<br />pr. uønsket</span>
             {borde.map((m) => {
-              const main = svar(m.id, "mainline");
+              const ready = svar(m.id, "ready");
               const heavy = svar(m.id, "heavy");
               const light = svar(m.id, "light");
-              const bord = main?.sted.bord ?? heavy?.sted.bord ?? light?.sted.bord ?? 0;
-              const g = KASTEBORDET.graenser[Math.min(bord, KASTEBORDET.graenser.length - 1)];
+              const bord = ready?.sted.bord ?? heavy?.sted.bord ?? light?.sted.bord ?? 0;
+              const g = graenseFor(bord);
               const sidst = bord === KASTEBORDET.graenser.length - 1;
               // Hvert tal står med sin prøvetid: et svar kan være timer gammelt.
-              const celle = (p: typeof main, v: number | null, graense: number, d: number, fejl = false) => (
-                <span className={`hp-lab-v fm-num${v !== null && v > graense ? (fejl ? " is-fejl" : " is-over") : ""}`}>
-                  {v === null || !p ? "–" : <>{v.toFixed(d).replace(".", ",")}<i>%</i><em className="hp-lab-t">{klokke(p.taget)}</em></>}
+              const celle = (p: typeof ready, v: number | null, d: number, enhed: string, graense: number | null, fejl = false) => (
+                <span className={`hp-lab-v fm-num${v !== null && graense !== null && v > graense ? (fejl ? " is-fejl" : " is-over") : ""}`}>
+                  {v === null || !p ? "–" : <>{v.toFixed(d).replace(".", ",")}<i>{enhed}</i><em className="hp-lab-t">{klokke(p.taget)}</em></>}
                 </span>
               );
               return (
                 <Fragment key={m.id}>
                   <span className="hp-kb-navn">{m.kort}</span>
-                  {celle(main, main?.ct ? main.ct.bigf + main.ct.bigh : null, g.multi, 1, sidst)}
-                  {celle(heavy, heavy?.ct ? heavy.ct.godt : null, g.heavyGodt, 0)}
-                  {celle(light, light?.ct ? light.ct.godt : null, g.lightGodt, 0)}
+                  {celle(ready, ready?.ct ? ctMulti(ready.ct) : null, 1, "%", g.readyMulti, sidst)}
+                  {celle(heavy, heavy?.ct ? ctPris(heavy.ct) : null, 0, "", null)}
+                  {celle(light, light?.ct ? ctPris(light.ct) : null, 0, "", null)}
                 </Fragment>
               );
             })}
           </div>
           <p className="hp-note">
-            Sortering {kraftig ? "kraftig" : "normal"} · {lab.ct.taget} CT · {lab.videometer.taget} videometer
+            Triøre {kraftig ? "kraftig" : "normal"} · {lab.ct.taget} CT · {lab.videometer.taget} videometer
           </p>
         </div>
       )}

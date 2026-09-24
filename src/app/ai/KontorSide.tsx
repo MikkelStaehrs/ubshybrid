@@ -8,6 +8,7 @@ import { samlLog, samlSamtale, type Haendelse } from "../../lib/telemetri";
 import { AnbefalingListe } from "./Enhed";
 import { Sim } from "./HudPanels";
 import { AgentLog, AgentMaaler, HaendelsesLog } from "./Logge";
+import { ProeveBoks } from "./ProeveBoks";
 import {
   KANAL_MS, laesKanal, sendKommando, type Ejer, type Hastighed, type KommandoIndhold, type SimStatus,
 } from "./simKanal";
@@ -36,10 +37,10 @@ const nytId = () => `${Date.now().toString(36)}-${Math.random().toString(36).sli
  * Formandens kontor.
  *
  * Linjeskærmen i operatørrummet kører ordren; kontoret kører ingen
- * simulering selv. Det læser, hvad linjeskærmen sender — agenterne imellem,
- * hændelserne og anbefalingerne — og styrer den: fart, forfra, Claude eller
- * regler, og et ja eller nej til en anbefaling. De to kan sidde på hver sin
- * maskine; beskederne går gennem serveren.
+ * simulering selv. Det læser, hvad linjeskærmen sender — prøvetagningen,
+ * agenterne imellem, hændelserne og anbefalingerne — og styrer den: fart,
+ * forfra, Claude eller regler, og et ja eller nej til en anbefaling. De to
+ * kan sidde på hver sin maskine; beskederne går gennem serveren.
  *
  * Kontoret viser intet, linjeskærmen ikke selv har sendt.
  */
@@ -173,7 +174,16 @@ export function KontorSide() {
           <p className="hp-afventer"><span className="hp-afventer-mark" aria-hidden />Venter på linjeskærmen</p>
         </section>
       ) : (
-        <div className="sl-kolonner is-tre">
+        <div className="sl-kolonner is-fire">
+          <section className="hud-panel sl-kolonne">
+            <header className="hp-head">
+              <span className="hp-label">Prøvetagning</span>
+              <Sim />
+            </header>
+            <div className="sl-rul">
+              <ProeveBoks p={status.proever ?? null} />
+            </div>
+          </section>
           <section className="hud-panel sl-kolonne">
             <header className="hp-head">
               <span className="hp-label">Anbefalinger</span>

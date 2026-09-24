@@ -324,8 +324,10 @@ dem over; talte de med, forudsatte fremskrivningen kort, ingen skal bruge.
 **Tallene er simulerede, og det står på dem.** Temperatur, fugt, hastighed,
 omdrejninger og kastebordenes vibration, slag, hældning og luft kommer fra
 simulatoren i `src/lib/telemetri.ts`; laboratoriets svar — FV0–FV3,
-BIGF/BIGH, NOTS, foreign seeds og slibeskader — fra prøvemodellen i
-`src/lib/proever.ts`. Begge læser deres antagelser fra `data/fremskrivning.ts`.
+BIGF/BIGH/TWIN, tomme frø, fragmenter, NOTS, foreign seeds og slibeskader —
+fra prøvemodellen i `src/lib/proever.ts`. Begge læser deres antagelser fra
+`data/fremskrivning.ts`. Kastebordenes tre strømme er den ene del, der er
+kalibreret på rigtige målinger (se "Kastebordene").
 Ret antagelserne dér — ikke i koden. Kanalerne og flowet tager et eksakt
 skridt, ikke en tilnærmelse: udsvinget er det samme, uanset hvor tit siden
 tikker, så en bærbar, der hakker, ikke rammer grænser, som en, der ikke
@@ -488,6 +490,12 @@ hver sin maskine.
 - **Hver hændelse og besked én gang.** Et svar, der ikke nåede frem, sendes
   igen, og serveren har det måske allerede. `samlLog()` og `samlSamtale()`
   tåler det — også inden for det samme, nye bundt. Det har en test.
+- **Prøvetagningen har sin egen kolonne på kontoret** (`ProeveBoks`): CT-køen,
+  kastebordenes seneste svar med de kilo godt frø, Heavy og Light har taget,
+  jetpealerne og videometeret med sorteringen på Triørerne. Linjeskærmen
+  regner den af sit billede med `proeveOverblik()` (`src/lib/proeveoverblik.ts`)
+  og sender den i sin status; kontoret regner intet selv. Kiloene bærer
+  "Skøn". Det har tests.
 - **Lageret er serverens hukommelse eller Upstash.** Hukommelsen er nok, når
   appen kører som én proces — lokalt, med den anden maskine på netværket. På
   Vercel kan linjeskærmen og kontoret lande i hver sin instans, så dér skal
@@ -509,8 +517,8 @@ klassificeringerne væk fra maskinens kanaler.
 **Prøverne tages i hånden og analyseres i Analytics-rummet** (sagt af
 driften). Videometeret tager 500 g før fordeleren og finder foreign seeds
 efter art og slibeskader. CT-scanneren tager efter jetpealerne i hvert spor
-og kastebordenes tre strømme: Heavy (store frø, multigerm, sten), Light
-(løse låg, kim, ler, små frø) og Mainline. Begge tager ca. 20 minutter pr.
+og kastebordenes tre strømme: Heavy (multigerm og sten), Light (løse låg og
+kim, ler og de svageste frø) og Ready, der går videre. Begge tager ca. 20 minutter pr.
 prøve, og **der er én CT-scanner**: alle CT-prøver står i kø til den. Det er
 tre CT-prøver i timen — en fuld runde gennem den faste plan (`PROEVER.ctPlan`)
 tager 4 t 40 min. Det er ikke en fejl i modellen, men den flaskehals,
@@ -518,23 +526,34 @@ simuleringen skal vise.
 
 - **Et svar er en prøve, ikke en måling nu.** Det viser strømmen, da prøven
   blev taget, og kommer 20 minutter efter. Tiden står ved hvert svar.
+- **Et CT-svar ser ud som det rigtige.** Ca. 650 frø i kategorierne FV0–FV3,
+  BIGF, BIGH, TWIN, tomme (EMP) og NOTS, og de små fragmenter talt for sig —
+  som i CSV'erne fra CT-scanneren. Sten og ler ser den ikke, og så står de
+  ikke i svaret. Det har en test.
+- **Sporet går som i virkeligheden** (sagt af driften): fordeleren deler i to
+  størrelser — små frø i spor N, store i spor S, og det kan ses i
+  frøvægten fra jetpealerne — jetpealeren sliber, Triøren tager foreign
+  seeds, Alfa sorterer i størrelse, Carter tager multigerm, og to kasteborde
+  tager resten. Hvad hver maskine tager, har en test.
 - **Partiet ligger fast** (`nytParti()`). Det er det samme frø hele ordren;
   kasserne afviger lidt, og et stykke kan være urent. Et svar svinger så
   meget, som en prøve af den størrelse gør — og ikke mere. Før fløj tallene
   op og ned fra minut til minut, og det passede ikke til virkeligheden. Det
   har en test.
 - **Frøet tager tid om at nå frem** (`PROCES.transitMin`). Når videometerets
-  svar kommer, er frøet fra den kasse allerede forbi Carter og Alfa — og det
-  siger agenten. Det, der kommer efter, når den nå.
-- **Intet forsvinder.** Heavy, Light og Mainline er det, bordet fik. Det har
-  en test, som rækkerne i kæden.
+  svar kommer, er frøet fra den kasse allerede forbi Triøren — og det siger
+  agenten. Det, der kommer efter, når den nå.
+- **Intet forsvinder.** Heavy, Light og Ready er det, bordet fik, og
+  sporets regnskab går op over begge borde. Det har tests, som rækkerne i
+  kæden.
 - **En maskine, der står, springes over i planen.** Der tages ingen prøve af
   ingenting.
-- **Rav eller rødt.** Et svar uden for et bords grænse er rav: det er noget,
-  en agent kan rette, og den anbefaler det. Det sidste bords Mainline er
-  frøet, der forlader linjen — er det uden for, er det en fejl og rødt, som
-  en kanal over sin alarmgrænse. Hændelsen følger med: advarsel og alarm.
-  Det har en test.
+- **Rav eller rødt.** Et Ready uden for bordets grænse er rav: det er noget,
+  en agent kan rette, og den anbefaler det. Det sidste bords Ready er
+  færdigvaren — er det uden for, er det en fejl og rødt, som en kanal over
+  sin alarmgrænse. Hændelsen følger med: advarsel og alarm. En dyr Heavy
+  eller Light er ingen af delene, men noget at åbne bordet for. Det har en
+  test.
 - **Laboratoriet er ikke forbundet i dag** (`INF-LAB` i
   `data/ot-infrastructure.ts`). Prøvetagningsagenten står derfor som
   manglende i den rigtige visning; fremskrivningen forudsætter forbindelsen,
@@ -552,8 +571,8 @@ prøvested bindes til W-ID, og på et kastebord til strømmen.
   ISTA-prøverne er tom, til driften har sagt, hvor de tages.
 - **Operationsnummeret er laboratoriets.** Det står i panelet, på mærket og
   ved prøven i enheden. Står det tomt, står der "Ikke udfyldt" i panelet og
-  en streg på det udfoldede mærke og i enheden ("OP –") — det gættes ikke,
-  og det har en test. Det samme gælder hyppigheden.
+  en streg på det udfoldede mærke, i enheden og på kontoret ("OP –") — det
+  gættes ikke, og det har en test. Det samme gælder hyppigheden.
 
 **Prøvetagningsagenten** (`engine: "kode"`) følger planen og melder hvert
 svar — CT til sporets linjeagent, videometer til Operatøragenten — med,
@@ -567,15 +586,40 @@ alarm bygger på det. Det har en test.
 
 ### Kastebordene
 
-**Bordet vurderes på renhed og tab** (`vurder()` i `src/lib/proever.ts`),
-ud fra de seneste svar fra dets tre strømme: for meget multigerm eller let
-materiale i Mainline, for meget godt frø i Heavy eller Light. Grænserne står
-i `KASTEBORDET.graenser`, én for det første og én for det andet bord i
-sporet. **Tværhældningen styrer den tunge ende, luften den lette** — mere af
-det ene eller det andet renser Mainline og sender mere godt frø ud. Hvor
-meget, står i `KASTEBORDET` — skøn, som resten af fremskrivningens tal. Et
-normalt parti holder sig inden for grænserne ved standardindstillingerne;
-det har en test, ellers anbefalede en agent noget hver gang.
+**Heavy og Light ryger ud; kun Ready går videre** (sagt af driften). Hvert
+godt frø i siderne er tabt, og tabet regnes i kg.
+
+**Bordene er kalibreret på rigtige CT-prøver** (`KASTEBORDET.maalt`: 549
+prøver, juni–december 2025, første og sidste bord hver for sig). Dataene
+siger det tydeligt: Heavy er 96–97 % godt frø og Light 99 % — mens Ready
+kun er lidt renere end det, der kom ind. Modellen (`skil()`) sender en
+slags oftere til en side, jo tættere den stod dér i prøverne, og ved
+standardindstillingerne giver den netop det, CT'en har set. Det har en test.
+
+**Hvor meget der går til siderne, er et skøn** (`KASTEBORDET.masse`). CT'en
+ser, hvad strømmene består af, ikke hvor meget der løber i dem. Hvert kilo,
+simuleringen regner tabt, hviler på det tal, og derfor står der "Skøn" på
+kiloene — på kontoret, i rapporten og i anbefalingerne. Tværhældningen
+flytter, hvor meget der går til Heavy, luften hvor meget der går til Light.
+
+**Bordet vurderes på Ready og på prisen i siderne** (`vurder()` i
+`src/lib/proever.ts`). Prisen er gode frø smidt ud pr. uønsket frø eller
+fragment fjernet (`ctPris()`), og den kan læses af CT'en alene.
+
+- For meget multigerm i Ready: tværhældningen et trin op. For mange
+  fragmenter: luften op.
+- Smider en side mange gode frø ud pr. uønsket (`pris`), og har Ready luft
+  (under `margen` af sin grænse): bordet åbnes et trin — tværs for Heavy,
+  luft for Light. Anbefalingen siger, hvor mange kg godt frø i timen det
+  sparer.
+- Uden et svar fra Ready åbnes intet: et bord åbnes ikke i blinde.
+
+Grænserne står i `KASTEBORDET.graenser`, én for det første og én for det
+sidste bord. Et normalt parti holder Ready inden for dem ved
+standardindstillingerne; det har en test, ellers lukkede en agent et bord
+hver gang. At agenten åbner bordene, skal kunne ses i kiloene: en ordre, hvor
+anbefalingerne udføres, taber mindre godt frø end den samme ordre uden. Også
+det har en test.
 
 **Agenten anbefaler, et menneske udfører.** Linjeagenten anbefaler én
 indstilling ét trin (`KASTEBORDET.trin`), med det, den venter, der sker.
@@ -583,7 +627,8 @@ Anbefalingen står i enheden, i Anbefalinger-panelet og på kontoret med
 **Udfør** og **Afvis**; ingen hældning flytter sig, før nogen trykker. Det,
 operatøren eller formanden gør, står i samtalen som `kilde: "menneske"`.
 Virkningen gøres op på det første svar fra bordet, der er taget efter
-ændringen — med prøvens usikkerhed ved, for ét svar er én prøve. Tager ingen
+ændringen — med prøvens usikkerhed ved, for ét svar er én prøve. Kiloene
+kan CT'en ikke måle; de står som ventet. Tager ingen
 stilling, bortfalder den efter `anbefalingGyldigS` — og bremser kun tiden
 det første minut.
 
@@ -591,8 +636,8 @@ det første minut.
   det var sat (`staarSomSat()`). Et svar fra før siger intet om det, der
   står nu.
 - **En afvejning er ikke et trin.** Peger to fund hver sin vej på samme
-  indstilling — for meget multigerm i Mainline og for meget godt frø i
-  Heavy — siger agenten det til formanden og spørger, hvad der vejer tungest,
+  indstilling — for meget multigerm i Ready og en dyr Heavy — siger
+  agenten det til formanden og spørger, hvad der vejer tungest,
   i stedet for at skrue frem og tilbage. Det samme, når en indstilling er ved
   sin grænse.
 - **Inden for grænserne.** En anbefaling går aldrig over kanalens alarmgrænse
@@ -602,7 +647,7 @@ det første minut.
 - **Et nej bliver hørt.** Afviser operatøren, eller bortfalder anbefalingen,
   får bordet ro i `roEfterNejS`. Alle fire har tests.
 
-**Sorteringen på Carter og Alfa** (sagt af driften). Finder videometeret
+**Sorteringen på Triørerne** (sagt af driften). Finder videometeret
 flere foreign seeds end `fremmedHoej`, anbefaler Operatøragenten kraftig
 sortering i begge spor; er to prøver i træk under `fremmedLav`, normal igen
 — kraftig sortering koster godt frø (`PROCES.sortering`). Båndet imellem
@@ -812,12 +857,24 @@ har sagt tallet.
   total udledt af den er et estimat og skal blive ved med at hedde det.
 - **Hysteresen og de fem/to procent er valgt, ikke målt.** De skal forbi
   driften sammen med stopgrænsen.
-- **Fremskrivningens tal er gæt.** Hvordan prøverne tages, er sagt af
-  driften; tallene er valgt: partiets sammensætning og variation, det urene
-  stykke, jetpealerens løse materiale, sorteringens virkning, kastebordets
-  skillemodel og grænserne, prøveplanen og transittiderne. Alt det, og alle
-  driftspunkter og alarmgrænser i `data/fremskrivning.ts`, skal forbi
-  driften, før nogen tager tallene for pålydende.
+- **Heavy og Light skal vejes.** Kastebordenes sammensætning er målt; hvor
+  meget der går til hver side (`KASTEBORDET.masse`), er et skøn på 3 %. Hvert
+  kilo godt frø, simuleringen regner tabt, hviler på det. Vej sidestrømmene
+  pr. ordre — så er tabet vægten gange CT'ens andel godt frø.
+- **Fremskrivningens øvrige tal er gæt.** Hvordan prøverne tages, er sagt af
+  driften; tallene er valgt: partiets variation, det urene stykke, Triørens
+  og Carters virkning, hvor meget tværhældning og luft flytter, grænserne og
+  prisen, prøveplanen og transittiderne. Alt det, og alle driftspunkter og
+  alarmgrænser i `data/fremskrivning.ts`, skal forbi driften, før nogen
+  tager tallene for pålydende.
+- **Første og sidste bord hænger ikke helt sammen i dataene.** Første bords
+  målte Ready har flere fragmenter og mindre multigerm, end sidste bords
+  strømme forudsætter. Prøverne er fra forskellige batches og tider. Modellen
+  kalibrerer hvert bord for sig, så sidste bords Ready får 0,7 % fragmenter
+  mod målte 0,44 %.
+- **Færdigvarens krav er ikke i modellen.** CL-prøven — det, der kommer i
+  kasserne — skal have 99 % renhed. Hvordan CL måles (på vægt efter ISTA
+  eller på CT), er ikke afklaret, og derfor bygger ingen grænse på det endnu.
 - **Laboratoriets svar er et `dataset`, ikke et signal** — og det er ikke
   forbundet. Hvordan CT'ens og videometerets svar kommer ind i databasen, og
   i hvilket format, er ikke afklaret.
@@ -835,9 +892,10 @@ har sagt tallet.
   er det en ændring af planen — ikke af modellen.
 - **Ordren har ingen kilde.** Ordre nr., genetik, varietet, estimeret kg og
   kasser skal komme fra ordresystemet. Hvilket, hvordan og i hvilket format
-  er ikke afklaret; det ved driften. Demoen læser kasserne som dem, der
-  tippes i vippestolene, og tæller dem af strømmen ind — i virkeligheden
-  kunne en tæller på vippestolene gøre det bedre.
+  er ikke afklaret; det ved driften. Adgang til masterdata i ERP'ens API er
+  søgt (september 2026). Demoen læser kasserne som dem, der tippes i
+  vippestolene, og tæller dem af strømmen ind — i virkeligheden kunne en
+  tæller på vippestolene gøre det bedre.
 - **Dataagent og Operatøragent er besluttet på demoens præmisser.** De står
   som besluttede, så simuleringen kan vise dem arbejde. Prisen for dem er et
   skøn (6 og 30 kørsler i døgnet), og i virkeligheden ville deres beskeder

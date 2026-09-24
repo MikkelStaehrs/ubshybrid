@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SIMULERING } from "../../../data/fremskrivning";
 import type { Layout } from "../../lib/layout";
 import type { LiveSourceKind } from "../../lib/live-source";
+import { proeveOverblik } from "../../lib/proeveoverblik";
 import type { Besked } from "../../lib/samspil";
 import {
   samlLog, samlSamtale, simulator, tomtBillede,
@@ -294,6 +295,7 @@ export function useTelemetri(opts: {
         ...b.anbefalinger.filter((a) => a.status === "aaben"),
         ...b.anbefalinger.filter((a) => a.status !== "aaben").slice(0, 6),
       ],
+      proever: proeveOverblik(b),
     });
     let vist: KanalTilstand | null = null;
     const visKanal = (k: KanalTilstand) => {

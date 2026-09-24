@@ -270,14 +270,17 @@ describe("tal og tider i beskederne", () => {
         ct: 40, videometer: 12, sprunget: 2, fremmedMaks: { stk: 102, kasse: 3 }, kraftigS: 3 * 3600,
         produkt: [{ lane: "N", multi: 0.52 }, { lane: "S", multi: null }],
       },
+      tab: { godtKg: 1234.4, godtIndKg: 11_800 },
     });
     assert.equal(linjer[0], "12.000 kg · 24 kasser · 12 t 0 min");
     assert.match(linjer[1], /^1,00 t\/hr i snit · oppetid 97,5 %$/);
     assert.match(linjer[2], /spor N stod 1 gang, 10 min 0 s · spor S stod ikke/);
     assert.equal(linjer[3], "MSSQL fulgte med hele vejen");
     assert.equal(linjer[5], "Laboratoriet · 40 CT-prøver · 12 videometer · 2 sprunget over");
-    assert.equal(linjer[6], "Mainline ud · spor N multigerm 0,5 % · spor S intet svar");
-    assert.equal(linjer[7], "Foreign seeds højst 102 pr. prøve (kasse 3) · kraftig sortering 3 t 0 min");
+    assert.equal(linjer[6], "Ready ud · spor N multigerm 0,5 % · spor S intet svar");
+    // Tabet i kg er et skøn, og det står der.
+    assert.equal(linjer[7], "Godt frø tabt på kastebordene ca. 1.234 kg · 10,5 % af det gode frø · skøn");
+    assert.equal(linjer[8], "Foreign seeds højst 102 pr. prøve (kasse 3) · kraftig sortering 3 t 0 min");
   });
 
   it("samtalen husker hver besked én gang, nyeste først", () => {

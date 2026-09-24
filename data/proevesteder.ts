@@ -17,7 +17,7 @@
 
 export type ProevestedSlags = "proces" | "ista";
 export type Instrument = "videometer" | "ct";
-export type Stroem = "heavy" | "light" | "mainline";
+export type Stroem = "heavy" | "light" | "ready";
 
 export interface Proevested {
   /** Stabil nøgle i koden. */
@@ -39,17 +39,17 @@ export interface Proevested {
 
 export const INSTRUMENT_NAVN: Record<Instrument, string> = { videometer: "Videometer", ct: "CT-scanner" };
 
-const STROEM_NAVN: Record<Stroem, string> = { heavy: "Heavy", light: "Light", mainline: "Mainline" };
+const STROEM_NAVN: Record<Stroem, string> = { heavy: "Heavy", light: "Light", ready: "Ready" };
 
 const FORMAAL: Record<Stroem, string> = {
-  heavy: "Hvor meget godt frø bordet sender ud i den tunge ende — sammen med multigerm og sten.",
-  light: "Hvor meget godt frø bordet sender ud i den lette ende — sammen med løse låg, kim og ler.",
-  mainline: "Hvor rent frøet er, der går videre: multigerm, foreign seeds og let materiale.",
+  heavy: "Hvor mange gode frø bordet smider ud i den tunge ende for hvert multigerm, det fanger. Heavy ryger ud.",
+  light: "Hvor mange gode frø bordet smider ud i den lette ende for hvert tomt frø og fragment, det fanger. Light ryger ud.",
+  ready: "Hvor rent frøet er, der går videre: multigerm, fragmenter og foreign seeds. Fra det sidste bord er det færdigvaren.",
 };
 
 /** Kastebordene og deres tre strømme. */
 const kastebord = (wId: string, kort: string): Proevested[] =>
-  (["heavy", "light", "mainline"] as const).map((stroem) => ({
+  (["heavy", "light", "ready"] as const).map((stroem) => ({
     id: `kb-${wId}-${stroem}`,
     operationsnr: null,
     slags: "proces",
@@ -66,7 +66,7 @@ export const PROEVESTEDER: Proevested[] = [
     operationsnr: null,
     slags: "proces",
     navn: "Før fordeleren",
-    formaal: "Tidlig advarsel om foreign seeds — så der kan sorteres hårdere på Carter og Alfa — og slibeskader. 500 g.",
+    formaal: "Tidlig advarsel om foreign seeds — så der kan sorteres hårdere på Triørerne — og slibeskader. 500 g.",
     hvor: { del: "sliberi", wId: "615" },
     analyse: { del: "analytics", instrument: "videometer" },
     hyppighed: null,
@@ -76,7 +76,7 @@ export const PROEVESTEDER: Proevested[] = [
     operationsnr: null,
     slags: "proces",
     navn: "Efter Jetpealer N",
-    formaal: "Partiets kvalitet efter slibning: FV, multigerm (BIGF, BIGH) og NOTS.",
+    formaal: "Partiets kvalitet efter slibning: FV, multigerm (BIGF, BIGH, TWIN), NOTS og frøvægten i sporet.",
     hvor: { del: "sliberi", wId: "790" },
     analyse: { del: "analytics", instrument: "ct" },
     hyppighed: null,
@@ -86,7 +86,7 @@ export const PROEVESTEDER: Proevested[] = [
     operationsnr: null,
     slags: "proces",
     navn: "Efter Jetpealer S",
-    formaal: "Partiets kvalitet efter slibning: FV, multigerm (BIGF, BIGH) og NOTS.",
+    formaal: "Partiets kvalitet efter slibning: FV, multigerm (BIGF, BIGH, TWIN), NOTS og frøvægten i sporet.",
     hvor: { del: "sliberi", wId: "789" },
     analyse: { del: "analytics", instrument: "ct" },
     hyppighed: null,

@@ -121,7 +121,7 @@ describe("forbindelserne", () => {
       const maskine = s.layout!.machines.find((x) => x.wIds.includes(mk.wId))!;
       assert.deepEqual(mk.p, [maskine.pos[0] + s.forskyd[0], maskine.pos[2] + s.forskyd[1]]);
     }
-    // Et kastebord har tre: Heavy, Light og Mainline.
+    // Et kastebord har tre: Heavy, Light og Ready.
     assert.equal(m.proever.find((x) => x.wId === "636")!.steder.length, 3);
   });
 
