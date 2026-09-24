@@ -216,6 +216,17 @@
 /* Simuleringens fart. Gangen står altid, i SIM-mærkets farve: en time på
    skærmen er ikke en time i hallen. */
 .hud-fart { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+/* Linjeskærmen siger kun noget om kanalen, når kontoret ikke kan se den. */
+.hud-kanal {
+  padding: 1px 7px;
+  border: 1px solid var(--hud-test);
+  color: var(--hud-test-lys);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hud-kanal.is-fejl { border-color: var(--hud-brud); color: var(--hud-brud); }
 .hud-gang {
   min-width: 44px;
   font-family: var(--font-mono);
@@ -785,7 +796,7 @@ button.hud-switch { background: transparent; cursor: pointer; }
   -webkit-box-orient: vertical;
 }
 
-/* --- Loggen på skærm 2 ------------------------------------------------------ */
+/* --- Kontoret ------------------------------------------------------------- */
 .ai-hud.sim-logside {
   display: flex;
   flex-direction: column;
@@ -809,13 +820,16 @@ button.hud-switch { background: transparent; cursor: pointer; }
 .sl-uro-chip.is-fejl { border-color: var(--hud-brud); color: var(--hud-brud); }
 .sl-kolonner { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--pad); }
 .sl-kolonne { min-height: 0; overflow: hidden; }
+/* Anbefalingerne smalt til venstre: de skal ses, men læses ikke som en log. */
+.sl-kolonner.is-tre { grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.25fr) minmax(0, 1fr); }
+.sl-rul { min-height: 0; overflow-y: auto; }
 .sim-logside .hs-tekst { font-size: 14px; }
 .sim-logside .hs-grund { font-size: 12.5px; }
 .sim-logside .hl-liste li { font-size: 12px; }
 .sl-venter { align-self: center; margin-top: 20vh; gap: 12px; align-items: center; }
 @media (max-width: 900px) {
   .ai-hud.sim-logside { position: static; overflow: visible; min-height: 100dvh; }
-  .sl-kolonner { grid-template-columns: 1fr; }
+  .sl-kolonner, .sl-kolonner.is-tre { grid-template-columns: 1fr; }
   .sl-kolonne { max-height: 80vh; }
 }
 .hc-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 1px; min-width: 0; }

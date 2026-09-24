@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SIMULERING } from "../../../data/fremskrivning";
 import { tallyMedTelemetri, type HudModel } from "../../lib/ai-hud";
 import { SITE } from "../../lib/context";
 import { rateFrom } from "../../lib/flow";
@@ -20,12 +20,16 @@ import { AnbefalingerPanel, EnhedPanel } from "./Enhed";
 import { Afkod } from "./Instrumenter";
 import { AgentMaaler } from "./Logge";
 import { LogVindue } from "./LogVindue";
-import type { Hastighed } from "./simKanal";
-import { useTelemetri, type Styring } from "./useTelemetri";
+import { useTelemetri, type KanalTilstand } from "./useTelemetri";
 import "./hud.css";
 
 /**
- * Kontrolrummet.
+ * Kontrolrummet — og med en ordre linjeskærmen i operatørrummet.
+ *
+ * Linjeskærmen viser linjen, ikke simuleringen: der er ingen knap, der skruer
+ * på tiden. Fart, forfra og Claude styres fra kontoret (`/ai/demo/kontor`),
+ * som kan sidde på en anden maskine. Gangen står her stadig, så ingen tager
+ * en time på skærmen for en time i hallen.
  *
  * Hologrammet fylder hele skærmen og er scenen. Panelerne ligger i kanterne:
  * ordren, flow, drift og hallen til venstre; agenter, analyse og kasteborde til
@@ -66,8 +70,18 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
     if (!model.fremskrevet || !o.ordreNr || !o.estimeretKg || !o.kasser || !model.flow.nominal) return null;
     return { ordreNr: o.ordreNr, estimeretKg: o.estimeretKg, kasser: o.kasser, nominalTPrT: model.flow.nominal };
   }, [model]);
-  const { billede, historik, log, samtale, styring, agenter } = useTelemetri({
+  // Kontoret beder om Claude eller regler. Det er en anden adresse — resten
+  // af den står, som den stod.
+  const router = useRouter();
+  const skiftMotor = useCallback((m: Motor) => {
+    const u = new URL(window.location.href);
+    if (m === "claude") u.searchParams.set("agenter", "claude");
+    else u.searchParams.delete("agenter");
+    router.replace(`${u.pathname}${u.search}`);
+  }, [router]);
+  const { billede, historik, log, samtale, styring, agenter, kanal } = useTelemetri({
     layout, fremskrevet: model.fremskrevet, liveSource, flowSignal, flaskehals, ophobning, ordre, seed, motor,
+    onMotor: skiftMotor,
   });
   const nu = useUr();
   const boot = useOpstart(still);
@@ -92,11 +106,6 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
   const iValgt = valgt ? billede.maskiner.find((m) => m.id === valgt) ?? null : null;
   const [logAaben, setLogAaben] = useState(false);
   const lukLog = useCallback(() => setLogAaben(false), []);
-  // Loggen i sit eget vindue, til en anden skærm. Den lytter på simuleringen
-  // her; den kører ingen selv.
-  const aabnSkaerm2 = useCallback(() => {
-    window.open("/ai/demo/log", "ubs-simlog", "popup,width=1400,height=900");
-  }, []);
 
   return (
     <main
@@ -128,18 +137,13 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
         <span className="hud-sep" aria-hidden />
         {styring ? <Ur nu={billede.t} /> : <Ur nu={nu} />}
         <Puls billede={billede} sim={sim} />
-        {styring && <Fart styring={styring} />}
+        {styring && <span className="hud-gang fm-num">{styring.gang === 0 ? "Pause" : `×${styring.gang}`}</span>}
         <button type="button" className={`hud-fartknap${tur ? " is-valgt" : ""}`} aria-pressed={tur} onClick={() => setTurValg(!tur)}>Tur</button>
         {valgt && <button type="button" className="hud-fartknap" onClick={lukEnhed}>Oversigt</button>}
-        {agenter && <AgentMaaler a={agenter} />}
+        {agenter && <AgentMaaler a={agenter} kort />}
+        {kanal && <KanalMaerke k={kanal} />}
         <h1><Afkod tekst={model.fremskrevet ? "AI-overblik · fremskrevet" : "AI-overblik"} forsinkelse={150} still={still} /></h1>
         {!model.fremskrevet && <Link href="/ai/demo" className="hud-switch">Med signaler inde</Link>}
-        {styring && (
-          <Link href={motor === "claude" ? "/ai/demo" : "/ai/demo?agenter=claude"} className="hud-switch">
-            {motor === "claude" ? "Med regler" : "Med Claude"}
-          </Link>
-        )}
-        {styring && <button type="button" className="hud-switch" onClick={aabnSkaerm2}>Log · skærm 2</button>}
         <Link href="/ai?visning=dokument" className="hud-switch">Dokumentvisning</Link>
       </header>
 
@@ -175,7 +179,16 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
       <div className="hud-right">
         <AgentCores model={model} nr={5} still={still} ai={billede.ai} sim={billede.simuleret} samtale={samtale} />
         <KvalitetPanel billede={billede} nr={6} still={still} />
-        {styring && <AnbefalingerPanel billede={billede} nr={7} still={still} onUdfoer={styring.udfoer} onAfvis={styring.afvis} />}
+        {styring && (
+          <AnbefalingerPanel
+            anbefalinger={billede.anbefalinger}
+            sim={billede.simuleret}
+            nr={7}
+            still={still}
+            onUdfoer={styring.udfoer}
+            onAfvis={styring.afvis}
+          />
+        )}
       </div>
 
       <footer className="hud-chain" style={{ ["--i" as string]: 8 }}>
@@ -202,7 +215,6 @@ export function HudView({ model, line, ot, liveSource, measure, fokusWid, flaske
           samtale={styring ? samtale : null}
           sim={billede.simuleret}
           onLuk={lukLog}
-          onSkaerm2={styring ? aabnSkaerm2 : undefined}
         />
       )}
 
@@ -234,37 +246,16 @@ function Ur({ nu }: { nu: number }) {
   );
 }
 
-/** Farterne, simuleringen kan køre med. "Auto" går langsomt, når der sker noget. */
-const FARTER: { h: Hastighed; label: string }[] = [
-  { h: "pause", label: "Pause" },
-  { h: 1, label: "1×" },
-  { h: 10, label: "10×" },
-  { h: SIMULERING.hurtig, label: `${SIMULERING.hurtig}×` },
-  { h: "auto", label: "Auto" },
-];
-
 /**
- * Hvor hurtigt tiden går. Tallet står der altid, så ingen tager en time på
- * skærmen for en time i hallen.
+ * Kanalen til kontoret. Intet mærke, når alt er, som det skal være — kun når
+ * kontoret ikke kan se, hvad der sker her.
  */
-function Fart({ styring }: { styring: Styring }) {
-  return (
-    <span className="hud-fart" role="group" aria-label="Simuleringens fart">
-      <span className="hud-gang fm-num">{styring.gang === 0 ? "Pause" : `×${styring.gang}`}</span>
-      {FARTER.map((f) => (
-        <button
-          key={String(f.h)}
-          type="button"
-          className={`hud-fartknap${styring.valgt === f.h ? " is-valgt" : ""}`}
-          aria-pressed={styring.valgt === f.h}
-          onClick={() => styring.saet(f.h)}
-        >
-          {f.label}
-        </button>
-      ))}
-      <button type="button" className="hud-fartknap" onClick={styring.genstart}>Forfra</button>
-    </span>
-  );
+function KanalMaerke({ k }: { k: KanalTilstand }) {
+  // Serveren svarer ikke: det er en fejl, rød som på kontoret. En anden
+  // linjeskærm, der har taget over, er det ikke.
+  if (k.fejl) return <span className="hud-kanal is-fejl">Kontoret afbrudt</span>;
+  if (k.ejer === false) return <span className="hud-kanal">Anden linjeskærm sender</span>;
+  return null;
 }
 
 /**

@@ -9,7 +9,9 @@ import {
   type Haendelse, type Motor, type Opgave, type OrdreValg, type TelemetriBillede,
 } from "../../lib/telemetri";
 import { useLiveSignals } from "../../lib/useLiveSignals";
-import { aabnKanal, type AgentStatus, type Hastighed, type SimBesked, type SimStatus } from "./simKanal";
+import {
+  haendelsesNoegle, KANAL_MS, sendLinje, type AgentStatus, type Hastighed, type Kommando, type SimStatus,
+} from "./simKanal";
 
 /** Så mange fejl i træk, før reglerne tager over for resten af kørslen. */
 const FEJL_I_TRAEK = 3;
@@ -31,9 +33,17 @@ export interface Styring {
   gang: number;
   saet: (h: Hastighed) => void;
   genstart: () => void;
-  /** Operatøren udfører eller afviser en anbefaling. */
+  /** Operatøren ved linjen udfører eller afviser en anbefaling. */
   udfoer: (id: number) => void;
   afvis: (id: number) => void;
+}
+
+/** Hvordan kanalen til kontoret har det, set fra linjeskærmen. */
+export interface KanalTilstand {
+  /** Sender denne linjeskærm? false: en anden har taget kanalen. null: ukendt. */
+  ejer: boolean | null;
+  /** Serveren har ikke svaret de sidste gange. */
+  fejl: boolean;
 }
 
 export interface Telemetri {
@@ -47,6 +57,8 @@ export interface Telemetri {
   styring: Styring | null;
   /** Hvem der tænker, og hvad det koster. Kun når der køres en ordre. */
   agenter: AgentStatus | null;
+  /** Kanalen til kontoret. Kun når der køres en ordre. */
+  kanal: KanalTilstand | null;
 }
 
 function gem(h: Historik, noegle: string, v: number | null) {
@@ -99,11 +111,16 @@ export function useTelemetri(opts: {
   seed?: number;
   /** Hvem der tænker for Claude-agenterne. "claude" koster penge pr. kald. */
   motor?: Motor;
+  /** Kontoret beder om Claude eller regler. Siden skifter adresse; simuleringen starter forfra. */
+  onMotor?: (m: Motor) => void;
 }): Telemetri {
   const {
     layout, fremskrevet, liveSource, flowSignal, flaskehals = false, ophobning = false, ordre = null, seed,
-    motor = "regler",
+    motor = "regler", onMotor,
   } = opts;
+  // Gennem en ref, så en ny funktion fra siden ikke starter ordren forfra.
+  const onMotorRef = useRef(onMotor);
+  useEffect(() => { onMotorRef.current = onMotor; }, [onMotor]);
 
   // --- Anlægget som det står --------------------------------------------------
   const ids = useMemo(() => (flowSignal && !fremskrevet ? [flowSignal] : []), [flowSignal, fremskrevet]);
@@ -122,11 +139,14 @@ export function useTelemetri(opts: {
   const [gang, setGang] = useState(0);
   const [koersel, setKoersel] = useState(0);
   const [agenter, setAgenter] = useState<AgentStatus | null>(null);
+  const [kanal, setKanal] = useState<KanalTilstand | null>(null);
   const saet = useCallback((h: Hastighed) => { valgtRef.current = h; setValgt(h); }, []);
   // Den kørende simulering, så operatørens klik når den — uden at starte forfra.
   const aktivSim = useRef<ReturnType<typeof simulator> | null>(null);
-  const udfoer = useCallback((id: number) => aktivSim.current?.udfoer(id), []);
-  const afvis = useCallback((id: number) => aktivSim.current?.afvis(id), []);
+  // Et ja eller nej på pause skal kunne ses, selv om ordren står.
+  const frisk = useRef(false);
+  const udfoer = useCallback((id: number) => { aktivSim.current?.udfoer(id, "Operatør"); frisk.current = true; }, []);
+  const afvis = useCallback((id: number) => { aktivSim.current?.afvis(id, "Operatør"); frisk.current = true; }, []);
   const genstart = useCallback(() => setKoersel((n) => n + 1), []);
 
   // Uden ordre: forvarm et minut, og kør i virkelig tid.
@@ -261,22 +281,70 @@ export function useTelemetri(opts: {
     let b = s.skridt(TAKT_MS, simNu);
     arkiver(historik.current, b);
     setSim(b);
+    let sidsteGang = 0;
 
-    const kanal = aabnKanal();
-    const tilstand = (g: number): SimStatus => ({
-      t: simNu, valgt: valgtRef.current, gang: g, ordre: b.ordre, uro: b.uro,
+    // --- Kanalen til kontoret -----------------------------------------------
+    // Linjeskærmen sender, hvordan det står, og det nye i loggen og samtalen.
+    // Svaret er kontorets kommandoer. Tager den kanalen fra en anden — eller
+    // har serveren glemt den — sender den alt, den har, forfra.
+    const tilstand = (): SimStatus => ({
+      t: simNu, valgt: valgtRef.current, gang: sidsteGang, ordre: b.ordre, uro: b.uro,
       agenter: { ...status, venter: [...venter.values()] },
+      anbefalinger: [
+        ...b.anbefalinger.filter((a) => a.status === "aaben"),
+        ...b.anbefalinger.filter((a) => a.status !== "aaben").slice(0, 6),
+      ],
     });
-    // Loggen på skærm 2 får det hele, når den beder om det — og en tom log,
-    // når simuleringen startes forfra.
-    kanal?.postMessage({ type: "tilstand", status: tilstand(0), log: [], samtale: [] } satisfies SimBesked);
-    if (kanal) {
-      kanal.onmessage = (e: MessageEvent<SimBesked>) => {
-        if (e.data.type === "hej") {
-          kanal.postMessage({ type: "tilstand", status: tilstand(0), log: log.current, samtale: samtale.current } satisfies SimBesked);
-        }
-      };
-    }
+    let vist: KanalTilstand | null = null;
+    const visKanal = (k: KanalTilstand) => {
+      if (!aktiv || (vist && vist.ejer === k.ejer && vist.fejl === k.fejl)) return;
+      vist = k;
+      setKanal(k);
+    };
+    let sendtLog = new Set<string>();
+    let sendtSamtale = new Set<number>();
+    let kommandoFra = 0;
+    let foerste = true;
+    let fejlISend = 0;
+    const udfoerte = new Set<string>();
+    const kommando = (k: Kommando) => {
+      if (udfoerte.has(k.id)) return;
+      udfoerte.add(k.id);
+      switch (k.k.type) {
+        case "fart": saet(k.k.h); break;
+        case "forfra": genstart(); break;
+        case "motor": if (k.k.motor !== motor) onMotorRef.current?.(k.k.motor); break;
+        case "udfoer": s.udfoer(k.k.id, "Formand"); frisk.current = true; break;
+        case "afvis": s.afvis(k.k.id, "Formand"); frisk.current = true; break;
+      }
+    };
+    let kanalUr: ReturnType<typeof setTimeout> | null = null;
+    const send = async () => {
+      // Ældste først, så kontoret får dem i den rækkefølge, de skete.
+      const nyeLog = log.current.filter((h) => !sendtLog.has(haendelsesNoegle(h))).reverse();
+      const nyeSamtale = samtale.current.filter((m) => !sendtSamtale.has(m.nr)).reverse();
+      try {
+        const svar = await sendLinje({
+          type: "linje", koersel: id, overtag: foerste, status: tilstand(), log: nyeLog, samtale: nyeSamtale, kommandoFra,
+        });
+        if (!aktiv) return;
+        fejlISend = 0;
+        if (!svar.ejer) { visKanal({ ejer: false, fejl: false }); return; }
+        foerste = false;
+        // Et tømt rum har kun det, der lige blev sendt. Resten går med næste gang.
+        if (svar.nulstillet) { sendtLog = new Set(); sendtSamtale = new Set(); }
+        for (const h of nyeLog) sendtLog.add(haendelsesNoegle(h));
+        for (const m of nyeSamtale) sendtSamtale.add(m.nr);
+        kommandoFra = svar.kommandoTil;
+        for (const k of svar.kommandoer) kommando(k);
+        visKanal({ ejer: true, fejl: false });
+      } catch {
+        if (aktiv && ++fejlISend >= 3) visKanal({ ejer: null, fejl: true });
+      } finally {
+        if (aktiv) kanalUr = setTimeout(send, KANAL_MS);
+      }
+    };
+    void send();
 
     let sidst = Date.now();
     let sidsteUro = simNu;
@@ -295,16 +363,17 @@ export function useTelemetri(opts: {
       // det, der sker imens, sker i det tempo, det ville.
       if (g > 1 && (venter.size > 0 || b.opgaver.length > 0)) g = 1;
       setGang(g);
+      sidsteGang = g;
       let rest = realDt * g;
-      // På pause står ordren, men loggen på skærm 2 skal stadig vide, at
-      // kontrolrummet er der.
-      if (rest <= 0) {
-        kanal?.postMessage({ type: "tilstand", status: tilstand(0) } satisfies SimBesked);
-        return;
+      // På pause står ordren. Er en anbefaling afgjort imens, tages et skridt
+      // uden tid, så det kan ses — på linjeskærmen og på kontoret.
+      const staar = rest <= 0;
+      if (staar) {
+        if (!frisk.current) return;
+        b = s.skridt(0, simNu);
       }
+      frisk.current = false;
 
-      const foerLog = log.current;
-      const foerSamtale = samtale.current;
       while (rest > 0) {
         const d = Math.min(SKRIDT_MS, rest);
         rest -= d;
@@ -325,23 +394,18 @@ export function useTelemetri(opts: {
       }
       if (b.uro.length > 0) sidsteUro = simNu;
       if (motor === "claude") tagOpgaver(b);
-      arkiver(historik.current, b);
+      // Kurverne går kun frem, når tiden gør.
+      if (!staar) arkiver(historik.current, b);
       log.current = samlLog(log.current, b.haendelser);
       samtale.current = samlSamtale(samtale.current, b.samtale);
       setSim(b);
-      kanal?.postMessage({
-        type: "tilstand",
-        status: tilstand(g),
-        ...(log.current !== foerLog ? { log: log.current } : {}),
-        ...(samtale.current !== foerSamtale ? { samtale: samtale.current } : {}),
-      } satisfies SimBesked);
     }, TAKT_MS);
     return () => {
       aktiv = false;
       clearInterval(ur);
-      kanal?.close();
+      if (kanalUr) clearTimeout(kanalUr);
     };
-  }, [fremskrevet, ordre, layout, flaskehals, ophobning, seed, koersel, motor]);
+  }, [fremskrevet, ordre, layout, flaskehals, ophobning, seed, koersel, motor, saet, genstart]);
 
   const styring = useMemo<Styring | null>(
     () => (fremskrevet && ordre ? { valgt, gang, saet, genstart, udfoer, afvis } : null),
@@ -351,7 +415,7 @@ export function useTelemetri(opts: {
   if (fremskrevet && sim) {
     return {
       billede: sim, historik: historik.current, log: log.current, samtale: samtale.current, styring,
-      agenter: ordre ? agenter : null,
+      agenter: ordre ? agenter : null, kanal: ordre ? kanal : null,
     };
   }
 
@@ -367,5 +431,5 @@ export function useTelemetri(opts: {
   const samples = flowSignal ? live.history.get(flowSignal) ?? [] : [];
   h.set("flow", samples.slice(-HISTORIK).map((s) => s.value));
   h.set("flowMa", samples.slice(-HISTORIK).map((s) => (Number.isFinite(s.raw) ? s.raw : null)));
-  return { billede, historik: h, log: billede.haendelser, samtale: [], styring: null, agenter: null };
+  return { billede, historik: h, log: billede.haendelser, samtale: [], styring: null, agenter: null, kanal: null };
 }

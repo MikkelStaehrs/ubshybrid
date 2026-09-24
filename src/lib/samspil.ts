@@ -38,7 +38,7 @@ export interface Besked {
 
 /**
  * Hvem der tænkte, som det står på skærmen: "Claude · 3,4 s" eller "Regel".
- * Ét sted, så mærket siger det samme i loggen, i panelet og på skærm 2.
+ * Ét sted, så mærket siger det samme i loggen, i panelet og på kontoret.
  */
 export function kildeTekst(b: Pick<Besked, "kilde" | "ms">, medTid = true): string {
   if (b.kilde === "menneske") return "Menneske";
@@ -58,7 +58,7 @@ export function stopGrund(tekst: string): string {
 }
 
 /** Modtagere, der er mennesker. Fladen skal kunne se forskel på dem og agenterne. */
-export const MENNESKER = new Set(["Operatør", "Systemansvarlig", "Vedligehold"]);
+export const MENNESKER = new Set(["Operatør", "Formand", "Systemansvarlig", "Vedligehold"]);
 
 /** Agenternes navne, som de står i data/agents.ts. */
 export const AGENT = {

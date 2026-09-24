@@ -1,12 +1,6 @@
-// Loggen til en anden skærm: hændelserne og agenterne imellem, side om side.
-//
-// Siden kører ingen simulering selv. Den lytter på kontrolrummet på
-// /ai/demo, som kører ordren, og viser, hvad der sker, mens det sker.
-import type { Metadata } from "next";
-import { SimLogSide } from "../../SimLogSide";
-
-export const metadata: Metadata = { title: "Log · simulering" };
+// Loggen på skærm 2 er blevet til kontoret.
+import { redirect } from "next/navigation";
 
 export default function LogPage() {
-  return <SimLogSide />;
+  redirect("/ai/demo/kontor");
 }

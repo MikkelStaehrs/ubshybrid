@@ -9,12 +9,24 @@ const kr = (v: number) => v.toLocaleString("da-DK", { minimumFractionDigits: 2, 
 
 /**
  * Hvem der tænker, og hvad det har kostet. Med Claude står prisen altid
- * fremme, og den agent, der tænker lige nu, står ved siden af. Har reglerne
- * taget over, står det — og hvorfor.
+ * fremme på kontoret, og den agent, der tænker lige nu, står ved siden af.
+ * Har reglerne taget over, står det — og hvorfor.
+ *
+ * `kort` er linjeskærmens udgave: hvem der tænker, ikke hvad det koster.
+ * Prisen er formandens sag, ikke operatørens — men når tiden går i virkelig
+ * tid, fordi en agent tænker, skal man ved linjen kunne se hvorfor.
  */
-export function AgentMaaler({ a }: { a: AgentStatus }) {
-  if (a.motor === "regler") return <span className="hud-motor">Regler · seed {a.seed}</span>;
+export function AgentMaaler({ a, kort = false }: { a: AgentStatus; kort?: boolean }) {
+  if (a.motor === "regler") return <span className="hud-motor">{kort ? "Regler" : `Regler · seed ${a.seed}`}</span>;
   if (a.stoppet) return <span className="hud-motor is-stoppet" title={a.stoppet}>Regler · {stopGrund(a.stoppet)}</span>;
+  if (kort) {
+    return (
+      <span className="hud-motor is-claude">
+        <b>Claude</b>
+        {a.venter.length > 0 && <span className="hud-taenker">{a.venter[0]} tænker</span>}
+      </span>
+    );
+  }
   return (
     <span className="hud-motor is-claude">
       <b>Claude</b>

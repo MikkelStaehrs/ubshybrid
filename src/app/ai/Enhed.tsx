@@ -168,26 +168,41 @@ export function EnhedPanel({ m, billede, historik, log, samtale, ot, onLuk, onUd
  * Linjeagenternes anbefalinger til operatøren. De åbne øverst, med
  * knapperne; de seneste afgjorte under, med det, der faktisk skete.
  */
-export function AnbefalingerPanel({ billede, nr, still, onUdfoer, onAfvis }: {
-  billede: TelemetriBillede;
+export function AnbefalingerPanel({ anbefalinger, sim, nr, still, onUdfoer, onAfvis }: {
+  anbefalinger: Anbefaling[];
+  sim: boolean;
   nr: number;
   still?: boolean;
   onUdfoer: (id: number) => void;
   onAfvis: (id: number) => void;
 }) {
-  const aabne = billede.anbefalinger.filter((a) => a.status === "aaben");
-  const afgjort = billede.anbefalinger.filter((a) => a.status !== "aaben").slice(0, Math.max(0, 2 - aabne.length));
   return (
-    <Panel label="Anbefalinger" nr={nr} still={still} right={billede.simuleret ? <Sim /> : undefined}>
-      {aabne.length === 0 && afgjort.length === 0 ? (
-        <p className="hp-afventer"><span className="hp-afventer-mark" aria-hidden />Ingen anbefalinger endnu</p>
-      ) : (
-        <div className="hp-anbefalinger">
-          {aabne.map((a) => <AnbefalingKort key={a.id} a={a} onUdfoer={onUdfoer} onAfvis={onAfvis} />)}
-          {afgjort.map((a) => <AnbefalingKort key={a.id} a={a} />)}
-        </div>
-      )}
+    <Panel label="Anbefalinger" nr={nr} still={still} right={sim ? <Sim /> : undefined}>
+      <AnbefalingListe anbefalinger={anbefalinger} afgjorte={2} onUdfoer={onUdfoer} onAfvis={onAfvis} />
     </Panel>
+  );
+}
+
+/**
+ * De åbne med knapperne, og så mange afgjorte under, der er plads til. Samme
+ * liste ved linjen og på kontoret: den, der trykker først, bestemmer.
+ */
+export function AnbefalingListe({ anbefalinger, afgjorte, onUdfoer, onAfvis }: {
+  anbefalinger: Anbefaling[];
+  afgjorte: number;
+  onUdfoer?: (id: number) => void;
+  onAfvis?: (id: number) => void;
+}) {
+  const aabne = anbefalinger.filter((a) => a.status === "aaben");
+  const afgjort = anbefalinger.filter((a) => a.status !== "aaben").slice(0, Math.max(0, afgjorte - aabne.length));
+  if (aabne.length === 0 && afgjort.length === 0) {
+    return <p className="hp-afventer"><span className="hp-afventer-mark" aria-hidden />Ingen anbefalinger endnu</p>;
+  }
+  return (
+    <div className="hp-anbefalinger">
+      {aabne.map((a) => <AnbefalingKort key={a.id} a={a} onUdfoer={onUdfoer} onAfvis={onAfvis} />)}
+      {afgjort.map((a) => <AnbefalingKort key={a.id} a={a} />)}
+    </div>
   );
 }
 
@@ -207,7 +222,7 @@ export function AnbefalingKort({ a, onUdfoer, onAfvis }: {
   return (
     <div className={`he-anbefaling s-${a.status}`}>
       <div className="he-anb-hoved">
-        <span className="he-anb-status">{status}</span>
+        <span className="he-anb-status">{status}{a.af && ` · ${a.af}`}</span>
         <span className="he-fra">{a.fra}</span>
         <span className="he-tid">{klok(a.t)}</span>
       </div>

@@ -1,51 +1,56 @@
-// Kanalen mellem kontrolrummet og loggen på den anden skærm.
-//
-// Simuleringen kører ét sted: i kontrolrummets vindue. Loggen på skærm 2
-// kører ingen simulering selv — den lytter. Browserens BroadcastChannel
-// forbinder vinduer fra samme adresse på samme maskine, så der skal ingen
-// server til, og intet forlader maskinen.
-import type { Besked } from "../../lib/samspil";
-import type { Haendelse, Motor, OrdreStatus, Uro } from "../../lib/telemetri";
+// Linjeskærmens og kontorets ende af kanalen. Reglerne og typerne står i
+// src/lib/kanal.ts; her er det kun, hvordan browseren taler med serveren.
+import type { Kommando, KontorSvar, LinjePost, LinjeSvar } from "../../lib/kanal";
 
-export const KANAL = "ubs-simulering";
+export type {
+  AgentStatus, Ejer, Hastighed, Kommando, KommandoIndhold, KontorSvar, LinjeSvar, SimStatus,
+} from "../../lib/kanal";
 
-/** Hvor hurtigt tiden går. "auto" er hurtigt, når alt er roligt, og langsomt, når ikke. */
-export type Hastighed = "auto" | "pause" | number;
+/** To gange i sekundet. Hurtigt nok til, at et klik på kontoret føles som et klik. */
+export const KANAL_MS = 500;
 
-export interface SimStatus {
-  /** Simuleringens klokke. */
-  t: number;
-  valgt: Hastighed;
-  /** Gangen lige nu. 0 er pause. */
-  gang: number;
-  ordre: OrdreStatus | null;
-  uro: Uro[];
-  agenter?: AgentStatus;
+const ADRESSE = "/api/kanal";
+
+async function post<T>(body: unknown, ventMs: number): Promise<{ ok: boolean; status: number; data: T }> {
+  const res = await fetch(ADRESSE, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(ventMs),
+  });
+  return { ok: res.ok, status: res.status, data: await res.json() as T };
 }
 
-/** Hvem der tænker, og hvad det har kostet. */
-export interface AgentStatus {
-  motor: Motor;
-  /** Kald til Claude i denne kørsel, der kostede noget. */
-  kald: number;
-  brugtKr: number;
-  loftKr: number;
-  /** De agenter, der tænker lige nu. */
-  venter: string[];
-  /** Hvorfor reglerne har taget over, hvis de har. */
-  stoppet: string | null;
-  /** Den seneste fejl — et kald, reglerne måtte svare for. */
-  fejl: string | null;
-  /** Kørslens seed. Samme seed giver samme hændelser — ikke samme svar fra Claude. */
-  seed: number;
+/** Linjeskærmen sender, hvordan det står, og får kontorets kommandoer tilbage. */
+export async function sendLinje(p: LinjePost): Promise<LinjeSvar> {
+  // Rundeligt: et svar, der ikke når frem, sendes igen — og serveren har
+  // det måske allerede. Kontoret tåler det, men færre er bedre.
+  const r = await post<LinjeSvar & { fejl?: string }>(p, 10_000);
+  if (!r.ok) throw new Error(r.data.fejl ?? `Kanalen svarede ${r.status}`);
+  return r.data;
 }
 
-export type SimBesked =
-  /** Loggen er åbnet og vil have det hele. */
-  | { type: "hej" }
-  /** Hvordan det står. Loggen og samtalen kun, når de har ændret sig. */
-  | { type: "tilstand"; status: SimStatus; log?: Haendelse[]; samtale?: Besked[] };
-
-export function aabnKanal(): BroadcastChannel | null {
-  return typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(KANAL);
+/** Kontoret læser det, der er kommet, siden det sidst spurgte. */
+export async function laesKanal(logFra: number, samtaleFra: number): Promise<KontorSvar> {
+  const res = await fetch(`${ADRESSE}?log=${logFra}&samtale=${samtaleFra}`, { cache: "no-store", signal: AbortSignal.timeout(5_000) });
+  const data = await res.json() as KontorSvar & { fejl?: string };
+  if (!res.ok) throw new Error(data.fejl ?? `Kanalen svarede ${res.status}`);
+  return data;
 }
+
+/**
+ * Kontoret beder linjeskærmen om noget. Svaret er et af to korte ord til
+ * skærmen — aldrig lagerets egen fejltekst.
+ */
+export async function sendKommando(kommando: Kommando): Promise<{ ok: true } | { ok: false; fejl: "Linjeskærmen er skiftet" | "Nåede ikke frem" }> {
+  try {
+    const r = await post<{ ok: boolean }>({ type: "kommando", kommando }, 5_000);
+    if (r.ok) return { ok: true };
+    return { ok: false, fejl: r.status === 409 ? "Linjeskærmen er skiftet" : "Nåede ikke frem" };
+  } catch {
+    return { ok: false, fejl: "Nåede ikke frem" };
+  }
+}
+
+/** Nøglen, en hændelse kendes på — samme som loggen bruger. */
+export const haendelsesNoegle = (h: { t: number; hvor: string | null; tekst: string }) => `${h.t}|${h.hvor}|${h.tekst}`;

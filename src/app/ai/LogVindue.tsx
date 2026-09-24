@@ -15,14 +15,13 @@ import { AgentLog, HaendelsesLog } from "./Logge";
  * Vinduet er grænseflade, ikke data: det glider ind, når nogen beder om
  * det, og viser intet, anlægget ikke selv har meldt.
  */
-export function LogVindue({ log, samtale, sim, onLuk, onSkaerm2 }: {
+export function LogVindue({ log, samtale, sim, onLuk }: {
   log: Haendelse[];
   /** Agenterne imellem. null, når der ingen ordre kører. */
   samtale: Besked[] | null;
   sim: boolean;
   onLuk: () => void;
   /** Åbn loggen i sit eget vindue, til en anden skærm. */
-  onSkaerm2?: () => void;
 }) {
   const [fane, setFane] = useState<"haendelser" | "agenter">(samtale ? "agenter" : "haendelser");
   const luk = useRef<HTMLButtonElement>(null);
@@ -61,7 +60,6 @@ export function LogVindue({ log, samtale, sim, onLuk, onSkaerm2 }: {
           )}
           {sim && <Sim />}
           <span className="hl-hoejre">
-            {onSkaerm2 && <button type="button" className="hp-knap" onClick={onSkaerm2}>Skærm 2</button>}
             <button type="button" ref={luk} className="hp-knap" onClick={onLuk}>Luk</button>
           </span>
         </header>

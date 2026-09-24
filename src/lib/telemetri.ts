@@ -283,9 +283,14 @@ export interface Anbefaling {
   /** Snittet af de prøver, anbefalingen bygger på. */
   foer: { fv3: number; udskud: number };
   status: "aaben" | "udfoert" | "afvist" | "udloebet";
+  /** Hvem der sagde ja eller nej — operatøren ved linjen eller formanden på kontoret. */
+  af?: Menneske;
   /** Når virkningen er gjort op, efter ændringen. */
   efter?: { fv3: number; udskud: number };
 }
+
+/** De mennesker, der kan sige ja og nej til en anbefaling. */
+export type Menneske = "Operatør" | "Formand";
 
 // ---------------------------------------------------------------------------
 
@@ -354,11 +359,14 @@ export const LOG_MAKS = 500;
 
 /**
  * Læg et billedes beskeder oven i samtalen. Samme regel som loggen: hver
- * besked én gang, nyeste først — ordnet efter løbenummer, ikke tid.
+ * besked én gang, nyeste først — ordnet efter løbenummer, ikke tid. Ældre
+ * beskeder kan komme efter nyere: kontoret får dem sendt forfra, når en
+ * linjeskærm har taget kanalen, og de skal med.
  */
 export function samlSamtale(samtale: Besked[], nye: Besked[], maks = LOG_MAKS): Besked[] {
-  const hoejeste = samtale[0]?.nr ?? 0;
-  const tilgang = nye.filter((b) => b.nr > hoejeste);
+  const kendt = new Set(samtale.map((b) => b.nr));
+  // Også inden for det nye: en linjeskærm, der ikke fik svar, sender igen.
+  const tilgang = nye.filter((b) => !kendt.has(b.nr) && !!kendt.add(b.nr));
   if (tilgang.length === 0) return samtale;
   return [...tilgang, ...samtale].sort((a, b) => b.nr - a.nr).slice(0, maks);
 }
@@ -375,7 +383,10 @@ const logNoegle = (h: Haendelse) => `${h.t}|${h.hvor}|${h.tekst}`;
  */
 export function samlLog(log: Haendelse[], nye: Haendelse[], maks = LOG_MAKS): Haendelse[] {
   const kendt = new Set(log.map(logNoegle));
-  const tilgang = nye.filter((h) => !kendt.has(logNoegle(h)));
+  const tilgang = nye.filter((h) => {
+    const k = logNoegle(h);
+    return !kendt.has(k) && !!kendt.add(k);
+  });
   if (tilgang.length === 0) return log;
   return [...tilgang, ...log].sort((a, b) => b.t - a.t).slice(0, maks);
 }
@@ -671,10 +682,13 @@ export interface Simulator {
   svar(id: number, svar: Svar | null): void;
   /** Hvor mange opgaver, der venter på et svar. */
   antalOpgaver(): number;
-  /** Operatøren udfører en anbefaling: indstillingen flyttes. */
-  udfoer(id: number): void;
-  /** Operatøren afviser en anbefaling. */
-  afvis(id: number): void;
+  /**
+   * Et menneske udfører en anbefaling: indstillingen flyttes. Den, der
+   * trykker først, bestemmer; en anbefaling, der er afgjort, rører sig ikke.
+   */
+  udfoer(id: number, hvem?: Menneske): void;
+  /** Et menneske afviser en anbefaling. */
+  afvis(id: number, hvem?: Menneske): void;
 }
 
 /**
@@ -2209,29 +2223,31 @@ export function simulator(layout: Layout, valg: SimValg = {}): Simulator {
     frem: (dtMs, nu) => { gaa(dtMs, nu, false); return uroNu; },
     svar: besvar,
     antalOpgaver: () => aabneOpgaver.size,
-    udfoer: (id) => {
+    udfoer: (id, hvem = "Operatør") => {
       const an = anbefalinger.find((x) => x.id === id);
       if (!an || an.status !== "aaben") return;
       const bord = maskiner.find((x) => x.m.id === an.maskine);
       if (!bord?.indstilling) return;
       an.status = "udfoert";
+      an.af = hvem;
       bord.indstilling[an.parameter] = an.tilVaerdi;
       beslutninger++;
       const enhed = an.parameter === "tvaers" ? "°" : " %";
       const navn = an.parameter === "tvaers" ? "Tværhældning" : "Luft";
       sig({
-        fra: "Operatør", til: an.fra, type: "handling", kilde: "menneske",
+        fra: hvem, til: an.fra, type: "handling", kilde: "menneske",
         tekst: `${navn} på ${an.kort}: ${tal(an.fraVaerdi, 1)} → ${tal(an.tilVaerdi, 1)}${enhed}.`,
       }, sidsteNu);
-      skriv({ t: sidsteNu, hvor: an.kort, tekst: `${navn} ${tal(an.fraVaerdi, 1)} → ${tal(an.tilVaerdi, 1)}${enhed}`, niveau: "info" });
+      skriv({ t: sidsteNu, hvor: an.kort, tekst: `${navn} ${tal(an.fraVaerdi, 1)} → ${tal(an.tilVaerdi, 1)}${enhed} · ${hvem}`, niveau: "info" });
       vurderes.set(an.id, []);
     },
-    afvis: (id) => {
+    afvis: (id, hvem = "Operatør") => {
       const an = anbefalinger.find((x) => x.id === id);
       if (!an || an.status !== "aaben") return;
       an.status = "afvist";
+      an.af = hvem;
       anbefalIgenFra.set(an.maskine, sidsteNu + KASTEBORDET.roEfterNejS * 1000);
-      sig({ fra: "Operatør", til: an.fra, type: "beslutning", kilde: "menneske", tekst: `Afvist: ${an.parameter === "tvaers" ? "tværhældningen" : "luften"} på ${an.kort} bliver, hvor den er.` }, sidsteNu);
+      sig({ fra: hvem, til: an.fra, type: "beslutning", kilde: "menneske", tekst: `Afvist: ${an.parameter === "tvaers" ? "tværhældningen" : "luften"} på ${an.kort} bliver, hvor den er.` }, sidsteNu);
     },
   };
 }

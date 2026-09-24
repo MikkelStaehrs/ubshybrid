@@ -29,9 +29,28 @@ ANTHROPIC_WORKSPACE_ID=
 # Loft i kroner. Udeladt: 10 pr. kørsel og 50 pr. døgn.
 AGENT_LOFT_KR_KOERSEL=
 AGENT_LOFT_KR_DOEGN=
+
+# Kun når linjeskærmen og kontoret kører på Vercel (se nedenfor).
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 ```
 
 På Vercel sættes de samme navne under *Settings → Environment Variables*.
+
+### Linjeskærm og kontor
+
+En ordre køres med linjeskærmen på `/ai/demo` (storskærmen i operatørrummet)
+og kontoret på `/ai/demo/kontor` (formandens skærm), gerne på hver sin
+maskine. Kontoret styrer fart, forfra og Claude, og kan udføre eller afvise
+anbefalinger. De to taler sammen gennem serveren.
+
+- **Lokalt** (`npm run dev` eller `npm start` på én maskine, den anden på
+  netværket) er serverens hukommelse nok. Der skal ikke sættes noget op.
+- **På Vercel** kan de to lande i hver sin instans, og så ser kontoret intet.
+  Opret en Redis-database hos Upstash — gratis, eller via *Storage* i
+  Vercel — og sæt `UPSTASH_REDIS_REST_URL` og `UPSTASH_REDIS_REST_TOKEN`.
+  Vercels egne navne, `KV_REST_API_URL` og `KV_REST_API_TOKEN`, virker også.
+  Uden står der "Uden fælles lager" på kontoret.
 
 ### Login
 

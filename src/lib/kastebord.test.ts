@@ -152,6 +152,22 @@ describe("en anbefaling", () => {
     assert.ok(nej && nej.kilde === "menneske");
   });
 
+  it("kan også afgøres fra kontoret — den, der trykker først, bestemmer", () => {
+    const { sim, anbefaling: a, b } = tilFoersteAnbefaling();
+    sim.udfoer(a.id, "Formand");
+    // Operatøren ved linjen trykker et øjeblik efter. Det er for sent.
+    sim.afvis(a.id, "Operatør");
+    const efter = sim.skridt(1000, b.t + 1000);
+    const x = efter.anbefalinger.find((y) => y.id === a.id)!;
+    assert.equal(x.status, "udfoert");
+    assert.equal(x.af, "Formand");
+    assert.equal(efter.indstillinger[a.maskine][a.parameter], a.tilVaerdi);
+    const ja = efter.samtale.find((m) => m.type === "handling" && m.kilde === "menneske");
+    assert.equal(ja?.fra, "Formand");
+    assert.ok(!efter.samtale.some((m) => m.tekst.startsWith("Afvist")), "et nej efter et ja må ikke stå i samtalen");
+    assert.ok(efter.haendelser.some((h) => h.hvor === a.kort && h.tekst.endsWith("· Formand")));
+  });
+
   it("gentages ikke: efter et nej får bordet ro", () => {
     const { sim, anbefaling: a, b } = tilFoersteAnbefaling();
     sim.afvis(a.id);

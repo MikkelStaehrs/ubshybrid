@@ -335,7 +335,7 @@ Simulatoren melder sin `uro` — et spor, der står, en database, der halter,
 et varsel — og så længe listen ikke er tom, går tiden langsomt. Sker der
 noget midt i et hurtigt spring, stopper springet dér. Gangen står altid i
 toppen (×90, ×8), så ingen tager en time på skærmen for en time i hallen, og
-den kan sættes i hånden: pause, 1×, 10×, 90×, auto, forfra.
+den kan sættes i hånden fra kontoret: pause, 1×, 10×, 90×, auto, forfra.
 
 **Arbejdsdelingen er pointen.** Hver agent ser sit og siger det til de
 andre; Operatøragenten afvejer og beslutter, og det, et menneske skal gøre,
@@ -373,7 +373,8 @@ koster penge pr. kald, og derfor er det et valg i adressen.
   manglende nøgle: så tager reglerne over for resten af kørslen, og det står
   på skærmen.
 - **Hver besked er mærket CLAUDE (med svartid) eller REGEL.** Prisen og
-  antallet af kald står i toppen.
+  antallet af kald står i toppen af kontoret. Linjeskærmen viser kun, hvem
+  der tænker — tiden går i virkelig tid imens, og det skal kunne ses hvorfor.
 - **Kaldet sker kun på serveren**, i `src/lib/claude.ts` via `/api/agent`.
   Nøglen forlader aldrig serveren og skrives aldrig ud. Loftet håndhæves dér:
   `AGENT_LOFT_KR_KOERSEL` (10 kr) og `AGENT_LOFT_KR_DOEGN` (50 kr).
@@ -396,14 +397,51 @@ koster penge pr. kald, og derfor er det et valg i adressen.
 - **Én FV3-prøve er ikke en trend.** Den meldes som en iagttagelse. En
   anbefaling kræver to prøver i træk — se kastebordene nedenfor.
 
-**Loggen på skærm 2** (`/ai/demo/log`) kører ingen simulering selv. Den
-lytter på kontrolrummet gennem browserens `BroadcastChannel` — samme maskine,
-ingen server — og viser agenterne imellem og hændelserne side om side. Tier
-kontrolrummet, bliver loggen stående og siger det.
-
 `frem()` tager et skridt uden at bygge et billede, til mellemskridtene, når
 tiden går hurtigt. Støjen i billedet trækkes, før billedet bygges, så et
 forløb med og uden billeder er det samme.
+
+### Linjeskærmen og kontoret
+
+En ordre køres som på en rigtig linje: **linjeskærmen** (`/ai/demo`) står i
+operatørrummet, **kontoret** (`/ai/demo/kontor`) hos formanden — gerne på
+hver sin maskine.
+
+- **Linjeskærmen viser linjen, ikke simuleringen.** Den har ingen knap, der
+  skruer på tiden; fart, forfra og Claude eller regler styres fra kontoret.
+  Gangen står der stadig. Simuleringen kører kun dér.
+- **Kontoret kører ingen simulering selv.** Det viser anbefalingerne,
+  agenterne imellem og hændelserne, prisen på Claude og styringen — og intet,
+  linjeskærmen ikke selv har sendt. Tier linjeskærmen, bliver kontoret
+  stående og siger det.
+- **Et ja eller nej kan komme fra begge steder.** Den, der trykker først,
+  bestemmer; en afgjort anbefaling rører sig ikke. Loggen og samtalen skriver,
+  om det var Operatør eller Formand (`Anbefaling.af`). Det har en test.
+- **Beskederne går gennem serveren** (`/api/kanal`, `src/lib/kanal.ts`), for
+  browserens egne kanaler når ikke en anden maskine. Serveren regner intet;
+  den gemmer og giver videre. Linjeskærmen sender to gange i sekundet, hvordan
+  det står, og det nye i loggen og samtalen, og får kontorets kommandoer
+  tilbage. Kontoret spørger lige så tit efter det nye.
+- **Den nyeste linjeskærm vinder.** Åbnes en ny, tager den kanalen, og den
+  gamle kører videre, men tier og siger det ("Anden linjeskærm sender"). Har
+  ejeren tiet i `TAVS_MS`, kan en anden tage over. En tømt kanal får en ny
+  `udgave`, så kontoret ved, at det skal læse forfra — og linjeskærmen sender
+  alt, den har, igen.
+- **En kommando når kun den kørsel, den var til.** Et ja til en anbefaling i
+  en gammel kørsel er ikke et ja til noget i den nye, så serveren afviser
+  den, og kontoret siger det.
+- **Hver hændelse og besked én gang.** Et svar, der ikke nåede frem, sendes
+  igen, og serveren har det måske allerede. `samlLog()` og `samlSamtale()`
+  tåler det — også inden for det samme, nye bundt. Det har en test.
+- **Lageret er serverens hukommelse eller Upstash.** Hukommelsen er nok, når
+  appen kører som én proces — lokalt, med den anden maskine på netværket. På
+  Vercel kan linjeskærmen og kontoret lande i hver sin instans, så dér skal
+  Upstash Redis til (`UPSTASH_REDIS_REST_URL`/`_TOKEN`, eller Vercels
+  `KV_REST_API_URL`/`_TOKEN`). Det er ren fetch mod REST-API'et, ingen pakke.
+  Kontoret siger "Uden fælles lager", når det kører på Vercel uden. Reglerne
+  for rummet er testet mod begge lagre.
+
+`/ai/demo/log` sender videre til kontoret.
 
 ### Kastebordene
 
@@ -426,9 +464,9 @@ skilte fint for en time siden, kan skille for blødt nu.
 
 **Agenten anbefaler, et menneske udfører.** Linjeagenten ser prøverne og
 anbefaler én indstilling ét trin (`KASTEBORDET.trin`), med det forventede.
-Anbefalingen står i enheden og i Anbefalinger-panelet med **Udfør** og
-**Afvis**; ingen hældning flytter sig, før nogen trykker. Det, operatøren
-gør, står i samtalen som `kilde: "menneske"`. Efter
+Anbefalingen står i enheden, i Anbefalinger-panelet og på kontoret med
+**Udfør** og **Afvis**; ingen hældning flytter sig, før nogen trykker. Det,
+operatøren eller formanden gør, står i samtalen som `kilde: "menneske"`. Efter
 `proeverFoerVurdering` prøver gør agenten virkningen op mod det forventede.
 Tager ingen stilling, bortfalder den efter `anbefalingGyldigS` — og bremser
 kun tiden det første minut, så en glemt anbefaling ikke holder simuleringen i
@@ -689,3 +727,9 @@ har sagt tallet.
   genstart. På Vercel er det pr. instans. Det er et loft, ikke et regnskab.
 - **`/api/agent` deler login med mennesker**, som `/api/context`. Den kan
   bruge penge, så den skal have sit eget token, før den åbnes for andre.
+- **`/api/kanal` har ét rum pr. server.** Åbner to mennesker `/ai/demo` på
+  samme tid, tager den seneste kanalen. Et rum pr. demo (`?rum=`) er lagt
+  an i ruten, men ikke i siderne.
+- **En åben anbefaling står et kvart minut på skærmen** ved "auto": ti
+  minutter i hallen, det første langsomt (×8), resten hurtigt (×90). Er det
+  for kort til at tage stilling fra kontoret, er pause svaret i dag.

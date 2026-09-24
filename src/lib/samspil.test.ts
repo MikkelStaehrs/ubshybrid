@@ -271,6 +271,12 @@ describe("tal og tider i beskederne", () => {
     const s = samlSamtale(samlSamtale([], [b(2), b(1)]), [b(3), b(2)]);
     assert.deepEqual(s.map((x) => x.nr), [3, 2, 1]);
     assert.equal(samlSamtale(s, [b(3)]), s);
+    // Sendt to gange i samme omgang — et svar, der ikke nåede frem: én gang.
+    assert.deepEqual(samlSamtale([], [b(1), b(1), b(2)]).map((x) => x.nr), [2, 1]);
+    const h = { t: 1, hvor: "KB-3N", tekst: "x", niveau: "info" as const };
+    assert.equal(samlLog([], [h, { ...h }]).length, 1);
+    // Sendt forfra, efter de nyere: de ældre kommer med, på deres plads.
+    assert.deepEqual(samlSamtale(samlSamtale([], [b(5), b(4)]), [b(1), b(2), b(4)]).map((x) => x.nr), [5, 4, 2, 1]);
   });
 });
 
