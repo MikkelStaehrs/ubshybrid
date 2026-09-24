@@ -11,15 +11,14 @@ import type { FloorplanImage, LineData, OtPhase } from "../lib/types";
 import type { SceneTheme } from "../lib/useSceneTheme";
 import { FlowRibbon } from "./FlowRibbon";
 import { MachineMesh } from "./MachineMesh";
-import type { SignalValue } from "../lib/live-source";
-import { LiveLayer } from "./LiveLayer";
 import { AgentLayer } from "./AgentLayer";
 import { OtLayer } from "./OtLayer";
 
 export type ViewMode = "perspective" | "top";
 
 /** Hvilket lag kortet viser. Kameraet er det samme i begge. */
-export type MapLayer = "maintenance" | "ot" | "live" | "agents";
+/** Hvilket lag kortet viser. Live hører til AI-overblikket (/ai), ikke her. */
+export type MapLayer = "maintenance" | "ot" | "agents";
 
 interface SceneProps {
   data: LineData;
@@ -44,10 +43,6 @@ interface SceneProps {
   otHovered: OtSelection | null;
   /** Sensoridéer brugeren har skitseret på maskinerne. */
   otIdeas: PlacedIdea[];
-  /** Seneste måleværdier. Tom uden for Live-visningen. */
-  liveValues: Map<string, SignalValue>;
-  liveSelected: string | null;
-  onLiveSelect: (signalId: string) => void;
   /** Agenterne med udledt status. Tom uden for Agents-visningen. */
   agents: AgentState[];
   agentSelected: string | null;
@@ -329,28 +324,12 @@ export function Scene(p: SceneProps) {
   const selected = p.selectedId ? layout.byId.get(p.selectedId) : undefined;
   const related = new Set(selected ? [...selected.upstream, ...selected.downstream] : []);
   // I OT-visningen træder maskiner og materialeflow tilbage, så sensorer,
-  // skab og kabler er det man ser. I Live står anlægget i normale farver —
-  // det er tallene ovenpå, der er nye.
+  // skab og kabler er det man ser.
   const ot = p.layer === "ot";
-  const live = p.layer === "live";
   const agentsView = p.layer === "agents";
   // Både OT og Agents toner anlægget ned — laget ovenpå er det, man skal se.
   const faded = ot || agentsView;
 
-  // Pilene bevæger sig kun, hvor et flowsignal siger, at der løber noget.
-  // Et signal i fejl eller uden kilde ved ingenting og får intet til at rulle.
-  const flowing = new Set<string>();
-  if (live && p.ot) {
-    for (const sensor of p.ot.sensors) {
-      if (sensor.type !== "Materialestrøm" || !sensor.machine) continue;
-      const v = p.liveValues.get(sensor.id);
-      // Over nulpunktet på sløjfen = der er materiale i maskinen.
-      if (!v || v.quality === "no-source" || v.quality === "fault" || !(v.raw > 4.5)) continue;
-      for (const e of data.edges) {
-        if (e.from === sensor.machine.id || e.to === sensor.machine.id) flowing.add(e.id);
-      }
-    }
-  }
   const visible = (m: { lane: string | null; name: string; wIds: string[] }) =>
     (!p.lane || m.lane === p.lane || m.lane === null) && matchesQuery(m, p.query);
 
@@ -394,7 +373,7 @@ export function Scene(p: SceneProps) {
             dashed={e.inferred}
             width={hot ? 1.0 : 0.85}
             y={hot ? 0.06 : 0.04}
-            animate={live ? flowing.has(e.id) : p.animateFlow}
+            animate={p.animateFlow}
             opacity={faded ? 0.12 : shown ? 1 : 0.15}
           />
         );
@@ -425,16 +404,6 @@ export function Scene(p: SceneProps) {
           showLabels={p.showLabels}
           onSelect={p.onAgentSelect}
           onSelectInlet={p.onInletSelect}
-        />
-      )}
-
-      {live && p.ot && (
-        <LiveLayer
-          sensors={p.ot.sensors}
-          values={p.liveValues}
-          theme={theme}
-          selectedId={p.liveSelected}
-          onSelect={p.onLiveSelect}
         />
       )}
 

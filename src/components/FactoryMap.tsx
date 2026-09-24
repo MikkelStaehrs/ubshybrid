@@ -21,13 +21,9 @@ import {
 import type {
   LineData, Machine, MachineKind, MaintenanceEvent, MaintenanceType, OtPhase, SensorIdea,
 } from "../lib/types";
-import { useLiveSignals } from "../lib/useLiveSignals";
-import type { LiveSourceKind } from "../lib/live-source";
 import { useSceneTheme } from "../lib/useSceneTheme";
 import { AgentPanel } from "./AgentPanel";
 import { InletPanel } from "./InletPanel";
-import { LivePanel } from "./LivePanel";
-import { SignalModal } from "./SignalModal";
 import { Field, Modal } from "./Modal";
 import { CabinetModal, OtDot, SensorModal } from "./OtModals";
 import { Scene, type MapLayer, type ViewMode } from "./Scene";
@@ -218,19 +214,16 @@ export function FactoryMap({
   lines,
   rooms,
   onSelectLine,
-  liveSource = "mock",
   initialLayer,
   initialAgent,
 }: {
   data: LineData;
   site?: string;
-  /** Alle linjer i visningsrækkefølge. Er der under to, vises ingen linjevælger. */
+  /** Alle linjer i visningsrækkefølge. */
   lines?: LineOption[];
   /** Fælles rum, altid valgbare uanset hvilken linje man står på. */
   rooms?: LineOption[];
   onSelectLine?: (id: string) => void;
-  /** Hvor Live-visningen henter tal fra. Sættes af serveren ud fra LIVE_SOURCE. */
-  liveSource?: LiveSourceKind;
   /** Startvisning fra et dybt link. Uden den åbner kortet på Maintenance. */
   initialLayer?: MapLayer;
   /** Agent, der skal være valgt fra start. Kræver initialLayer "agents". */
@@ -257,7 +250,6 @@ export function FactoryMap({
   const [otHover, setOtHover] = useState<OtSelection | null>(null);
   // Sensoridéer er en skitse i browseren — de rører ikke data/.
   const [ideas, setIdeas] = useState<SensorIdea[]>([]);
-  const [liveSel, setLiveSel] = useState<string | null>(null);
   const [agentSel, setAgentSel] = useState<string | null>(initialAgent ?? null);
   // Fælleszonen vælges for sig — den ejes ikke af nogen agent.
   const [inletSel, setInletSel] = useState(false);
@@ -290,7 +282,6 @@ export function FactoryMap({
     setOtSel(null);
     setOtHover(null);
     setIdeas([]);
-    setLiveSel(null);
     setAgentSel(null);
     setInletSel(false);
     setResetToken((t) => t + 1);
@@ -322,7 +313,6 @@ export function FactoryMap({
   const hasFlow = data.edges.length > 0;
 
   const isOt = activeLayer === "ot";
-  const isLive = activeLayer === "live";
   const isAgents = activeLayer === "agents";
   // Status udledes hver gang — den står ingen steder i dataene.
   const agents = useMemo(() => agentStates(data.line.id, layout, ot), [data.line.id, layout, ot]);
@@ -331,8 +321,6 @@ export function FactoryMap({
 
   const selectAgent = (id: string | null) => { setAgentSel(id); setInletSel(false); };
   const selectInlet = () => { setInletSel(true); setAgentSel(null); };
-  const signalIds = useMemo(() => ot?.sensors.map((s) => s.id) ?? [], [ot]);
-  const live = useLiveSignals(liveSource, signalIds, isLive);
   /** Tallet på hver faseknap er kumulativt, ligesom filteret selv. */
   const sensorCounts = useMemo(() => {
     const out = {} as Record<OtPhase, number>;
@@ -353,7 +341,6 @@ export function FactoryMap({
   const unchanneled = shownSensors.filter((s) => !channelOf(s)).length;
   /** Forudsætninger der ikke findes i dag — det er dem, kortet skal råbe op om. */
   const missingInfra = ot?.infrastructure.filter((n) => !isDone(n.status)).length ?? 0;
-  const liveSensor = liveSel ? ot?.sensors.find((x) => x.id === liveSel) : undefined;
   // Linjens driftsparametre med maskinens egne afvigelser lagt ovenpå.
   const ops = selected ? opsForMachine(lineOps, selected.wIds) : null;
   const otSensor = otSel?.kind === "sensor" ? ot?.sensors.find((s) => s.id === otSel.id) : undefined;
@@ -393,7 +380,7 @@ export function FactoryMap({
   };
 
   return (
-    <div className={`fm-root${(isAgents ? !!agentSelected || inletSel : !!selected && !isLive) ? " has-panel" : ""}${isLive ? " is-live" : ""}`}>
+    <div className={`fm-root${(isAgents ? !!agentSelected || inletSel : !!selected) ? " has-panel" : ""}`}>
       <div className="fm-canvas" data-hovering={hoveredId ? "" : undefined}>
         {theme && (
           <Canvas
@@ -422,9 +409,6 @@ export function FactoryMap({
               otSelected={otSel}
               otHovered={otHover}
               otIdeas={placedIdeas}
-              liveValues={live.values}
-              liveSelected={liveSel}
-              onLiveSelect={setLiveSel}
               agents={isAgents ? agents : []}
               agentSelected={agentSel}
               onAgentSelect={selectAgent}
@@ -496,9 +480,6 @@ export function FactoryMap({
               </button>
               <button type="button" aria-pressed={activeLayer === "ot"} onClick={() => setLayer("ot")}>
                 OT Layer
-              </button>
-              <button type="button" aria-pressed={activeLayer === "live"} onClick={() => setLayer("live")}>
-                Live
               </button>
               <button type="button" aria-pressed={activeLayer === "agents"} onClick={() => setLayer("agents")}>
                 Agents
@@ -644,7 +625,7 @@ export function FactoryMap({
         )}
       </aside>
 
-      {selected && !isLive && !isAgents && (
+      {selected && !isAgents && (
         <aside className="fm-panel" aria-label={`${selected.name} ${selected.wIds.join("/")}`}>
           <div className="fm-plate">
             <div className="fm-plate-head">
@@ -795,16 +776,6 @@ export function FactoryMap({
         <HistoryModal m={selected} onClose={() => setHistoryOpen(false)} />
       )}
 
-      {isLive && liveSource === "mock" && (
-        <div className="fm-mock-banner" role="status">
-          <strong>Simulerede data</strong>
-          <span>
-            Tallene er genereret i browseren, ikke målt. Sæt <span className="fm-mono">LIVE_SOURCE=api</span>,
-            når kæden står.
-          </span>
-        </div>
-      )}
-
       {isAgents && (
         <div className="fm-mock-banner" role="status">
           <strong>Eksempelrapporter</strong>
@@ -826,29 +797,6 @@ export function FactoryMap({
           inlet={inlet}
           onSelectAgent={selectAgent}
           onClose={() => setInletSel(false)}
-        />
-      )}
-
-      {isLive && ot && (
-        <LivePanel
-          ot={ot}
-          report={reports?.get(ot.cabinets[0]?.id ?? "") ?? null}
-          live={live}
-          sourceKind={liveSource}
-          lineId={data.line.id}
-          selectedId={liveSel}
-          onSelect={setLiveSel}
-        />
-      )}
-
-      {isLive && liveSensor && (
-        <SignalModal
-          sensor={liveSensor}
-          value={live.values.get(liveSensor.id)}
-          samples={live.history.get(liveSensor.id) ?? []}
-          channel={channelOf(liveSensor)}
-          lineId={data.line.id}
-          onClose={() => setLiveSel(null)}
         />
       )}
 

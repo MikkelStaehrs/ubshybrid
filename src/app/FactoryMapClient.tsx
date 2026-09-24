@@ -2,7 +2,6 @@
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import type { LiveSourceKind } from "../lib/live-source";
 import { DEFAULT_LINE, FABRIK_ID, LINE_OPTIONS, LINES, ROOM_OPTIONS } from "../lib/lines";
 
 // WebGL kører kun i browseren.
@@ -17,7 +16,7 @@ const FabrikOversigt = dynamic(() => import("../components/FabrikOversigt").then
   loading: () => <div className="fm-loading">Indlæser hele fabrikken…</div>,
 });
 
-export default function FactoryMapClient({ liveSource }: { liveSource: LiveSourceKind }) {
+export default function FactoryMapClient() {
   const [viewId, setViewId] = useState(DEFAULT_LINE);
   // Dybt link fra AI-overblikket: /?lag=agents&agent=AG-SLIB-N
   const params = useSearchParams();
@@ -32,8 +31,7 @@ export default function FactoryMapClient({ liveSource }: { liveSource: LiveSourc
       lines={LINE_OPTIONS}
       rooms={ROOM_OPTIONS}
       onSelectLine={setViewId}
-      liveSource={liveSource}
-      initialLayer={lag === "agents" || lag === "ot" || lag === "live" ? lag : undefined}
+      initialLayer={lag === "agents" || lag === "ot" ? lag : undefined}
       initialAgent={params.get("agent") ?? undefined}
     />
   );

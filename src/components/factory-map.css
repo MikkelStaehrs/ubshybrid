@@ -1128,41 +1128,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 .fm-prereq.st-missing .fm-prereq-blocks { color: var(--ot-missing); }
 .fm-prereq-note { grid-column: 2 / -1; font-size: 12px; color: var(--muted); opacity: 0.85; line-height: 1.4; }
 
-/* --- Live: kvalitet som farve --------------------------------------------- */
-.q-good { --q: var(--live-good); }
-.q-stale { --q: var(--live-stale); }
-.q-fault { --q: var(--live-fault); }
-.q-no-source { --q: var(--live-none); }
-.fm-q { color: var(--q, var(--muted)); }
-.fm-q::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--q, var(--muted));
-}
-
-/* --- Badge over målepunktet ----------------------------------------------- */
-.fm-live-badge {
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  padding: 4px 8px;
-  border: 1px solid var(--q, var(--line));
-  border-radius: 5px;
-  background: var(--surface-solid);
-  box-shadow: var(--shadow);
-  white-space: nowrap;
-}
-.fm-live-value { font-family: var(--font-mono); font-size: 13px; color: var(--q, var(--ink)); }
-.fm-live-tag { font-family: var(--font-mono); font-size: 9px; color: var(--muted); }
-.fm-live-badge.is-selected { border-width: 2px; }
-.fm-live-badge.q-no-source { opacity: 0.7; }
-
 /* --- Banner --------------------------------------------------------------- */
 .fm-mock-banner {
   position: absolute;
@@ -1211,7 +1176,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   line-height: 1;
   text-transform: uppercase;
 }
-.fm-live-sub { font-size: 12px; color: var(--muted); }
+
 .fm-live-panel section { padding: 12px 16px; border-top: 1px solid var(--line); }
 .fm-live-panel section:first-of-type { border-top: 0; }
 .fm-live-panel h3 {
@@ -1223,99 +1188,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   color: var(--muted);
 }
 .fm-live-panel p { margin: 0 0 6px; font-size: 12px; line-height: 1.5; }
-
-/* --- Kæden ---------------------------------------------------------------- */
-.fm-chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.fm-chain li {
-  display: grid;
-  grid-template-columns: 10px 1fr auto;
-  gap: 2px 8px;
-  align-items: center;
-  font-size: 13px;
-}
-.fm-chain-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--st, var(--line));
-}
-.fm-chain li.st-missing .fm-chain-dot,
-.fm-chain li.st-planned .fm-chain-dot,
-.fm-chain li.st-idea .fm-chain-dot {
-  background: none;
-  border: 1.5px dashed var(--st);
-}
-.fm-chain-status { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--st, var(--muted)); }
-.fm-chain-seen { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
-.fm-chain-note { grid-column: 2 / -1; font-size: 11px; color: var(--muted); opacity: 0.85; line-height: 1.4; }
-
-/* --- Signaltabel ---------------------------------------------------------- */
-.fm-siglist { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-.fm-sighead {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 8px;
-  padding: 0 9px 4px;
-  border-bottom: 1px solid var(--line);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.fm-sigrow button {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 2px 8px;
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid transparent;
-  border-left: 3px solid var(--q, var(--line));
-  border-radius: 4px;
-  background: var(--surface-2);
-  text-align: left;
-  font-size: 12px;
-}
-.fm-sigrow button:hover { border-color: var(--line); border-left-color: var(--q, var(--line)); }
-.fm-sigrow.is-selected button { border-color: var(--accent); border-left-color: var(--q, var(--accent)); }
-.fm-sig-val { color: var(--q, var(--ink)); }
-.fm-sig-src { grid-column: 1 / 4; font-size: 11px; color: var(--muted); }
-.fm-sig-q { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--q, var(--muted)); }
-
-.fm-oee { opacity: 0.85; }
-
-/* --- Sparkline ------------------------------------------------------------ */
-.fm-live-now { display: flex; align-items: baseline; gap: 8px; }
-.fm-live-now-value { font-size: 40px; line-height: 1; }
-.fm-live-now-unit { font-size: 16px; color: var(--muted); }
-.fm-live-now-raw { margin-left: auto; font-size: 12px; color: var(--muted); }
-
-.fm-spark { position: relative; margin-bottom: 12px; }
-.fm-spark svg {
-  display: block;
-  width: 100%;
-  height: 96px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--surface-2);
-}
-.fm-spark path {
-  stroke: var(--accent);
-  stroke-width: 1.6;
-  vector-effect: non-scaling-stroke;
-  stroke-linejoin: round;
-}
-.fm-spark-scale {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  bottom: 4px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  font-size: 10px;
-  color: var(--muted);
-  pointer-events: none;
-}
 
 @media (max-width: 860px) {
   .fm-live-panel { top: auto; left: var(--gutter); width: auto; max-height: 52%; }
@@ -1410,10 +1282,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
 }
 .fm-report { white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
 
-.fm-sig-fault, .fm-sig-why { grid-column: 1 / -1; font-size: 11px; line-height: 1.4; }
-.fm-sig-fault { color: var(--live-fault); }
-.fm-sig-why { color: var(--muted); }
-
 /* Motoren bag en agent. Claude koster penge pr. kørsel, kode gør ikke. */
 .fm-engine {
   padding: 1px 6px;
@@ -1469,36 +1337,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
    bruger: grøn leverer, grå står stille, rød er en fejl, rav er uden for
    det gode bånd. Der er ikke opfundet nye — betydningerne findes allerede. */
 .fm-flow { display: grid; gap: 10px; }
-.fm-flow-now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-
-.fm-run-state {
-  padding: 2px 7px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  white-space: nowrap;
-}
-.fm-run-state.run-koerer { color: var(--live-good); }
-.fm-run-state.run-staar { color: var(--live-none); }
-.fm-run-state.run-fejl { color: var(--live-fault); }
-.fm-run-state.run-ukendt { color: var(--muted); border-style: dashed; }
-
-.fm-flow-pct { font-size: 30px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
-.fm-flow-unit { font-size: 15px; color: var(--muted); margin-left: -6px; }
-.fm-flow-level {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--lvl, var(--muted));
-  margin-left: auto;
-}
-.fm-flow-level.lvl-ok { --lvl: var(--live-good); }
-/* Lavt og højt er begge uden for det aftalte bånd. Etiketten siger hvilket. */
-.fm-flow-level.lvl-lav, .fm-flow-level.lvl-hoej { --lvl: var(--live-stale); }
-
-.fm-flow-rate { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
-.fm-flow-rate strong { color: var(--ot-missing); }
 
 /* Bredden er tid. Ingen minimumsbredde: et kort udfald skal se kort ud. */
 .fm-timeline {
@@ -1509,39 +1347,4 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   overflow: hidden;
   background: var(--surface-2);
 }
-.fm-tl-seg { display: block; height: 100%; }
-.fm-tl-seg.tl-koerer { background: var(--live-good); }
-.fm-tl-seg.tl-staar { background: var(--live-none); opacity: 0.45; }
-.fm-tl-seg.tl-fejl {
-  /* Stribet: et hul i målingen er ikke en måling. */
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--live-fault) 0 3px,
-    transparent 3px 6px
-  );
-}
 
-.fm-flow-stops { margin: 0; font-size: 12px; color: var(--muted); }
-
-.fm-flow-figures { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.fm-flow-figures > div {
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--surface-2);
-}
-.fm-flow-figures dt {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.fm-flow-figures dd { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
-.fm-flow-figures dd.fm-flow-hint {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.fm-live-now-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }

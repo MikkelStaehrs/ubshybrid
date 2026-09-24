@@ -37,7 +37,7 @@ afgiver den endelige dom over et signal.
 
 De tre steder, der skal vide det, spørger der — ingen af dem regner selv:
 
-- **Live-visningen** (`LivePanel`, `LiveLayer`)
+- **AI-overblikket** (`src/lib/ai-hud.ts`) — det er her, live-delen bor
 - **Agentstatus** (`src/lib/agents.ts`)
 - **`/api/context`** (`src/lib/context.ts`)
 
@@ -102,8 +102,8 @@ Kortet må aldrig vise noget, der ser ud som en måling uden at være det.
 - Tomme felter står som **"Ikke udfyldt"**. De udelades i `/api/context` og
   opsummeres i maskinens `missing`-liste. Samme feltdefinitioner (`src/lib/fields.ts`)
   bruges begge steder, så "ikke udfyldt" betyder det samme i panelet og i API'et.
-- **Simulerede data mærkes.** `LIVE_SOURCE=mock` giver et banner, og
-  Forbindelser-panelet siger, at tallene ikke er hentet gennem kæden.
+- **Simulerede data mærkes.** `LIVE_SOURCE=mock` giver et mærkat øverst på
+  /ai, der siger, at måleren ikke er hentet gennem kæden.
 - **Skabeloner mærkes.** Agenternes "seneste rapport" bruger klammer —
   `[antal]`, `[maskine]` — netop for ikke at ligne et resultat.
 - Mangler noget en kilde, så sig det i fladen. OEE-sektionen står tom med en
@@ -327,8 +327,13 @@ Hyppigheden af stop og fejl er skruet op til en skærm, man ser på i fem
 minutter — den siger intet om anlægget.
 
 I den rigtige visning er der ingen simulator. Maskinerne har ingen tal, og
-panelerne siger "Afventer signal". Kun flowet kommer ind, fra den samme
-LiveSource som kortet.
+panelerne siger "Afventer signal". Kun flowet kommer ind, fra LiveSource
+(`LIVE_SOURCE`).
+
+**Live hører til /ai, ikke til fabrikskortet.** Kortet viser anlægget, OT-laget
+og agenterne; tallene, der løber, står i AI-overblikket. Et Live-lag på
+kortet er fjernet med vilje — to steder at se det samme signal er to steder,
+der kan komme til at vise det forskelligt.
 
 ### Driftsagenten
 

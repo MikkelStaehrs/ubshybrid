@@ -7,7 +7,6 @@ const TOKENS = [
   "scene-bg", "floor", "slab", "wall", "grid", "flow", "warn", "accent",
   "m-intake", "m-elevator", "m-distributor", "m-process", "m-analysis", "m-person", "m-steel", "label-ink",
   "ot-cabinet", "ot-tray", "ot-active", "ot-test", "ot-planned", "ot-idea", "ot-ordered", "ot-missing",
-  "live-good", "live-stale", "live-fault", "live-none",
   "agent-1", "agent-2", "agent-3", "agent-shared",
 ] as const;
 export type SceneTheme = Record<(typeof TOKENS)[number], string> & { dark: boolean };
