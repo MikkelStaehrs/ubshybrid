@@ -587,6 +587,15 @@ const fmt = (v: number | null, d: number) =>
  * ligner noget, panelet siger; i skærmkanten skæres det over. Derfor
  * projiceres det hver frame, og uden for scenen skjules det.
  */
+/**
+ * Stregen fra mærkatet ned til maskinen. Én fast liste: drei's Line bygger
+ * geometrien om, når punkterne er en ny liste, og smider materialet ud med
+ * den gamle — og så skal grafikkortet kompilere shaderen forfra. Med en ny
+ * liste ved hvert billede var det fire gange i sekundet, og det var det
+ * tungeste i hele scenen.
+ */
+const MAERKAT_STREG: [number, number, number][] = [[0, -2.6, 0], [0, -0.3, 0]];
+
 function Maerkat({ m, pos, fokus, scene, sim, onVaelg }: {
   m: MaskinLaesning;
   pos: [number, number, number];
@@ -618,7 +627,7 @@ function Maerkat({ m, pos, fokus, scene, sim, onVaelg }: {
   const vis = hoved ? [hoved] : [];
   return (
     <group position={pos} ref={gruppe}>
-      <Line points={[[0, -2.6, 0], [0, -0.3, 0]]} color={tilstand === "koerer" ? "#5fc4a9" : tilstand === "ukendt" ? "#2b3936" : tilstand === "styret" ? "#ffc766" : "#e0705f"} lineWidth={1} transparent opacity={0.7} />
+      <Line points={MAERKAT_STREG} color={tilstand === "koerer" ? "#5fc4a9" : tilstand === "ukendt" ? "#2b3936" : tilstand === "styret" ? "#ffc766" : "#e0705f"} lineWidth={1} transparent opacity={0.7} />
       <Html center zIndexRange={[30, 0]} className="h3-wrap">
         <div
           ref={tag}

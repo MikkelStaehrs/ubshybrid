@@ -43,9 +43,19 @@ function zoneOf(ms: PlacedMachine[], pad = 1.8): Zone | null {
   };
 }
 
-const rect = (z: Zone, y: number): Point3[] => [
-  [z.x0, y, z.z0], [z.x1, y, z.z0], [z.x1, y, z.z1], [z.x0, y, z.z1], [z.x0, y, z.z0],
-];
+// Samme zone giver samme liste. drei's Line bygger geometrien om og smider
+// materialet ud, når punkterne er en ny liste — og så kompileres shaderen
+// forfra ved hvert klik.
+const rammer = new Map<string, Point3[]>();
+const rect = (z: Zone, y: number): Point3[] => {
+  const k = `${z.x0}|${z.x1}|${z.z0}|${z.z1}|${y}`;
+  let p = rammer.get(k);
+  if (!p) {
+    p = [[z.x0, y, z.z0], [z.x1, y, z.z0], [z.x1, y, z.z1], [z.x0, y, z.z1], [z.x0, y, z.z0]];
+    rammer.set(k, p);
+  }
+  return p;
+};
 
 function ZoneTag({ position, name, sub, className, onSelect }: {
   position: Point3;
