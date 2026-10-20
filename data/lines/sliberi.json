@@ -4,7 +4,7 @@
     "name": "Sliberiet",
     "order": 2,
     "sourceFile": "flow-sliberi.drawio",
-    "parsedAt": "2026-09-16T13:04:43.237Z",
+    "parsedAt": "2026-10-20T11:28:56.094Z",
     "positionMode": "schematic"
   },
   "lanes": [
@@ -36,7 +36,13 @@
       "downstream": [
         "W-611"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "role": "Bagmand",
+          "task": "Fylder frø på anlæg"
+        }
+      ]
     },
     {
       "id": "W-611",
@@ -100,7 +106,7 @@
       "lane": null,
       "step": 3,
       "drawio": {
-        "x": 354,
+        "x": 355,
         "y": -920,
         "w": 120,
         "h": 60
@@ -111,7 +117,13 @@
       "downstream": [
         "W-756"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "role": "Formand",
+          "task": "kigger på slibning af frø"
+        }
+      ]
     },
     {
       "id": "W-756",
@@ -162,7 +174,13 @@
         "W-758",
         "W-759"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "Skifter sold ved behov",
+          "role": "Bagmand"
+        }
+      ]
     },
     {
       "id": "W-758",
@@ -237,7 +255,12 @@
       "downstream": [
         "W-762"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "udtager prøve for at kontrolere slibningrad"
+        }
+      ]
     },
     {
       "id": "W-789",
@@ -262,7 +285,12 @@
       "downstream": [
         "W-763"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "udtager prøve for at kontrolere slibningrad"
+        }
+      ]
     },
     {
       "id": "W-762",
@@ -287,7 +315,12 @@
       "downstream": [
         "W-772"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "justere triøre for at sikre den smider bigerm og pinde ud"
+        }
+      ]
     },
     {
       "id": "W-763",
@@ -312,7 +345,12 @@
       "downstream": [
         "W-773"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "justere triøre for at sikre den smider bigerm og pinde ud"
+        }
+      ]
     },
     {
       "id": "W-772",
@@ -387,7 +425,12 @@
       "downstream": [
         "W-761"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "skifter sold ved behov"
+        }
+      ]
     },
     {
       "id": "W-625",
@@ -412,7 +455,12 @@
       "downstream": [
         "W-760"
       ],
-      "details": {}
+      "details": {},
+      "operators": [
+        {
+          "task": "skifter sold ved behov"
+        }
+      ]
     },
     {
       "id": "W-761",
@@ -813,5 +861,14 @@
       "inferred": false
     }
   ],
-  "issues": []
+  "issues": [
+    "Opgaven \"Skifter sold ved behov\" ved Fordeler er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"udtager prøve for at kontrolere slibningrad\" ved Jetpealer S og Jetpealer N er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"udtager prøve for at kontrolere slibningrad\" ved Jetpealer S er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"justere triøre for at sikre den smider bigerm og pinde ud\" ved Triøre S og Triøre N er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"justere triøre for at sikre den smider bigerm og pinde ud\" ved Triøre S er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"skifter sold ved behov\" ved Alfa S er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"skifter sold ved behov\" ved Alfa S og Alfa N er ikke koblet til en person – træk en pil fra teksten til figuren.",
+    "Opgaven \"skifter sold ved behov\" ved Alfa N er ikke koblet til en person – træk en pil fra teksten til figuren."
+  ]
 }

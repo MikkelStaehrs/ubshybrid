@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { FlowEdge, Footprint, LineData, Machine, MachineDetails, MachineKind, Placement } from "./types";
+import type { FlowEdge, Footprint, LineData, Machine, MachineDetails, MachineKind, Operator, Placement } from "./types";
 
 // ---------------------------------------------------------------------------
 // Draw.io → LineData
@@ -246,12 +246,18 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
     absCache.set(c.id, o);
     return o;
   };
+  // Operatørlaget: figurer (roller) og tekstbokse (opgaver/rollenavne).
+  const isActor = (c: RawCell) => /shape=umlActor/i.test(String(c.attrs.style ?? ""));
+  const isText = (c: RawCell) => /^text;|(^|;)text;/.test(String(c.attrs.style ?? ""));
+  const isAnnotation = (c: RawCell) => isActor(c) || isText(c);
+
   const isShape = (c: RawCell) => {
     const style = String(c.attrs.style ?? "");
     const parent = cellById.get(c.attrs.parent ?? "");
     return (
       c.attrs.vertex === "1" && !!c.geometry &&
       c.attrs.connectable !== "0" &&
+      !isActor(c) &&
       !/^text;|(^|;)text;|swimlane|container=1|group/.test(style) &&
       parent?.attrs.edge !== "1"
     );
@@ -320,8 +326,14 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
     edges.push({ id, from: from.id, to: to.id, inferred, note });
   };
 
+  // Pile i operatørlaget beskriver ikke materialeflow og skal hverken blive til
+  // forbindelser eller give flow-advarsler.
+  const annotationIds = new Set(raw.filter(isAnnotation).map((c) => c.id));
+  const touchesAnnotation = (c: RawCell) =>
+    annotationIds.has(c.attrs.source ?? "") || annotationIds.has(c.attrs.target ?? "");
+
   for (const c of raw) {
-    if (c.attrs.edge !== "1") continue;
+    if (c.attrs.edge !== "1" || touchesAnnotation(c)) continue;
     const src = byDrawioId.get(c.attrs.source ?? "");
     let tgt = byDrawioId.get(c.attrs.target ?? "");
     if (!src) { issues.push(`Pil ${c.id} har ingen startmaskine.`); continue; }
@@ -372,6 +384,64 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
     }
   }
 
+
+  // --- Operatørlag ------------------------------------------------------------
+  // Tegningen kobler maskine → opgavetekst → figur. Figuren navngives af den
+  // nærmeste tekstboks ("Formand", "Bagmand"). Pilene vendes begge veje, fordi
+  // laget er tegnet i hånden og retningen ikke er konsekvent.
+  const annCells = raw.filter((c) => isAnnotation(c) && !!c.geometry);
+  if (annCells.length) {
+    const label = (c: RawCell) => htmlToText(String(c.attrs.value ?? "")).replace(/\s+/g, " ").trim();
+    const mid = (c: RawCell) => ({ x: c.geometry!.x + c.geometry!.w / 2, y: c.geometry!.y + c.geometry!.h / 2 });
+
+    // Hver figur får navn fra den nærmeste tekstboks; den tekstboks er dermed
+    // et rollenavn og ikke en opgave.
+    const texts = annCells.filter((c) => isText(c) && label(c));
+    const roleName = new Map<string, string>();
+    for (const actor of annCells.filter(isActor)) {
+      let best: RawCell | undefined;
+      let bestD = Infinity;
+      for (const t of texts) {
+        const d = Math.hypot(mid(actor).x - mid(t).x, mid(actor).y - mid(t).y);
+        if (d < bestD) { bestD = d; best = t; }
+      }
+      const name = best ? label(best) : "";
+      if (!name) { issues.push(`En figur i operatørlaget mangler et navn (celle ${actor.id}).`); continue; }
+      roleName.set(actor.id, name);
+      roleName.set(best!.id, name);
+    }
+
+    const adj = new Map<string, Set<string>>();
+    const link = (a: string, b: string) => {
+      if (!a || !b) return;
+      (adj.get(a) ?? adj.set(a, new Set()).get(a)!).add(b);
+      (adj.get(b) ?? adj.set(b, new Set()).get(b)!).add(a);
+    };
+    for (const c of raw) {
+      if (c.attrs.edge !== "1" || !touchesAnnotation(c)) continue;
+      link(c.attrs.source ?? "", c.attrs.target ?? "");
+    }
+
+    const unassigned: string[] = [];
+    for (const t of texts) {
+      if (roleName.has(t.id)) continue; // rollenavn, ikke opgave
+      const near = [...(adj.get(t.id) ?? [])];
+      const onMachines = near.map((id) => byDrawioId.get(id)).filter(Boolean) as Machine[];
+      if (!onMachines.length) continue;
+      const role = near.map((id) => roleName.get(id)).find(Boolean);
+      for (const m of onMachines) {
+        const list = (m.operators ??= []);
+        const existing = list.find((o) => o.task === label(t));
+        if (existing) { if (!existing.role && role) existing.role = role; continue; }
+        list.push(role ? { role, task: label(t) } : { task: label(t) });
+      }
+      if (!role) unassigned.push(`"${label(t)}" ved ${onMachines.map((m) => m.name).join(" og ")}`);
+    }
+    for (const u of unassigned) {
+      issues.push(`Opgaven ${u} er ikke koblet til en person – træk en pil fra teksten til figuren.`);
+    }
+  }
+
   const byId = new Map(machines.map((m) => [m.id, m]));
   for (const e of edges) {
     byId.get(e.from)!.downstream.push(e.to);
@@ -417,6 +487,9 @@ export function parseDrawio(xml: string, opts: ParseOptions): LineData {
         branch.push(m);
         stack.push(...m.downstream.map((d) => byId.get(d)!));
       }
+      // Løber grenen straks sammen med en anden igen, har den ingen maskiner
+      // for sig selv — og dermed intet spor at navngive.
+      if (!branch.length) continue;
       const suffixes = branch.map((m) => m.name.match(/([A-ZÆØÅ])\1*$/)?.[1]).filter(Boolean) as string[];
       const tally = suffixes.reduce<Record<string, number>>((t, s) => ((t[s] = (t[s] ?? 0) + 1), t), {});
       const label =

@@ -175,6 +175,11 @@ Parseren læser:
 - **Label:** Maskinnavn på første linje og `W-ID:611` på næste. Flere id'er skrives `W-ID:793/794/795`.
 - **Pile:** Materialeflowet. Løse pile og manglende pile mellem maskiner, der står lige under hinanden, bliver *antaget* og vist med orange stiplet linje.
 - **Edit Data (Ctrl+M):** `navn`, `wid`, `maskintype` (Indtag, Elevator, Fordeler, Proces, Analyse eller Person) og `spor` styrer selve kortet. `producent`, `model`, `aar`, `proces`, `kapacitet`, `dim`, `ot` og `noter` vises i maskinpanelet. `x`, `z`, `rot`, `bredde`, `dybde` og `hoejde` er målfast placering (se nedenfor). Andre felter bliver også gemt i data.
+- **Operatørlag:** Figurer (`shape=umlActor`) er roller, ikke maskiner. Figuren får navn
+  fra den nærmeste tekstboks, og en tekstboks forbundet til en maskine er en opgave.
+  Kæden er *maskine → opgavetekst → figur*, og pilene læses begge veje, fordi laget
+  tegnes i hånden. Opgaver uden pil til en figur vises som "Ikke tildelt" og
+  kommer med i listen over ting at rette — de bliver **ikke** gættet.
 - **Spor:** Feltet `spor`. Mangler det, gættes sporet ud fra navnets endelse (S/N) efter en fordeler.
 
 ## Vedligehold og historik

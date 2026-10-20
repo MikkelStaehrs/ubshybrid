@@ -64,6 +64,17 @@ export interface FloorplanImage {
   opacity?: number;
 }
 
+/**
+ * Hvem der gør hvad ved en maskine. Kommer fra operatørlaget i tegningen:
+ * en figur (rollen) og en tekstboks (opgaven), forbundet med pile til maskinen.
+ */
+export interface Operator {
+  /** Rollens navn, fx "Bagmand". Mangler den, er opgaven ikke koblet til en figur i tegningen. */
+  role?: string;
+  /** Opgaven, fx "Skifter sold ved behov". */
+  task: string;
+}
+
 export interface Machine {
   /** Stabilt id, afledt af W-ID (fx "W-611"). */
   id: string;
@@ -83,6 +94,8 @@ export interface Machine {
   placement?: Placement;
   /** Opmålte mål. Bruges altid, også når placeringen er skematisk. */
   footprint?: Footprint;
+  /** Opgaver ved maskinen og hvem der udfører dem. */
+  operators?: Operator[];
   upstream: string[];
   downstream: string[];
   details: MachineDetails;

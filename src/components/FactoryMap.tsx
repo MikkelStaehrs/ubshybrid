@@ -692,6 +692,22 @@ export function FactoryMap({
             </section>
           )}
 
+          {!!selected.operators?.length && (
+            <section>
+              <h3>Bemanding</h3>
+              <ul className="fm-ops">
+                {selected.operators.map((op, i) => (
+                  <li key={i}>
+                    <span className={`fm-op-role${op.role ? "" : " is-unassigned"}`}>
+                      {op.role ?? "Ikke tildelt"}
+                    </span>
+                    <span>{op.task}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section>
             <h3>OT & el</h3>
             <dl>{OT_FIELDS.map((r) => <Field key={r.key} label={r.label} value={selected.details[r.key]} />)}</dl>

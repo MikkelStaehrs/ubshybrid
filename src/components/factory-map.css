@@ -1408,3 +1408,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); ma
   background: var(--surface-2);
 }
 
+/* --- Bemanding ------------------------------------------------------------ */
+.fm-ops { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.fm-ops li { display: grid; gap: 2px; }
+.fm-op-role {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--m-person);
+}
+.fm-op-role.is-unassigned { color: var(--warn); }
