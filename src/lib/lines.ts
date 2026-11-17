@@ -1,5 +1,6 @@
 import type { LineData } from "./types";
 import analytics from "../../data/lines/analytics.json";
+import coating from "../../data/lines/coating.json";
 import pillering from "../../data/lines/pillering.json";
 import sliberi from "../../data/lines/sliberi.json";
 
@@ -8,6 +9,7 @@ import sliberi from "../../data/lines/sliberi.json";
 export const LINES: Record<string, LineData> = {
   sliberi: sliberi as LineData,
   pillering: pillering as LineData,
+  coating: coating as LineData,
   analytics: analytics as LineData,
 };
 

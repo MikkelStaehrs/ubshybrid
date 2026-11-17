@@ -17,7 +17,6 @@ import type { FabrikDel, Forbindelse } from "../src/lib/fabrik";
  */
 export const UTEGNEDE: FabrikDel[] = [
   // Nummer 1 er ikke sagt endnu.
-  { id: "coating", navn: "Coating", slags: "linje", nr: 4 },
   { id: "steeping", navn: "Steeping", slags: "linje", nr: 5, valgfri: true },
   { id: "packing", navn: "Packing", slags: "linje", nr: 5 },
   { id: "shipping", navn: "Shipping", slags: "linje", nr: 7 },

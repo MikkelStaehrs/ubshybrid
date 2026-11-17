@@ -1,0 +1,1554 @@
+{
+  "line": {
+    "id": "coating",
+    "name": "Coating",
+    "order": 4,
+    "sourceFile": "coating.drawio",
+    "parsedAt": "2026-11-17T09:52:19.525Z",
+    "positionMode": "schematic"
+  },
+  "lanes": [
+    "A1",
+    "A2",
+    "A3"
+  ],
+  "machines": [
+    {
+      "id": "X-a1-vippestol",
+      "drawioId": "a1-vippestol",
+      "name": "Vippestol A1",
+      "label": "Vippestol A1\nW-ID:",
+      "wIds": [],
+      "kind": "intake",
+      "lane": "A1",
+      "step": 0,
+      "drawio": {
+        "x": 222.5,
+        "y": 0,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [],
+      "downstream": [
+        "X-a1-forbeholder"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a2-vippestol",
+      "drawioId": "a2-vippestol",
+      "name": "Vippestol A2",
+      "label": "Vippestol A2\nW-ID:",
+      "wIds": [],
+      "kind": "intake",
+      "lane": "A2",
+      "step": 0,
+      "drawio": {
+        "x": 917.5,
+        "y": 0,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [],
+      "downstream": [
+        "X-a2-forbeholder"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a3-vippestol",
+      "drawioId": "a3-vippestol",
+      "name": "Vippestol A3",
+      "label": "Vippestol A3\nW-ID:",
+      "wIds": [],
+      "kind": "intake",
+      "lane": "A3",
+      "step": 0,
+      "drawio": {
+        "x": 1502.5,
+        "y": 0,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [],
+      "downstream": [
+        "X-a3-forbeholder"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a1-forbeholder",
+      "drawioId": "a1-forbeholder",
+      "name": "Forbeholder A1",
+      "label": "Forbeholder A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 1,
+      "drawio": {
+        "x": 222.5,
+        "y": 100,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-vippestol"
+      ],
+      "downstream": [
+        "X-a1-vibrator"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a2-forbeholder",
+      "drawioId": "a2-forbeholder",
+      "name": "Forbeholder A2",
+      "label": "Forbeholder A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 1,
+      "drawio": {
+        "x": 917.5,
+        "y": 100,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-vippestol"
+      ],
+      "downstream": [
+        "X-a2-vibrator"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a3-forbeholder",
+      "drawioId": "a3-forbeholder",
+      "name": "Forbeholder A3",
+      "label": "Forbeholder A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 1,
+      "drawio": {
+        "x": 1502.5,
+        "y": 100,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-vippestol"
+      ],
+      "downstream": [
+        "X-a3-vibrator"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a1-vibrator",
+      "drawioId": "a1-vibrator",
+      "name": "Vibratorrende A1",
+      "label": "Vibratorrende A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 2,
+      "drawio": {
+        "x": 222.5,
+        "y": 200,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-forbeholder"
+      ],
+      "downstream": [
+        "X-a1-vejecelle"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a2-vibrator",
+      "drawioId": "a2-vibrator",
+      "name": "Vibratorrende A2",
+      "label": "Vibratorrende A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 2,
+      "drawio": {
+        "x": 917.5,
+        "y": 200,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-forbeholder"
+      ],
+      "downstream": [
+        "X-a2-vejecelle"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a3-vibrator",
+      "drawioId": "a3-vibrator",
+      "name": "Vibratorrende A3",
+      "label": "Vibratorrende A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 2,
+      "drawio": {
+        "x": 1502.5,
+        "y": 200,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-forbeholder"
+      ],
+      "downstream": [
+        "X-a3-vejecelle"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a1-vejecelle",
+      "drawioId": "a1-vejecelle",
+      "name": "Vejecelle med beholder A1",
+      "label": "Vejecelle med beholder A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 3,
+      "drawio": {
+        "x": 222.5,
+        "y": 300,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-vibrator"
+      ],
+      "downstream": [
+        "X-a1-elevator"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a2-vejecelle",
+      "drawioId": "a2-vejecelle",
+      "name": "Vejecelle med beholder A2",
+      "label": "Vejecelle med beholder A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 3,
+      "drawio": {
+        "x": 917.5,
+        "y": 300,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-vibrator"
+      ],
+      "downstream": [
+        "X-a2-elevator"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a3-vejecelle",
+      "drawioId": "a3-vejecelle",
+      "name": "Vejecelle med beholder A3",
+      "label": "Vejecelle med beholder A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 3,
+      "drawio": {
+        "x": 1502.5,
+        "y": 300,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-vibrator"
+      ],
+      "downstream": [
+        "X-a3-elevator"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-a1-elevator",
+      "drawioId": "a1-elevator",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "A1",
+      "step": 4,
+      "drawio": {
+        "x": 222.5,
+        "y": 400,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-vejecelle"
+      ],
+      "downstream": [
+        "X-a1-coater1",
+        "X-a1-coater2",
+        "X-a1-coater3",
+        "X-a1-coater4",
+        "X-a1-coater5",
+        "X-a1-coater6",
+        "X-a1-coater7",
+        "X-a1-coater8",
+        "X-a1-coater9",
+        "X-a1-coater10"
+      ],
+      "details": {
+        "noter": "Fører frøet op til de 10 forbeholdere over coaterne."
+      }
+    },
+    {
+      "id": "X-a2-elevator",
+      "drawioId": "a2-elevator",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "A2",
+      "step": 4,
+      "drawio": {
+        "x": 917.5,
+        "y": 400,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-vejecelle"
+      ],
+      "downstream": [
+        "X-a2-coater1",
+        "X-a2-coater2",
+        "X-a2-coater3",
+        "X-a2-coater4",
+        "X-a2-coater5",
+        "X-a2-coater6",
+        "X-a2-coater7",
+        "X-a2-coater8",
+        "X-a2-coater9",
+        "X-a2-coater10"
+      ],
+      "details": {
+        "noter": "Fører frøet op til de 10 forbeholdere over coaterne."
+      }
+    },
+    {
+      "id": "X-a3-elevator",
+      "drawioId": "a3-elevator",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "A3",
+      "step": 4,
+      "drawio": {
+        "x": 1502.5,
+        "y": 400,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-vejecelle"
+      ],
+      "downstream": [
+        "X-a3-coater1",
+        "X-a3-coater2",
+        "X-a3-coater3",
+        "X-a3-coater4",
+        "X-a3-coater5",
+        "X-a3-coater6"
+      ],
+      "details": {
+        "noter": "Fører frøet op til de 6 forbeholdere over coaterne."
+      }
+    },
+    {
+      "id": "X-a1-coater1",
+      "drawioId": "a1-coater1",
+      "name": "Coater 1 A1",
+      "label": "Coater 1 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 0,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater2",
+      "drawioId": "a1-coater2",
+      "name": "Coater 2 A1",
+      "label": "Coater 2 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 55,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater3",
+      "drawioId": "a1-coater3",
+      "name": "Coater 3 A1",
+      "label": "Coater 3 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 110,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater4",
+      "drawioId": "a1-coater4",
+      "name": "Coater 4 A1",
+      "label": "Coater 4 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 165,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater5",
+      "drawioId": "a1-coater5",
+      "name": "Coater 5 A1",
+      "label": "Coater 5 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 220,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater6",
+      "drawioId": "a1-coater6",
+      "name": "Coater 6 A1",
+      "label": "Coater 6 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 275,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater7",
+      "drawioId": "a1-coater7",
+      "name": "Coater 7 A1",
+      "label": "Coater 7 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 330,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater8",
+      "drawioId": "a1-coater8",
+      "name": "Coater 8 A1",
+      "label": "Coater 8 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 385,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater9",
+      "drawioId": "a1-coater9",
+      "name": "Coater 9 A1",
+      "label": "Coater 9 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 440,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-coater10",
+      "drawioId": "a1-coater10",
+      "name": "Coater 10 A1",
+      "label": "Coater 10 A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 5,
+      "drawio": {
+        "x": 495,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-elevator"
+      ],
+      "downstream": [
+        "X-a1-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater1",
+      "drawioId": "a2-coater1",
+      "name": "Coater 1 A2",
+      "label": "Coater 1 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 695,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater2",
+      "drawioId": "a2-coater2",
+      "name": "Coater 2 A2",
+      "label": "Coater 2 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 750,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater3",
+      "drawioId": "a2-coater3",
+      "name": "Coater 3 A2",
+      "label": "Coater 3 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 805,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater4",
+      "drawioId": "a2-coater4",
+      "name": "Coater 4 A2",
+      "label": "Coater 4 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 860,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater5",
+      "drawioId": "a2-coater5",
+      "name": "Coater 5 A2",
+      "label": "Coater 5 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 915,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater6",
+      "drawioId": "a2-coater6",
+      "name": "Coater 6 A2",
+      "label": "Coater 6 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 970,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater7",
+      "drawioId": "a2-coater7",
+      "name": "Coater 7 A2",
+      "label": "Coater 7 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 1025,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater8",
+      "drawioId": "a2-coater8",
+      "name": "Coater 8 A2",
+      "label": "Coater 8 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 1080,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater9",
+      "drawioId": "a2-coater9",
+      "name": "Coater 9 A2",
+      "label": "Coater 9 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 1135,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a2-coater10",
+      "drawioId": "a2-coater10",
+      "name": "Coater 10 A2",
+      "label": "Coater 10 A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 5,
+      "drawio": {
+        "x": 1190,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-elevator"
+      ],
+      "downstream": [
+        "X-a2-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a3-coater1",
+      "drawioId": "a3-coater1",
+      "name": "Coater 1 A3",
+      "label": "Coater 1 A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 5,
+      "drawio": {
+        "x": 1390,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-elevator"
+      ],
+      "downstream": [
+        "X-a3-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a3-coater2",
+      "drawioId": "a3-coater2",
+      "name": "Coater 2 A3",
+      "label": "Coater 2 A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 5,
+      "drawio": {
+        "x": 1445,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-elevator"
+      ],
+      "downstream": [
+        "X-a3-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a3-coater3",
+      "drawioId": "a3-coater3",
+      "name": "Coater 3 A3",
+      "label": "Coater 3 A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 5,
+      "drawio": {
+        "x": 1500,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-elevator"
+      ],
+      "downstream": [
+        "X-a3-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a3-coater4",
+      "drawioId": "a3-coater4",
+      "name": "Coater 4 A3",
+      "label": "Coater 4 A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 5,
+      "drawio": {
+        "x": 1555,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-elevator"
+      ],
+      "downstream": [
+        "X-a3-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a3-coater5",
+      "drawioId": "a3-coater5",
+      "name": "Coater 5 A3",
+      "label": "Coater 5 A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 5,
+      "drawio": {
+        "x": 1610,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-elevator"
+      ],
+      "downstream": [
+        "X-a3-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a3-coater6",
+      "drawioId": "a3-coater6",
+      "name": "Coater 6 A3",
+      "label": "Coater 6 A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 5,
+      "drawio": {
+        "x": 1665,
+        "y": 540,
+        "w": 50,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-elevator"
+      ],
+      "downstream": [
+        "X-a3-faerdigvare"
+      ],
+      "details": {
+        "noter": "Egen forbeholder over coateren. Farve og kemi pumpes ind med slangepumpe og flowmåler fra tankene Grøn, Rød, Blå, Kemi 1 og Kemi 2."
+      }
+    },
+    {
+      "id": "X-a1-faerdigvare",
+      "drawioId": "a1-faerdigvare",
+      "name": "Færdigvare A1",
+      "label": "Færdigvare A1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A1",
+      "step": 6,
+      "drawio": {
+        "x": 222.5,
+        "y": 680,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a1-coater1",
+        "X-a1-coater2",
+        "X-a1-coater3",
+        "X-a1-coater4",
+        "X-a1-coater5",
+        "X-a1-coater6",
+        "X-a1-coater7",
+        "X-a1-coater8",
+        "X-a1-coater9",
+        "X-a1-coater10"
+      ],
+      "downstream": [],
+      "details": {}
+    },
+    {
+      "id": "X-a2-faerdigvare",
+      "drawioId": "a2-faerdigvare",
+      "name": "Færdigvare A2",
+      "label": "Færdigvare A2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A2",
+      "step": 6,
+      "drawio": {
+        "x": 917.5,
+        "y": 680,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a2-coater1",
+        "X-a2-coater2",
+        "X-a2-coater3",
+        "X-a2-coater4",
+        "X-a2-coater5",
+        "X-a2-coater6",
+        "X-a2-coater7",
+        "X-a2-coater8",
+        "X-a2-coater9",
+        "X-a2-coater10"
+      ],
+      "downstream": [],
+      "details": {}
+    },
+    {
+      "id": "X-a3-faerdigvare",
+      "drawioId": "a3-faerdigvare",
+      "name": "Færdigvare A3",
+      "label": "Færdigvare A3\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "A3",
+      "step": 6,
+      "drawio": {
+        "x": 1502.5,
+        "y": 680,
+        "w": 100,
+        "h": 60
+      },
+      "upstream": [
+        "X-a3-coater1",
+        "X-a3-coater2",
+        "X-a3-coater3",
+        "X-a3-coater4",
+        "X-a3-coater5",
+        "X-a3-coater6"
+      ],
+      "downstream": [],
+      "details": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "a1-vippestol--a1-forbeholder",
+      "from": "X-a1-vippestol",
+      "to": "X-a1-forbeholder",
+      "inferred": false
+    },
+    {
+      "id": "a1-forbeholder--a1-vibrator",
+      "from": "X-a1-forbeholder",
+      "to": "X-a1-vibrator",
+      "inferred": false
+    },
+    {
+      "id": "a1-vibrator--a1-vejecelle",
+      "from": "X-a1-vibrator",
+      "to": "X-a1-vejecelle",
+      "inferred": false
+    },
+    {
+      "id": "a1-vejecelle--a1-elevator",
+      "from": "X-a1-vejecelle",
+      "to": "X-a1-elevator",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater1",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater1",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater2",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater2",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater3",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater3",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater4",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater4",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater5",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater5",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater6",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater6",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater7",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater7",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater8",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater8",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater9",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater9",
+      "inferred": false
+    },
+    {
+      "id": "a1-elevator--a1-coater10",
+      "from": "X-a1-elevator",
+      "to": "X-a1-coater10",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater1--a1-faerdigvare",
+      "from": "X-a1-coater1",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater2--a1-faerdigvare",
+      "from": "X-a1-coater2",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater3--a1-faerdigvare",
+      "from": "X-a1-coater3",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater4--a1-faerdigvare",
+      "from": "X-a1-coater4",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater5--a1-faerdigvare",
+      "from": "X-a1-coater5",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater6--a1-faerdigvare",
+      "from": "X-a1-coater6",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater7--a1-faerdigvare",
+      "from": "X-a1-coater7",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater8--a1-faerdigvare",
+      "from": "X-a1-coater8",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater9--a1-faerdigvare",
+      "from": "X-a1-coater9",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a1-coater10--a1-faerdigvare",
+      "from": "X-a1-coater10",
+      "to": "X-a1-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-vippestol--a2-forbeholder",
+      "from": "X-a2-vippestol",
+      "to": "X-a2-forbeholder",
+      "inferred": false
+    },
+    {
+      "id": "a2-forbeholder--a2-vibrator",
+      "from": "X-a2-forbeholder",
+      "to": "X-a2-vibrator",
+      "inferred": false
+    },
+    {
+      "id": "a2-vibrator--a2-vejecelle",
+      "from": "X-a2-vibrator",
+      "to": "X-a2-vejecelle",
+      "inferred": false
+    },
+    {
+      "id": "a2-vejecelle--a2-elevator",
+      "from": "X-a2-vejecelle",
+      "to": "X-a2-elevator",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater1",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater1",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater2",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater2",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater3",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater3",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater4",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater4",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater5",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater5",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater6",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater6",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater7",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater7",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater8",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater8",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater9",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater9",
+      "inferred": false
+    },
+    {
+      "id": "a2-elevator--a2-coater10",
+      "from": "X-a2-elevator",
+      "to": "X-a2-coater10",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater1--a2-faerdigvare",
+      "from": "X-a2-coater1",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater2--a2-faerdigvare",
+      "from": "X-a2-coater2",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater3--a2-faerdigvare",
+      "from": "X-a2-coater3",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater4--a2-faerdigvare",
+      "from": "X-a2-coater4",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater5--a2-faerdigvare",
+      "from": "X-a2-coater5",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater6--a2-faerdigvare",
+      "from": "X-a2-coater6",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater7--a2-faerdigvare",
+      "from": "X-a2-coater7",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater8--a2-faerdigvare",
+      "from": "X-a2-coater8",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater9--a2-faerdigvare",
+      "from": "X-a2-coater9",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a2-coater10--a2-faerdigvare",
+      "from": "X-a2-coater10",
+      "to": "X-a2-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a3-vippestol--a3-forbeholder",
+      "from": "X-a3-vippestol",
+      "to": "X-a3-forbeholder",
+      "inferred": false
+    },
+    {
+      "id": "a3-forbeholder--a3-vibrator",
+      "from": "X-a3-forbeholder",
+      "to": "X-a3-vibrator",
+      "inferred": false
+    },
+    {
+      "id": "a3-vibrator--a3-vejecelle",
+      "from": "X-a3-vibrator",
+      "to": "X-a3-vejecelle",
+      "inferred": false
+    },
+    {
+      "id": "a3-vejecelle--a3-elevator",
+      "from": "X-a3-vejecelle",
+      "to": "X-a3-elevator",
+      "inferred": false
+    },
+    {
+      "id": "a3-elevator--a3-coater1",
+      "from": "X-a3-elevator",
+      "to": "X-a3-coater1",
+      "inferred": false
+    },
+    {
+      "id": "a3-elevator--a3-coater2",
+      "from": "X-a3-elevator",
+      "to": "X-a3-coater2",
+      "inferred": false
+    },
+    {
+      "id": "a3-elevator--a3-coater3",
+      "from": "X-a3-elevator",
+      "to": "X-a3-coater3",
+      "inferred": false
+    },
+    {
+      "id": "a3-elevator--a3-coater4",
+      "from": "X-a3-elevator",
+      "to": "X-a3-coater4",
+      "inferred": false
+    },
+    {
+      "id": "a3-elevator--a3-coater5",
+      "from": "X-a3-elevator",
+      "to": "X-a3-coater5",
+      "inferred": false
+    },
+    {
+      "id": "a3-elevator--a3-coater6",
+      "from": "X-a3-elevator",
+      "to": "X-a3-coater6",
+      "inferred": false
+    },
+    {
+      "id": "a3-coater1--a3-faerdigvare",
+      "from": "X-a3-coater1",
+      "to": "X-a3-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a3-coater2--a3-faerdigvare",
+      "from": "X-a3-coater2",
+      "to": "X-a3-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a3-coater3--a3-faerdigvare",
+      "from": "X-a3-coater3",
+      "to": "X-a3-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a3-coater4--a3-faerdigvare",
+      "from": "X-a3-coater4",
+      "to": "X-a3-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a3-coater5--a3-faerdigvare",
+      "from": "X-a3-coater5",
+      "to": "X-a3-faerdigvare",
+      "inferred": false
+    },
+    {
+      "id": "a3-coater6--a3-faerdigvare",
+      "from": "X-a3-coater6",
+      "to": "X-a3-faerdigvare",
+      "inferred": false
+    }
+  ],
+  "issues": [
+    "\"Vippestol A1\" mangler W-ID.",
+    "\"Forbeholder A1\" mangler W-ID.",
+    "\"Vibratorrende A1\" mangler W-ID.",
+    "\"Vejecelle med beholder A1\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Coater 1 A1\" mangler W-ID.",
+    "\"Coater 2 A1\" mangler W-ID.",
+    "\"Coater 3 A1\" mangler W-ID.",
+    "\"Coater 4 A1\" mangler W-ID.",
+    "\"Coater 5 A1\" mangler W-ID.",
+    "\"Coater 6 A1\" mangler W-ID.",
+    "\"Coater 7 A1\" mangler W-ID.",
+    "\"Coater 8 A1\" mangler W-ID.",
+    "\"Coater 9 A1\" mangler W-ID.",
+    "\"Coater 10 A1\" mangler W-ID.",
+    "\"Færdigvare A1\" mangler W-ID.",
+    "\"Vippestol A2\" mangler W-ID.",
+    "\"Forbeholder A2\" mangler W-ID.",
+    "\"Vibratorrende A2\" mangler W-ID.",
+    "\"Vejecelle med beholder A2\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Coater 1 A2\" mangler W-ID.",
+    "\"Coater 2 A2\" mangler W-ID.",
+    "\"Coater 3 A2\" mangler W-ID.",
+    "\"Coater 4 A2\" mangler W-ID.",
+    "\"Coater 5 A2\" mangler W-ID.",
+    "\"Coater 6 A2\" mangler W-ID.",
+    "\"Coater 7 A2\" mangler W-ID.",
+    "\"Coater 8 A2\" mangler W-ID.",
+    "\"Coater 9 A2\" mangler W-ID.",
+    "\"Coater 10 A2\" mangler W-ID.",
+    "\"Færdigvare A2\" mangler W-ID.",
+    "\"Vippestol A3\" mangler W-ID.",
+    "\"Forbeholder A3\" mangler W-ID.",
+    "\"Vibratorrende A3\" mangler W-ID.",
+    "\"Vejecelle med beholder A3\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Coater 1 A3\" mangler W-ID.",
+    "\"Coater 2 A3\" mangler W-ID.",
+    "\"Coater 3 A3\" mangler W-ID.",
+    "\"Coater 4 A3\" mangler W-ID.",
+    "\"Coater 5 A3\" mangler W-ID.",
+    "\"Coater 6 A3\" mangler W-ID.",
+    "\"Færdigvare A3\" mangler W-ID.",
+    "Flere startpunkter: Vippestol A1, Vippestol A2, Vippestol A3."
+  ]
+}

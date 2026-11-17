@@ -6,7 +6,7 @@ import {
   AGENT_ENGINE_LABEL, AGENT_STATUS_LABEL,
 } from "../lib/agents";
 import { OT_FIELDS, STAMDATA_FIELDS } from "../lib/fields";
-import { KIND_LABEL, layoutLine, shortWIds } from "../lib/layout";
+import { KIND_LABEL, layoutLine, shortWIds, sporFraVenstre } from "../lib/layout";
 import { LinjeVaelger } from "./LinjeVaelger";
 import type { LineOption } from "../lib/lines";
 import {
@@ -501,7 +501,7 @@ export function FactoryMap({
           {/* Sporfilteret tonede maskiner — i OT-visningen er de tonet i forvejen. */}
           {!isOt && !isAgents && data.lanes.length > 0 && (
           <div className="fm-seg" role="group" aria-label="Spor">
-            {[null, ...data.lanes.slice().sort().reverse()].map((l) => (
+            {[null, ...sporFraVenstre(data)].map((l) => (
               <button key={l ?? "all"} type="button" aria-pressed={lane === l} onClick={() => setLane(l)}>
                 {l ? `Spor ${l}` : "Alle"}
               </button>

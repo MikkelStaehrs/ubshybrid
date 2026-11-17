@@ -113,3 +113,16 @@ export function shortWIds(wIds: string[]): string {
   }
   return wIds.join("/");
 }
+
+/**
+ * Sporene, som de står på tegningen, fra venstre mod højre. Bogstavordenen
+ * holdt for S og N, men gav "L2, L1", da Pillering kom til — og ville give
+ * "10, 1, 9" for spor med tal.
+ */
+export function sporFraVenstre(data: LineData): string[] {
+  const midt = (lane: string) => {
+    const xs = data.machines.filter((m) => m.lane === lane).map((m) => m.drawio.x + m.drawio.w / 2);
+    return xs.reduce((a, b) => a + b, 0) / xs.length;
+  };
+  return data.lanes.slice().sort((a, b) => midt(a) - midt(b));
+}
