@@ -1,11 +1,13 @@
 import type { LineData } from "./types";
 import analytics from "../../data/lines/analytics.json";
+import pillering from "../../data/lines/pillering.json";
 import sliberi from "../../data/lines/sliberi.json";
 
 // Register nye linjer her efter `npm run parse -- <fil> <id> "<navn>" <nr>`.
 // Linjerne er selvstændige procesafsnit — der er ikke materialeflow imellem dem.
 export const LINES: Record<string, LineData> = {
   sliberi: sliberi as LineData,
+  pillering: pillering as LineData,
   analytics: analytics as LineData,
 };
 

@@ -1,0 +1,497 @@
+{
+  "line": {
+    "id": "pillering",
+    "name": "Pillering",
+    "order": 3,
+    "sourceFile": "pillering.drawio",
+    "parsedAt": "2026-11-17T08:26:24.300Z",
+    "positionMode": "schematic"
+  },
+  "lanes": [
+    "L1",
+    "L2"
+  ],
+  "machines": [
+    {
+      "id": "X-L1-cc50",
+      "drawioId": "L1-cc50",
+      "name": "Centricoater CC50 L1",
+      "label": "Centricoater CC50 L1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L1",
+      "step": 0,
+      "drawio": {
+        "x": 100,
+        "y": 50,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [],
+      "downstream": [
+        "X-L1-cc150"
+      ],
+      "details": {
+        "noter": "Pulver fra egen forbeholder (1. lag)."
+      }
+    },
+    {
+      "id": "X-L2-cc50",
+      "drawioId": "L2-cc50",
+      "name": "Centricoater CC50 L2",
+      "label": "Centricoater CC50 L2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L2",
+      "step": 0,
+      "drawio": {
+        "x": 400,
+        "y": 50,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [],
+      "downstream": [
+        "X-L2-cc150"
+      ],
+      "details": {
+        "noter": "Pulver fra egen forbeholder (1. lag)."
+      }
+    },
+    {
+      "id": "X-L1-cc150",
+      "drawioId": "L1-cc150",
+      "name": "Centricoater CC150 L1",
+      "label": "Centricoater CC150 L1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L1",
+      "step": 1,
+      "drawio": {
+        "x": 100,
+        "y": 150,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-cc50"
+      ],
+      "downstream": [
+        "X-L1-elev1"
+      ],
+      "details": {
+        "noter": "Pulver fra egen forbeholder (2. lag)."
+      }
+    },
+    {
+      "id": "X-L2-cc150",
+      "drawioId": "L2-cc150",
+      "name": "Centricoater CC150 L2",
+      "label": "Centricoater CC150 L2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L2",
+      "step": 1,
+      "drawio": {
+        "x": 400,
+        "y": 150,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-cc50"
+      ],
+      "downstream": [
+        "X-L2-elev1"
+      ],
+      "details": {
+        "noter": "Pulver fra egen forbeholder (2. lag)."
+      }
+    },
+    {
+      "id": "X-L1-elev1",
+      "drawioId": "L1-elev1",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "L1",
+      "step": 2,
+      "drawio": {
+        "x": 100,
+        "y": 250,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-cc150"
+      ],
+      "downstream": [
+        "X-L1-vaad"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-L2-elev1",
+      "drawioId": "L2-elev1",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "L2",
+      "step": 2,
+      "drawio": {
+        "x": 400,
+        "y": 250,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-cc150"
+      ],
+      "downstream": [
+        "X-L2-vaad"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-L1-vaad",
+      "drawioId": "L1-vaad",
+      "name": "Vådsorter L1",
+      "label": "Vådsorter L1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L1",
+      "step": 3,
+      "drawio": {
+        "x": 100,
+        "y": 350,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-elev1"
+      ],
+      "downstream": [
+        "X-L1-fluid"
+      ],
+      "details": {
+        "noter": "Sold str. #1,85."
+      }
+    },
+    {
+      "id": "X-L2-vaad",
+      "drawioId": "L2-vaad",
+      "name": "Vådsorter L2",
+      "label": "Vådsorter L2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L2",
+      "step": 3,
+      "drawio": {
+        "x": 400,
+        "y": 350,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-elev1"
+      ],
+      "downstream": [
+        "X-L2-fluid"
+      ],
+      "details": {
+        "noter": "Sold str. #1,85."
+      }
+    },
+    {
+      "id": "X-L1-fluid",
+      "drawioId": "L1-fluid",
+      "name": "Fluidbed L1",
+      "label": "Fluidbed L1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L1",
+      "step": 4,
+      "drawio": {
+        "x": 100,
+        "y": 450,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-vaad"
+      ],
+      "downstream": [
+        "X-L1-elev2"
+      ],
+      "details": {
+        "noter": "Tre kamre."
+      }
+    },
+    {
+      "id": "X-L2-fluid",
+      "drawioId": "L2-fluid",
+      "name": "Fluidbed L2",
+      "label": "Fluidbed L2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L2",
+      "step": 4,
+      "drawio": {
+        "x": 400,
+        "y": 450,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-vaad"
+      ],
+      "downstream": [
+        "X-L2-elev2"
+      ],
+      "details": {
+        "noter": "Tre kamre."
+      }
+    },
+    {
+      "id": "X-L1-elev2",
+      "drawioId": "L1-elev2",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "L1",
+      "step": 5,
+      "drawio": {
+        "x": 100,
+        "y": 550,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-fluid"
+      ],
+      "downstream": [
+        "X-L1-toer"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-L2-elev2",
+      "drawioId": "L2-elev2",
+      "name": "Elevator",
+      "label": "Elevator\nW-ID:",
+      "wIds": [],
+      "kind": "elevator",
+      "lane": "L2",
+      "step": 5,
+      "drawio": {
+        "x": 400,
+        "y": 550,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-fluid"
+      ],
+      "downstream": [
+        "X-L2-toer"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-L1-toer",
+      "drawioId": "L1-toer",
+      "name": "Tørsorter L1",
+      "label": "Tørsorter L1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L1",
+      "step": 6,
+      "drawio": {
+        "x": 100,
+        "y": 650,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-elev2"
+      ],
+      "downstream": [
+        "X-L1-kasse"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-L2-toer",
+      "drawioId": "L2-toer",
+      "name": "Tørsorter L2",
+      "label": "Tørsorter L2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L2",
+      "step": 6,
+      "drawio": {
+        "x": 400,
+        "y": 650,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-elev2"
+      ],
+      "downstream": [
+        "X-L2-kasse"
+      ],
+      "details": {}
+    },
+    {
+      "id": "X-L1-kasse",
+      "drawioId": "L1-kasse",
+      "name": "Færdigvarekasse L1",
+      "label": "Færdigvarekasse L1\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L1",
+      "step": 7,
+      "drawio": {
+        "x": 100,
+        "y": 750,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L1-toer"
+      ],
+      "downstream": [],
+      "details": {}
+    },
+    {
+      "id": "X-L2-kasse",
+      "drawioId": "L2-kasse",
+      "name": "Færdigvarekasse L2",
+      "label": "Færdigvarekasse L2\nW-ID:",
+      "wIds": [],
+      "kind": "process",
+      "lane": "L2",
+      "step": 7,
+      "drawio": {
+        "x": 400,
+        "y": 750,
+        "w": 120,
+        "h": 60
+      },
+      "upstream": [
+        "X-L2-toer"
+      ],
+      "downstream": [],
+      "details": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "L1-cc50--L1-cc150",
+      "from": "X-L1-cc50",
+      "to": "X-L1-cc150",
+      "inferred": false
+    },
+    {
+      "id": "L1-cc150--L1-elev1",
+      "from": "X-L1-cc150",
+      "to": "X-L1-elev1",
+      "inferred": false
+    },
+    {
+      "id": "L1-elev1--L1-vaad",
+      "from": "X-L1-elev1",
+      "to": "X-L1-vaad",
+      "inferred": false
+    },
+    {
+      "id": "L1-vaad--L1-fluid",
+      "from": "X-L1-vaad",
+      "to": "X-L1-fluid",
+      "inferred": false
+    },
+    {
+      "id": "L1-fluid--L1-elev2",
+      "from": "X-L1-fluid",
+      "to": "X-L1-elev2",
+      "inferred": false
+    },
+    {
+      "id": "L1-elev2--L1-toer",
+      "from": "X-L1-elev2",
+      "to": "X-L1-toer",
+      "inferred": false
+    },
+    {
+      "id": "L1-toer--L1-kasse",
+      "from": "X-L1-toer",
+      "to": "X-L1-kasse",
+      "inferred": false
+    },
+    {
+      "id": "L2-cc50--L2-cc150",
+      "from": "X-L2-cc50",
+      "to": "X-L2-cc150",
+      "inferred": false
+    },
+    {
+      "id": "L2-cc150--L2-elev1",
+      "from": "X-L2-cc150",
+      "to": "X-L2-elev1",
+      "inferred": false
+    },
+    {
+      "id": "L2-elev1--L2-vaad",
+      "from": "X-L2-elev1",
+      "to": "X-L2-vaad",
+      "inferred": false
+    },
+    {
+      "id": "L2-vaad--L2-fluid",
+      "from": "X-L2-vaad",
+      "to": "X-L2-fluid",
+      "inferred": false
+    },
+    {
+      "id": "L2-fluid--L2-elev2",
+      "from": "X-L2-fluid",
+      "to": "X-L2-elev2",
+      "inferred": false
+    },
+    {
+      "id": "L2-elev2--L2-toer",
+      "from": "X-L2-elev2",
+      "to": "X-L2-toer",
+      "inferred": false
+    },
+    {
+      "id": "L2-toer--L2-kasse",
+      "from": "X-L2-toer",
+      "to": "X-L2-kasse",
+      "inferred": false
+    }
+  ],
+  "issues": [
+    "\"Centricoater CC50 L1\" mangler W-ID.",
+    "\"Centricoater CC150 L1\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Vådsorter L1\" mangler W-ID.",
+    "\"Fluidbed L1\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Tørsorter L1\" mangler W-ID.",
+    "\"Færdigvarekasse L1\" mangler W-ID.",
+    "\"Centricoater CC50 L2\" mangler W-ID.",
+    "\"Centricoater CC150 L2\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Vådsorter L2\" mangler W-ID.",
+    "\"Fluidbed L2\" mangler W-ID.",
+    "\"Elevator\" mangler W-ID.",
+    "\"Tørsorter L2\" mangler W-ID.",
+    "\"Færdigvarekasse L2\" mangler W-ID.",
+    "Flere startpunkter: Centricoater CC50 L1, Centricoater CC50 L2."
+  ]
+}
