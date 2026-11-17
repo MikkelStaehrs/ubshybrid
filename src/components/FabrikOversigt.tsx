@@ -14,6 +14,7 @@ import type { MachineKind } from "../lib/types";
 import { useSceneTheme, type SceneTheme } from "../lib/useSceneTheme";
 import { LinjeVaelger } from "./LinjeVaelger";
 import { FloorText } from "./Scene";
+import { ZoomGennem } from "./ZoomGennem";
 
 const SLAGS: ForbindelseSlags[] = ["materiale", "proever", "data", "mennesker"];
 
@@ -387,6 +388,8 @@ function Kamera({ model }: { model: FabrikModel }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width > 0]);
   return (
+    <>
+    <ZoomGennem min={10} />
     <MapControls
       makeDefault
       target={[cx, 0, cz]}
@@ -396,6 +399,8 @@ function Kamera({ model }: { model: FabrikModel }) {
       maxDistance={900}
       maxPolarAngle={Math.PI / 2.25}
       screenSpacePanning={false}
+      zoomToCursor
     />
+    </>
   );
 }

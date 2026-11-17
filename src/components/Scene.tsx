@@ -13,6 +13,7 @@ import { FlowRibbon } from "./FlowRibbon";
 import { MachineMesh } from "./MachineMesh";
 import { AgentLayer } from "./AgentLayer";
 import { OtLayer } from "./OtLayer";
+import { ZoomGennem } from "./ZoomGennem";
 
 export type ViewMode = "perspective" | "top";
 
@@ -149,7 +150,8 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
   // direkte på DOM'en, så det ikke afhænger af, at kontrollernes start-event
   // når frem.
   useEffect(() => {
-    const el = gl.domElement;
+    // Kontrollernes eget element: hjulet over et mærkat når ikke lærredet.
+    const el = (controls.current?.domElement as HTMLElement | undefined) ?? gl.domElement;
     const drop = () => { goal.current = null; };
     const opts = { passive: true } as const;
     el.addEventListener("pointerdown", drop, opts);
@@ -177,6 +179,8 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
   });
 
   return (
+    <>
+    <ZoomGennem min={CAM.minDistance} />
     <MapControls
       ref={controls}
       makeDefault
@@ -186,8 +190,10 @@ function CameraRig({ layout, selectedId, view, resetToken }: Pick<SceneProps, "l
       maxDistance={CAM.maxDistance}
       maxPolarAngle={CAM.maxPolar}
       screenSpacePanning={false}
+      zoomToCursor
       onStart={() => (goal.current = null)}
     />
+    </>
   );
 }
 
